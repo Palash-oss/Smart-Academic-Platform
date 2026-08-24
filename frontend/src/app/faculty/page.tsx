@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Users, AlertTriangle, CheckCircle2, Search, Filter } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle2, Search, Filter, Building2, Layers } from 'lucide-react';
+import Link from 'next/link';
 
 interface SubjectRecord {
   id: string;
@@ -30,16 +31,24 @@ export default function FacultyDashboardPage() {
   const [students, setStudents] = useState<StudentOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDeptCode, setSelectedDeptCode] = useState('ALL');
+  const [selectedDivName, setSelectedDivName] = useState('ALL');
   const [riskFilterOnly, setRiskFilterOnly] = useState(false);
 
   useEffect(() => {
     loadFacultyData();
-  }, []);
+  }, [selectedDeptCode, selectedDivName]);
 
   const loadFacultyData = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth('/api/attendance/faculty/overview');
+      let url = '/api/attendance/faculty/overview';
+      const params = new URLSearchParams();
+      if (selectedDeptCode !== 'ALL') params.append('dept_code', selectedDeptCode);
+      if (selectedDivName !== 'ALL') params.append('div_name', selectedDivName);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetchWithAuth(url);
       if (res.ok) {
         const data = await res.json();
         setStudents(data);
@@ -74,15 +83,23 @@ export default function FacultyDashboardPage() {
               Faculty Attendance Ledger
             </h1>
             <p className="text-xs text-subtle font-sans mt-0.5">
-              Deterministic Academic Compliance Monitor & At-Risk Audit Ledger
+              Multi-Department Academic Compliance Monitor & At-Risk Audit Ledger (310 Students)
             </p>
           </div>
 
           <div className="flex items-center gap-4 text-xs font-mono">
+            <Link
+              href="/faculty/mark"
+              className="px-4 py-2 bg-paper text-ink font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-xs"
+            >
+              <span>+ Mark Live Attendance</span>
+            </Link>
+
             <div className="px-3 py-2 bg-surface border border-border rounded-lg flex items-center gap-2 shadow-xs">
               <Users className="h-4 w-4 text-paper" />
-              <span>TOTAL ENROLLED: <strong className="text-paper">{totalStudents}</strong></span>
+              <span>ENROLLED: <strong className="text-paper">{totalStudents}</strong></span>
             </div>
+
             <div className="px-3 py-2 bg-surface border border-border-strong text-paper rounded-lg flex items-center gap-2 font-bold shadow-xs">
               <AlertTriangle className="h-4 w-4 text-paper" />
               <span>AT RISK (&lt;75%): <strong>{atRiskCount}</strong></span>
@@ -91,16 +108,58 @@ export default function FacultyDashboardPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface p-4 border border-border rounded-lg shadow-xs">
-          <div className="relative w-full sm:w-80">
-            <Search className="h-4 w-4 absolute left-3 top-2.5 text-subtle" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search student by name or email..."
-              className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-4 py-2 text-xs text-paper placeholder-subtle focus:outline-none"
-            />
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-surface p-4 border border-border rounded-lg shadow-xs">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <Search className="h-4 w-4 absolute left-3 top-2.5 text-subtle" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name or email..."
+                className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-4 py-2 text-xs text-paper placeholder-subtle focus:outline-none"
+              />
+            </div>
+
+            {/* Department Filter */}
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <Building2 className="h-4 w-4 text-subtle shrink-0" />
+              <select
+                value={selectedDeptCode}
+                onChange={(e) => {
+                  setSelectedDeptCode(e.target.value);
+                  setSelectedDivName('ALL');
+                }}
+                className="bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-mono text-paper focus:outline-none"
+              >
+                <option value="ALL">All Departments</option>
+                <option value="COMP">COMP — Computer</option>
+                <option value="AIDS">AIDS — AI & Data Sci</option>
+                <option value="ECS">ECS — Electronics</option>
+                <option value="MECH">MECH — Mechanical</option>
+              </select>
+            </div>
+
+            {/* Division Filter */}
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <Layers className="h-4 w-4 text-subtle shrink-0" />
+              <select
+                value={selectedDivName}
+                onChange={(e) => setSelectedDivName(e.target.value)}
+                className="bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-mono text-paper focus:outline-none"
+              >
+                <option value="ALL">All Divisions</option>
+                {selectedDeptCode === 'COMP' ? (
+                  <>
+                    <option value="A">Division A (70)</option>
+                    <option value="B">Division B (70)</option>
+                  </>
+                ) : (
+                  <option value="A">Division A</option>
+                )}
+              </select>
+            </div>
           </div>
 
           <button
@@ -135,7 +194,7 @@ export default function FacultyDashboardPage() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-subtle font-mono">
-                    Loading student ledger records...
+                    Loading student ledger records from PostgreSQL...
                   </td>
                 </tr>
               ) : filteredStudents.length === 0 ? (
