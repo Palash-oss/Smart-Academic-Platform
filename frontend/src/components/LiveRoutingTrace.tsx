@@ -7,13 +7,27 @@ interface LiveRoutingTraceProps {
   activeAgent: string | null;     // 'student_support' | 'attendance' | null
   isStreaming: boolean;
   routingReasoning?: string | null;
+  role?: string;
 }
 
 export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
   activeAgent,
   isStreaming,
   routingReasoning,
+  role = 'STUDENT',
 }) => {
+  const isFaculty = role === 'FACULTY';
+
+  const ragTitle = isFaculty ? 'Faculty Policy & Syllabus Agent' : 'Student Support Agent';
+  const ragDesc = isFaculty
+    ? 'Department policy, grading regulations & course syllabus inquiries retrieved from pgvector.'
+    : 'Policy, grading & syllabus inquiries. Answers retrieved from chunked vectors.';
+
+  const calcTitle = isFaculty ? 'Department Attendance Agent' : 'Student Attendance Agent';
+  const calcDesc = isFaculty
+    ? 'Deterministic department analytics, division risk summaries & student risk lists computed in Python.'
+    : 'Deterministic percentage & risk flag calculations executed strictly in Python.';
+
   return (
     <div className="bg-surface border border-border rounded-lg p-5 flex flex-col gap-6 shadow-sm">
       <div className="flex items-center justify-between border-b border-border pb-3">
@@ -55,7 +69,7 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
             strokeDasharray="4 4"
           />
 
-          {/* Active Animated Routing Trace Path: Supervisor -> Student Support Node */}
+          {/* Active Animated Routing Trace Path: Supervisor -> RAG Node */}
           {activeAgent === 'student_support' && (
             <path
               d="M 50 50 L 180 50 M 220 50 Q 280 50, 320 25"
@@ -67,7 +81,7 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
             />
           )}
 
-          {/* Active Animated Routing Trace Path: Supervisor -> Attendance Node */}
+          {/* Active Animated Routing Trace Path: Supervisor -> Calc Node */}
           {activeAgent === 'attendance' && (
             <path
               d="M 50 50 L 180 50 M 220 50 Q 280 50, 320 75"
@@ -80,15 +94,12 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
           )}
 
           {/* Nodes */}
-          {/* Node 1: User Query */}
           <circle cx="50" cy="50" r="14" fill="#FFFFFF" stroke={isStreaming ? '#0A0A0B' : '#E4E4E7'} strokeWidth="2" />
           <text x="50" y="54" textAnchor="middle" fill="#0A0A0B" fontSize="10" fontFamily="IBM Plex Mono" fontWeight="bold">Q</text>
 
-          {/* Node 2: Supervisor Router Node */}
           <rect x="180" y="36" width="40" height="28" rx="6" fill="#F4F4F5" stroke={isStreaming ? '#0A0A0B' : '#E4E4E7'} strokeWidth="2" />
           <text x="200" y="53" textAnchor="middle" fill="#0A0A0B" fontSize="9" fontFamily="IBM Plex Mono" fontWeight="bold">SUP</text>
 
-          {/* Node 3A: Student Support Node (Top Right) */}
           <circle 
             cx="320" 
             cy="25" 
@@ -99,7 +110,6 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
           />
           <text x="320" y="29" textAnchor="middle" fill={activeAgent === 'student_support' ? '#FFFFFF' : '#0A0A0B'} fontSize="9" fontWeight="bold" fontFamily="IBM Plex Mono">RAG</text>
 
-          {/* Node 3B: Attendance Node (Bottom Right) */}
           <circle 
             cx="320" 
             cy="75" 
@@ -114,7 +124,7 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
 
       {/* Agents Status Cards */}
       <div className="grid grid-cols-1 gap-3 font-sans">
-        {/* Student Support Node */}
+        {/* RAG Policy/Syllabus Node */}
         <div className={`p-3 rounded border transition-all ${
           activeAgent === 'student_support'
             ? 'bg-ink border-border-strong text-paper font-semibold shadow-sm'
@@ -123,16 +133,16 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <ShieldCheck className={`h-4 w-4 ${activeAgent === 'student_support' ? 'text-paper' : 'text-subtle'}`} />
-              <span className="font-serif text-xs font-semibold tracking-wide">Student Support Agent</span>
+              <span className="font-serif text-xs font-semibold tracking-wide">{ragTitle}</span>
             </div>
             <span className="text-[10px] font-mono opacity-60">pgvector RAG</span>
           </div>
           <p className="text-[11px] text-subtle leading-relaxed">
-            Policy, grading & syllabus inquiries. Answers retrieved from chunked vectors.
+            {ragDesc}
           </p>
         </div>
 
-        {/* Attendance Node */}
+        {/* Analytics/Attendance Calc Node */}
         <div className={`p-3 rounded border transition-all ${
           activeAgent === 'attendance'
             ? 'bg-ink border-border-strong text-paper font-semibold shadow-sm'
@@ -141,12 +151,12 @@ export const LiveRoutingTrace: React.FC<LiveRoutingTraceProps> = ({
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Calculator className={`h-4 w-4 ${activeAgent === 'attendance' ? 'text-paper' : 'text-subtle'}`} />
-              <span className="font-serif text-xs font-semibold tracking-wide">Attendance Agent</span>
+              <span className="font-serif text-xs font-semibold tracking-wide">{calcTitle}</span>
             </div>
             <span className="text-[10px] font-mono opacity-60">Python Engine</span>
           </div>
           <p className="text-[11px] text-subtle leading-relaxed">
-            Deterministic percentage & risk flag calculations executed strictly in Python.
+            {calcDesc}
           </p>
         </div>
       </div>

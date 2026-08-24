@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen } from 'lucide-react';
+import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 interface Department {
@@ -27,6 +27,17 @@ interface Student {
   student_email: string;
 }
 
+interface MarkedSession {
+  session_id: string;
+  session_number: number;
+  subject: string;
+  session_date: string;
+  present_count: number;
+  absent_count: number;
+  total_enrolled: number;
+  created_at: string;
+}
+
 export default function MarkAttendancePage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDeptCode, setSelectedDeptCode] = useState('COMP');
@@ -40,17 +51,22 @@ export default function MarkAttendancePage() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [sessionDate, setSessionDate] = useState('2026-08-24');
+  const [markedSessions, setMarkedSessions] = useState<MarkedSession[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [undoingSessionId, setUndoingSessionId] = useState<string | null>(null);
 
   const [resultBanner, setResultBanner] = useState<{
     subject: string;
     total: number;
     present: number;
     absent: number;
+    sessionNumber: number;
   } | null>(null);
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 1. Fetch Departments & Divisions on Mount
   useEffect(() => {
@@ -70,6 +86,13 @@ export default function MarkAttendancePage() {
       loadStudents(selectedDeptCode, selectedDivName);
     }
   }, [selectedDeptCode, selectedDivName]);
+
+  // 4. Fetch Marked Sessions history for selected course and date
+  useEffect(() => {
+    if (selectedCourseName && sessionDate) {
+      loadMarkedSessions(selectedCourseName, sessionDate);
+    }
+  }, [selectedCourseName, sessionDate]);
 
   const loadDepartments = async () => {
     setLoadingDepartments(true);
@@ -117,7 +140,6 @@ export default function MarkAttendancePage() {
       if (res.ok) {
         const data: Student[] = await res.json();
         setStudents(data);
-        // Default all students to Present
         setPresentStudentIds(new Set(data.map((s) => s.student_id)));
       }
     } catch (err) {
@@ -127,8 +149,24 @@ export default function MarkAttendancePage() {
     }
   };
 
+  const loadMarkedSessions = async (subject: string, dateStr: string) => {
+    try {
+      const res = await fetchWithAuth(
+        `/api/attendance/faculty/sessions?subject=${encodeURIComponent(subject)}&session_date=${dateStr}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setMarkedSessions(data.sessions || []);
+      }
+    } catch (err) {
+      console.error('Failed to load marked sessions history:', err);
+    }
+  };
+
   const currentDeptObj = departments.find((d) => d.code === selectedDeptCode);
   const availableDivisions = currentDeptObj ? currentDeptObj.divisions : [];
+  const sessionsTodayCount = markedSessions.length;
+  const isMaxDailyReached = sessionsTodayCount >= 2;
 
   const handleDeptChange = (newDeptCode: string) => {
     setSelectedDeptCode(newDeptCode);
@@ -139,6 +177,7 @@ export default function MarkAttendancePage() {
   };
 
   const toggleStudentPresent = (id: string) => {
+    if (isMaxDailyReached) return;
     const nextSet = new Set(presentStudentIds);
     if (nextSet.has(id)) {
       nextSet.delete(id);
@@ -149,6 +188,7 @@ export default function MarkAttendancePage() {
   };
 
   const toggleAll = (selectPresent: boolean) => {
+    if (isMaxDailyReached) return;
     if (selectPresent) {
       setPresentStudentIds(new Set(students.map((s) => s.student_id)));
     } else {
@@ -163,8 +203,11 @@ export default function MarkAttendancePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isMaxDailyReached) return;
+
     setSubmitting(true);
     setResultBanner(null);
+    setErrorMessage(null);
 
     const allIds = students.map((s) => s.student_id);
     const presentIds = Array.from(presentStudentIds);
@@ -187,13 +230,49 @@ export default function MarkAttendancePage() {
           subject: data.subject,
           total: data.total_marked,
           present: data.present_count,
-          absent: data.absent_count
+          absent: data.absent_count,
+          sessionNumber: data.session_number
         });
+        loadMarkedSessions(selectedCourseName, sessionDate);
+      } else {
+        const errData = await res.json();
+        setErrorMessage(errData.detail || 'Failed to submit attendance session.');
       }
     } catch (err) {
       console.error('Failed to submit attendance session:', err);
+      setErrorMessage('Network error while submitting attendance.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleUndoSession = async (sessionId: string, sessionNum: number) => {
+    if (!confirm(`Are you sure you want to UNDO Session #${sessionNum}? This will revert all student attendance totals for this session.`)) {
+      return;
+    }
+
+    setUndoingSessionId(sessionId);
+    setErrorMessage(null);
+    setResultBanner(null);
+
+    try {
+      const res = await fetchWithAuth(`/api/attendance/faculty/sessions/${sessionId}/undo`, {
+        method: 'POST'
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        loadMarkedSessions(selectedCourseName, sessionDate);
+        loadStudents(selectedDeptCode, selectedDivName);
+      } else {
+        const errData = await res.json();
+        setErrorMessage(errData.detail || 'Failed to undo session.');
+      }
+    } catch (err) {
+      console.error('Failed to undo session:', err);
+      setErrorMessage('Network error while undoing session.');
+    } finally {
+      setUndoingSessionId(null);
     }
   };
 
@@ -216,25 +295,99 @@ export default function MarkAttendancePage() {
                 Live Lecture Attendance Marker
               </h1>
               <p className="text-xs text-subtle font-sans mt-0.5">
-                Department & Division Scoped Live Session Attendance Register
+                Daily Cap Enforced: Max 2 Lecture Sessions Per Subject / Day
               </p>
             </div>
           </div>
 
-          <span className="text-xs font-mono px-3 py-1.5 bg-surface border border-border rounded-lg text-paper font-semibold">
-            SELECTED CLASS: {selectedDeptCode}-{selectedDivName} ({students.length} STUDENTS)
-          </span>
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <span className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 ${
+              isMaxDailyReached
+                ? 'bg-paper text-ink border-paper'
+                : 'bg-surface text-paper border-border'
+            }`}>
+              <Clock className="h-3.5 w-3.5" />
+              <span>SESSIONS TODAY: {sessionsTodayCount} / 2 (MAX 2)</span>
+            </span>
+          </div>
         </div>
 
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div className="p-4 bg-surface border-2 border-paper rounded-lg font-mono text-xs flex items-start gap-2 shadow-sm">
+            <AlertTriangle className="h-4 w-4 text-paper shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-paper">Action Restricted</p>
+              <p className="text-subtle">{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Max Limit Warning Banner */}
+        {isMaxDailyReached && (
+          <div className="p-4 bg-surface border border-border-strong rounded-lg font-mono text-xs flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2 text-paper">
+              <AlertTriangle className="h-4 w-4 text-paper shrink-0" />
+              <span>
+                <strong>Daily Limit Reached (2 / 2 Sessions Marked)</strong>: Additional session submissions for this course on {sessionDate} are restricted.
+              </span>
+            </div>
+            <span className="text-[11px] text-subtle">Use Session History below to Undo if needed.</span>
+          </div>
+        )}
+
+        {/* Success Banner */}
         {resultBanner && (
           <div className="p-4 bg-surface border-2 border-paper rounded-lg font-mono text-xs space-y-1 shadow-sm">
             <div className="flex items-center gap-2 font-bold text-sm text-paper">
               <CheckCircle2 className="h-4 w-4 text-paper" />
-              <span>Session Attendance Successfully Recorded Live in Postgres!</span>
+              <span>Session #{resultBanner.sessionNumber} Successfully Recorded Live in Postgres!</span>
             </div>
             <p className="text-subtle">
-              Course: <strong>{resultBanner.subject}</strong> | Total Class Roster: <strong>{resultBanner.total}</strong> | Present: <strong className="text-paper">{resultBanner.present}</strong> | Absent: <strong className="text-paper">{resultBanner.absent}</strong>
+              Course: <strong>{resultBanner.subject}</strong> | Total Roster: <strong>{resultBanner.total}</strong> | Present: <strong className="text-paper">{resultBanner.present}</strong> | Absent: <strong className="text-paper">{resultBanner.absent}</strong>
             </p>
+          </div>
+        )}
+
+        {/* Session History & Undo Panel */}
+        {markedSessions.length > 0 && (
+          <div className="bg-surface border border-border rounded-lg p-4 font-mono text-xs space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <span className="font-bold text-paper flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-paper" />
+                MARKED SESSIONS HISTORY ({sessionDate})
+              </span>
+              <span className="text-subtle text-[11px]">Click 'Undo Session' to revert attendance</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {markedSessions.map((sess) => (
+                <div
+                  key={sess.session_id}
+                  className="p-3 bg-ink border border-border rounded-lg flex items-center justify-between"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-paper text-xs">Session #{sess.session_number}</span>
+                      <span className="text-[10px] text-subtle">At {sess.created_at || 'Today'}</span>
+                    </div>
+                    <p className="text-[11px] text-subtle mt-0.5">
+                      Present: <strong className="text-paper">{sess.present_count}</strong> / {sess.total_enrolled} Enrolled
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleUndoSession(sess.session_id, sess.session_number)}
+                    disabled={undoingSessionId === sess.session_id}
+                    className="px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border text-paper rounded text-xs flex items-center gap-1.5 transition-colors font-semibold disabled:opacity-40"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-paper" />
+                    <span>{undoingSessionId === sess.session_id ? 'Undoing...' : 'Undo Session'}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -335,6 +488,7 @@ export default function MarkAttendancePage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search student name..."
+                    disabled={isMaxDailyReached}
                     className="bg-surface border border-border focus:border-paper rounded-lg pl-8 pr-3 py-1.5 text-xs text-paper placeholder-subtle focus:outline-none w-48"
                   />
                 </div>
@@ -343,14 +497,16 @@ export default function MarkAttendancePage() {
                   <button
                     type="button"
                     onClick={() => toggleAll(true)}
-                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
+                    disabled={isMaxDailyReached}
+                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper disabled:opacity-30"
                   >
                     Mark All Present
                   </button>
                   <button
                     type="button"
                     onClick={() => toggleAll(false)}
-                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
+                    disabled={isMaxDailyReached}
+                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper disabled:opacity-30"
                   >
                     Clear All
                   </button>
@@ -375,7 +531,9 @@ export default function MarkAttendancePage() {
                     <div
                       key={st.student_id}
                       onClick={() => toggleStudentPresent(st.student_id)}
-                      className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`p-3.5 flex items-center justify-between transition-colors ${
+                        isMaxDailyReached ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                      } ${
                         isPresent ? 'bg-surface hover:bg-surface-hover' : 'bg-ink/60 hover:bg-ink'
                       }`}
                     >
@@ -414,11 +572,17 @@ export default function MarkAttendancePage() {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={submitting || students.length === 0}
+              disabled={submitting || students.length === 0 || isMaxDailyReached}
               className="px-6 py-3 bg-paper text-ink font-semibold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 text-sm disabled:opacity-40 shadow-xs"
             >
               <Save className="h-4 w-4" />
-              <span>{submitting ? 'Recording Live Session...' : `Submit Attendance for ${selectedDeptCode}-${selectedDivName}`}</span>
+              <span>
+                {isMaxDailyReached
+                  ? 'Max Daily Limit Reached (2/2 Marked)'
+                  : submitting
+                  ? 'Recording Session...'
+                  : `Submit Session #${sessionsTodayCount + 1} for ${selectedDeptCode}-${selectedDivName}`}
+              </span>
             </button>
           </div>
         </form>

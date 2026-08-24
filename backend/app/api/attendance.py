@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import csv
 import io
+from datetime import date
 from typing import List, Dict, Any, Optional
 
 from app.db.session import get_db
@@ -16,6 +17,8 @@ from app.services.attendance_service import (
     fetch_courses_by_department,
     fetch_students_by_division,
     mark_session_attendance,
+    fetch_marked_sessions_for_date,
+    undo_lecture_session,
     bulk_import_roster
 )
 
@@ -53,8 +56,13 @@ async def get_faculty_attendance_overview(
     current_user: User = Depends(require_role(["FACULTY"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Faculty Dashboard endpoint: Returns attendance breakdown and risk status for enrolled students."""
-    return await fetch_all_students_faculty_overview(db, dept_code=dept_code, div_name=div_name)
+    """Faculty Dashboard endpoint: Returns attendance breakdown scoped to Faculty's Department."""
+    return await fetch_all_students_faculty_overview(
+        db,
+        faculty_dept_id=current_user.department_id,
+        dept_code=dept_code,
+        div_name=div_name
+    )
 
 
 @router.get("/faculty/departments")
@@ -62,8 +70,11 @@ async def get_faculty_departments(
     current_user: User = Depends(require_role(["FACULTY"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns list of departments and divisions for dropdown filtering."""
-    return await fetch_faculty_departments_and_divisions(db)
+    """Returns list of departments and divisions available for current faculty."""
+    return await fetch_faculty_departments_and_divisions(
+        db,
+        faculty_dept_id=current_user.department_id
+    )
 
 
 @router.get("/faculty/courses")
@@ -87,27 +98,71 @@ async def get_faculty_division_students(
     return await fetch_students_by_division(db, dept_code, div_name)
 
 
+@router.get("/faculty/sessions")
+async def get_faculty_marked_sessions(
+    subject: str = Query(...),
+    session_date: str = Query(...),
+    current_user: User = Depends(require_role(["FACULTY"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetches marked lecture sessions for a given date and subject to display session history & enable Undo."""
+    return await fetch_marked_sessions_for_date(
+        db=db,
+        faculty_id=current_user.id,
+        subject=subject,
+        session_date=session_date
+    )
+
+
 @router.post("/faculty/mark")
 async def mark_attendance_endpoint(
     req: MarkAttendanceRequest,
     current_user: User = Depends(require_role(["FACULTY"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Live Attendance Marking endpoint for Faculty.
-    Increments total_classes for all enrolled students, and attended_classes for present students.
-    """
+    """Live Attendance Marking endpoint for Faculty (Strict Daily Cap: Max 2 lectures per day per subject)."""
     if not req.all_enrolled_student_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Enrolled student IDs list cannot be empty."
         )
 
-    return await mark_session_attendance(
-        db=db,
-        subject=req.subject,
-        present_student_ids=req.present_student_ids,
-        all_enrolled_student_ids=req.all_enrolled_student_ids
-    )
+    sess_date = req.session_date if req.session_date else date.today().strftime("%Y-%m-%d")
+
+    try:
+        return await mark_session_attendance(
+            db=db,
+            faculty_id=current_user.id,
+            subject=req.subject,
+            session_date=sess_date,
+            present_student_ids=req.present_student_ids,
+            all_enrolled_student_ids=req.all_enrolled_student_ids
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+
+
+@router.post("/faculty/sessions/{session_id}/undo")
+async def undo_attendance_session_endpoint(
+    session_id: uuid.UUID,
+    current_user: User = Depends(require_role(["FACULTY"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reverts (undoes) a previously submitted lecture session, decrementing total & attended classes."""
+    try:
+        return await undo_lecture_session(
+            db=db,
+            session_id=session_id,
+            faculty_id=current_user.id
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
 
 
 @router.post("/faculty/roster/import")

@@ -1,11 +1,25 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Text, CheckConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Text as VectorColumnType
+from typing import List, Optional
 
-from app.db.session import Base
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    Float,
+    ForeignKey,
+    DateTime,
+    Text,
+    JSON,
+    CheckConstraint,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class Department(Base):
@@ -14,8 +28,8 @@ class Department(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    code: Mapped[str] = mapped_column(String, unique=True, nullable=False)  # 'COMP', 'AIDS', 'ECS', 'MECH'
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
 
     divisions = relationship("Division", back_populates="department", cascade="all, delete-orphan")
     courses = relationship("Course", back_populates="department", cascade="all, delete-orphan")
@@ -32,13 +46,13 @@ class Division(Base):
     department_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String, nullable=False)  # 'A', 'B'
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
     semester: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    student_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    student_count: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
 
     department = relationship("Department", back_populates="divisions")
-    users = relationship("User", back_populates="division")
-    faculty_assignments = relationship("FacultyCourseDivision", back_populates="division")
+    students = relationship("User", back_populates="division")
+    faculty_assignments = relationship("FacultyCourseDivision", back_populates="division", cascade="all, delete-orphan")
 
 
 class Course(Base):
@@ -50,14 +64,13 @@ class Course(Base):
     department_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    code: Mapped[str] = mapped_column(String, nullable=False)  # e.g., '25PCC13CE11'
-    semester: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    semester: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
 
     department = relationship("Department", back_populates="courses")
-    faculty_assignments = relationship("FacultyCourseDivision", back_populates="course")
     attendance_logs = relationship("AttendanceLog", back_populates="course")
-    documents = relationship("Document", back_populates="course")
+    faculty_assignments = relationship("FacultyCourseDivision", back_populates="course", cascade="all, delete-orphan")
 
 
 class User(Base):
@@ -66,11 +79,11 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
-    full_name: Mapped[str] = mapped_column(String, nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False)  # 'STUDENT' or 'FACULTY'
-
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
+    
     department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )
@@ -78,12 +91,8 @@ class User(Base):
         UUID(as_uuid=True), ForeignKey("divisions.id", ondelete="SET NULL"), nullable=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
-    )
-
     department = relationship("Department", back_populates="users")
-    division = relationship("Division", back_populates="users")
+    division = relationship("Division", back_populates="students")
     attendance_logs = relationship("AttendanceLog", back_populates="student", cascade="all, delete-orphan")
     faculty_assignments = relationship("FacultyCourseDivision", back_populates="faculty", cascade="all, delete-orphan")
 
@@ -136,6 +145,34 @@ class AttendanceLog(Base):
     course = relationship("Course", back_populates="attendance_logs")
 
 
+class LectureSession(Base):
+    __tablename__ = "lecture_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=True
+    )
+    division_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("divisions.id", ondelete="CASCADE"), nullable=True
+    )
+    course_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=True
+    )
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    session_date: Mapped[str] = mapped_column(String(20), nullable=False) # 'YYYY-MM-DD'
+    session_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    present_student_ids: Mapped[List[str]] = mapped_column(JSON, nullable=False)
+    all_enrolled_student_ids: Mapped[List[str]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -145,18 +182,14 @@ class Document(Base):
     department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )
-    course_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
-    )
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    doc_type: Mapped[str] = mapped_column(String, nullable=True)
-    source_path: Mapped[str] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
 
     department = relationship("Department", back_populates="documents")
-    course = relationship("Course", back_populates="documents")
     embeddings = relationship("DocumentEmbedding", back_populates="document", cascade="all, delete-orphan")
 
 
@@ -170,7 +203,7 @@ class DocumentEmbedding(Base):
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding = mapped_column(VectorColumnType, nullable=True)
-    chunk_index: Mapped[int] = mapped_column(Integer, nullable=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
 
     document = relationship("Document", back_populates="embeddings")

@@ -1,12 +1,12 @@
 import os
 import math
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select, or_
 from app.core.config import settings
 from app.db.models import DocumentEmbedding, Document
 
-# Try importing Google GenAI for embedding generation
 try:
     import google.generativeai as genai
     if settings.GEMINI_API_KEY:
@@ -24,11 +24,9 @@ def generate_fallback_embedding(text: str, dim: int = 768) -> List[float]:
     
     vec = []
     for i in range(dim):
-        # Pseudo-random float between -1 and 1
         val = math.sin(seed + i * 0.1)
         vec.append(val)
     
-    # Normalize vector
     norm = math.sqrt(sum(x * x for x in vec))
     if norm > 0:
         vec = [x / norm for x in vec]
@@ -56,27 +54,45 @@ def get_text_embedding(text_content: str) -> List[float]:
 async def retrieve_relevant_documents(
     db: AsyncSession,
     query: str,
+    department_id: Optional[uuid.UUID] = None,
     top_k: int = 3
 ) -> List[Dict[str, Any]]:
-    """Retrieves top-k relevant document chunks using pgvector vector_cosine_ops distance."""
+    """Retrieves top-k relevant document chunks using pgvector vector_cosine_ops distance.
+    Enforces Department Scoping: Returns general university policy documents + student's department syllabus.
+    Excludes other departments' syllabi.
+    """
     query_vector = get_text_embedding(query)
     
     try:
         stmt = (
             select(DocumentEmbedding, Document)
             .join(Document, DocumentEmbedding.document_id == Document.id)
-            .order_by(DocumentEmbedding.embedding.cosine_distance(query_vector))
-            .limit(top_k)
         )
+        
+        if department_id:
+            stmt = stmt.where(
+                or_(
+                    Document.department_id == department_id,
+                    Document.department_id.is_(None)
+                )
+            )
+
+        stmt = stmt.order_by(DocumentEmbedding.embedding.cosine_distance(query_vector)).limit(top_k)
         result = await db.execute(stmt)
         rows = result.all()
     except Exception:
-        # Fallback query if pgvector extension is not enabled in local postgres
         stmt = (
             select(DocumentEmbedding, Document)
             .join(Document, DocumentEmbedding.document_id == Document.id)
-            .limit(top_k)
         )
+        if department_id:
+            stmt = stmt.where(
+                or_(
+                    Document.department_id == department_id,
+                    Document.department_id.is_(None)
+                )
+            )
+        stmt = stmt.limit(top_k)
         result = await db.execute(stmt)
         rows = result.all()
 

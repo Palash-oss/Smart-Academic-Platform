@@ -36,14 +36,7 @@ export default function ChatPage() {
   const [user, setUser] = useState<UserType | null>(null);
   const [attendanceData, setAttendanceData] = useState<StudentAttendanceData | null>(null);
   const [showSnapshot, setShowSnapshot] = useState(true);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome-msg',
-      role: 'assistant',
-      content: 'Welcome to the Academic Command Center! Ask me anything regarding your attendance records or official university policy rules.',
-      agent: 'student_support'
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
@@ -54,6 +47,21 @@ export default function ChatPage() {
   useEffect(() => {
     const currentUser = getStoredUser();
     setUser(currentUser);
+
+    const isFaculty = currentUser?.role === 'FACULTY';
+    const welcomeText = isFaculty
+      ? `Welcome ${currentUser.full_name}! Ask me anything regarding your department attendance analytics, division risk summaries, or official university policy rules.`
+      : `Welcome ${currentUser?.full_name || 'Student'}! Ask me anything regarding your course attendance records or official university policy rules.`;
+
+    setMessages([
+      {
+        id: 'welcome-msg',
+        role: 'assistant',
+        content: welcomeText,
+        agent: 'student_support'
+      }
+    ]);
+
     if (currentUser && currentUser.role === 'STUDENT') {
       loadAttendanceSnapshot();
     }
@@ -145,7 +153,12 @@ export default function ChatPage() {
 
               if (eventData.type === 'routing') {
                 setActiveAgent(eventData.agent);
-                setRoutingReasoning(`Routed to ${eventData.agent === 'attendance' ? 'Attendance Agent' : 'Student Support Agent'}`);
+                const isFaculty = user?.role === 'FACULTY';
+                const agentTag = eventData.agent === 'attendance'
+                  ? (isFaculty ? 'Department Attendance Agent' : 'Student Attendance Agent')
+                  : (isFaculty ? 'Faculty Policy & Syllabus Agent' : 'Student Support Agent');
+
+                setRoutingReasoning(`Routed to ${agentTag}`);
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId ? { ...msg, agent: eventData.agent } : msg
@@ -161,7 +174,7 @@ export default function ChatPage() {
                 );
               } else if (eventData.type === 'done') {
                 setIsStreaming(false);
-                if (activeAgent === 'attendance') {
+                if (activeAgent === 'attendance' && user?.role === 'STUDENT') {
                   loadAttendanceSnapshot();
                 }
               }
@@ -185,6 +198,8 @@ export default function ChatPage() {
     }
   };
 
+  const isFaculty = user?.role === 'FACULTY';
+
   return (
     <div className="min-h-screen bg-ink flex flex-col font-sans text-paper">
       <Navbar />
@@ -197,8 +212,14 @@ export default function ChatPage() {
             <div className="flex items-center gap-3">
               <Sparkles className="h-5 w-5 text-paper" />
               <div>
-                <h1 className="font-serif text-base font-semibold text-paper">Academic Assistant Workspace</h1>
-                <p className="text-xs text-subtle font-sans">Unified Chat with Autonomous Supervisor Routing</p>
+                <h1 className="font-serif text-base font-semibold text-paper">
+                  {isFaculty ? 'Faculty Intelligence Workspace' : 'Academic Assistant Workspace'}
+                </h1>
+                <p className="text-xs text-subtle font-sans">
+                  {isFaculty
+                    ? 'Unified Chat with Autonomous Department Analytics & Policy RAG'
+                    : 'Unified Chat with Autonomous Supervisor Routing'}
+                </p>
               </div>
             </div>
             <button
@@ -240,7 +261,9 @@ export default function ChatPage() {
                     <div className="flex items-center gap-2 text-[10px] font-mono">
                       <span className="text-subtle">ROUTED TO:</span>
                       <span className="px-2 py-0.5 rounded font-semibold uppercase tracking-wider bg-paper text-ink border border-paper">
-                        {msg.agent === 'attendance' ? 'Attendance Agent (Python Engine)' : 'Student Support Agent (pgvector RAG)'}
+                        {msg.agent === 'attendance'
+                          ? (isFaculty ? 'Department Attendance Agent' : 'Student Attendance Agent')
+                          : (isFaculty ? 'Faculty Policy & Syllabus Agent' : 'Student Support Agent')}
                       </span>
                     </div>
                   )}
@@ -264,8 +287,8 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Part C: Pinned "My Attendance" Compact Snapshot Card for Students */}
-          {attendanceData && (
+          {/* Part C: Pinned "My Attendance" Compact Snapshot Card for Students ONLY */}
+          {user && user.role === 'STUDENT' && attendanceData && (
             <div className="mx-4 mb-2 p-3 bg-ink border border-border-strong rounded-lg font-mono text-xs shadow-sm">
               <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
                 <div className="flex items-center gap-2">
@@ -323,24 +346,49 @@ export default function ChatPage() {
           {/* Quick Test Prompts */}
           <div className="px-4 py-2 border-t border-border bg-ink flex items-center gap-2 overflow-x-auto text-xs">
             <span className="text-subtle font-mono shrink-0">TEST PROMPTS:</span>
-            <button
-              onClick={() => handleSend("What is my attendance status in Data Structures?")}
-              className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-            >
-              Check Attendance Status
-            </button>
-            <button
-              onClick={() => handleSend("What is the policy for attendance shortage below 75%?")}
-              className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-            >
-              Attendance Policy Rules
-            </button>
-            <button
-              onClick={() => handleSend("How many classes do I need to attend to clear risk?")}
-              className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-            >
-              Required Classes Calculation
-            </button>
+            {isFaculty ? (
+              <>
+                <button
+                  onClick={() => handleSend("Which students are at risk in my department?")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Department Risk Summary
+                </button>
+                <button
+                  onClick={() => handleSend("Show division breakdown for my department")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Division Breakdown
+                </button>
+                <button
+                  onClick={() => handleSend("What is the policy for attendance shortage below 75%?")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Attendance Policy Rules
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleSend("What is my attendance status in Data Structures?")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Check Attendance Status
+                </button>
+                <button
+                  onClick={() => handleSend("What is the policy for attendance shortage below 75%?")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Attendance Policy Rules
+                </button>
+                <button
+                  onClick={() => handleSend("How many classes do I need to attend to clear risk?")}
+                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
+                >
+                  Required Classes Calculation
+                </button>
+              </>
+            )}
           </div>
 
           {/* Input Box */}
@@ -356,7 +404,11 @@ export default function ChatPage() {
                 type="text"
                 value={inputQuery}
                 onChange={(e) => setInputQuery(e.target.value)}
-                placeholder="Ask about your attendance numbers or academic policies..."
+                placeholder={
+                  isFaculty
+                    ? "Ask about department analytics, division risk summaries, or policy rules..."
+                    : "Ask about your attendance numbers or academic policies..."
+                }
                 disabled={isStreaming}
                 className="flex-1 bg-ink border border-border focus:border-paper rounded-lg px-4 py-3 text-sm text-paper placeholder-subtle focus:outline-none transition-colors"
               />
@@ -378,6 +430,7 @@ export default function ChatPage() {
             activeAgent={activeAgent}
             isStreaming={isStreaming}
             routingReasoning={routingReasoning}
+            role={user?.role}
           />
         </aside>
       </main>

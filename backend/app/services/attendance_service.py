@@ -1,22 +1,20 @@
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.db.models import AttendanceLog, User, Department, Division, Course, FacultyCourseDivision
+from sqlalchemy import select, func
+from app.db.models import AttendanceLog, User, Department, Division, Course, FacultyCourseDivision, LectureSession
 
 
 def calculate_attendance_percentage(attended: int, total: int) -> float:
-    """Calculates attendance percentage strictly in Python.
-    
-    Returns 0.0 if total is 0.
-    """
+    """Calculates attendance percentage strictly in Python."""
     if total <= 0:
         return 0.0
     return round((attended / total) * 100.0, 2)
 
 
 def is_attendance_at_risk(percentage: float, threshold: float = 75.0) -> bool:
-    """Determines whether an attendance percentage falls below the policy threshold (default 75%)."""
+    """Determines whether an attendance percentage falls below policy threshold (75%)."""
     return percentage < threshold
 
 
@@ -84,21 +82,22 @@ async def fetch_student_attendance_records(
 
 async def fetch_all_students_faculty_overview(
     db: AsyncSession,
+    faculty_dept_id: uuid.UUID | None = None,
     dept_code: str | None = None,
     div_name: str | None = None
 ) -> List[Dict[str, Any]]:
-    """Fetches attendance summary for all students (Faculty Dashboard).
-    Optimized: Batches queries into 2 SQL queries for 100x speedup (<50ms for 310 students).
-    """
+    """Fetches attendance summary for students (Faculty Dashboard)."""
     stmt = select(User).where(User.role == "STUDENT")
 
-    if dept_code or div_name:
+    if faculty_dept_id:
+        stmt = stmt.where(User.department_id == faculty_dept_id)
+    elif dept_code and dept_code != "ALL":
         stmt = stmt.join(Department, User.department_id == Department.id, isouter=True)
+        stmt = stmt.where(Department.code == dept_code)
+
+    if div_name and div_name != "ALL":
         stmt = stmt.join(Division, User.division_id == Division.id, isouter=True)
-        if dept_code and dept_code != "ALL":
-            stmt = stmt.where(Department.code == dept_code)
-        if div_name and div_name != "ALL":
-            stmt = stmt.where(Division.name == div_name)
+        stmt = stmt.where(Division.name == div_name)
 
     stmt = stmt.order_by(User.full_name)
     result = await db.execute(stmt)
@@ -109,12 +108,18 @@ async def fetch_all_students_faculty_overview(
 
     student_ids = [s.id for s in students]
 
-    # Batch query ALL attendance logs for these students in 1 single query
     logs_stmt = select(AttendanceLog).where(AttendanceLog.student_id.in_(student_ids))
     logs_res = await db.execute(logs_stmt)
     all_logs = logs_res.scalars().all()
 
-    # Group logs by student_id
+    div_stmt = select(Division)
+    div_res = await db.execute(div_stmt)
+    div_map = {div.id: div.name for div in div_res.scalars().all()}
+
+    dept_stmt = select(Department)
+    dept_res = await db.execute(dept_stmt)
+    dept_map = {d.id: d.code for d in dept_res.scalars().all()}
+
     logs_by_student: Dict[uuid.UUID, List[AttendanceLog]] = {}
     for log in all_logs:
         logs_by_student.setdefault(log.student_id, []).append(log)
@@ -148,10 +153,16 @@ async def fetch_all_students_faculty_overview(
         overall_risk = is_attendance_at_risk(overall_pct)
         subjects_at_risk = sum(1 for s in subject_records if s["is_at_risk"])
 
+        st_dept_code = dept_map.get(student.department_id, "COMP")
+        st_div_name = div_map.get(student.division_id, "A")
+
         overview.append({
             "student_id": str(student.id),
             "student_name": student.full_name,
             "student_email": student.email,
+            "department_code": st_dept_code,
+            "division_name": st_div_name,
+            "division_label": f"{st_dept_code}-{st_div_name}",
             "overall_percentage": overall_pct,
             "overall_risk": overall_risk,
             "total_subjects": len(subject_records),
@@ -162,9 +173,15 @@ async def fetch_all_students_faculty_overview(
     return overview
 
 
-async def fetch_faculty_departments_and_divisions(db: AsyncSession) -> List[Dict[str, Any]]:
-    """Returns list of departments and their corresponding divisions for dropdown filters."""
+async def fetch_faculty_departments_and_divisions(
+    db: AsyncSession,
+    faculty_dept_id: uuid.UUID | None = None
+) -> List[Dict[str, Any]]:
+    """Returns list of departments and divisions available for current faculty."""
     dept_stmt = select(Department)
+    if faculty_dept_id:
+        dept_stmt = dept_stmt.where(Department.id == faculty_dept_id)
+
     dept_res = await db.execute(dept_stmt)
     departments = dept_res.scalars().all()
 
@@ -223,14 +240,43 @@ async def fetch_students_by_division(
 
 async def mark_session_attendance(
     db: AsyncSession,
+    faculty_id: uuid.UUID,
     subject: str,
+    session_date: str,
     present_student_ids: List[uuid.UUID],
     all_enrolled_student_ids: List[uuid.UUID]
 ) -> Dict[str, Any]:
-    """Marks a live lecture session's attendance."""
-    present_set = set(present_student_ids)
-    updated_count = 0
+    """Marks a live lecture session with STRICT Daily Limit (Max 2 lectures per day per subject)."""
+    # 1. Check existing sessions marked for this subject + faculty on this date
+    sess_stmt = select(LectureSession).where(
+        LectureSession.faculty_id == faculty_id,
+        LectureSession.subject.ilike(f"%{subject}%"),
+        LectureSession.session_date == session_date
+    )
+    sess_res = await db.execute(sess_stmt)
+    existing_sessions = sess_res.scalars().all()
 
+    if len(existing_sessions) >= 2:
+        raise ValueError(
+            f"Maximum daily limit reached! You have already marked 2 lecture sessions for '{subject}' on {session_date}. No additional sessions are allowed for this date."
+        )
+
+    session_number = len(existing_sessions) + 1
+    present_set = set(present_student_ids)
+
+    # 2. Record LectureSession row
+    lecture_sess = LectureSession(
+        faculty_id=faculty_id,
+        subject=subject,
+        session_date=session_date,
+        session_number=session_number,
+        present_student_ids=[str(pid) for pid in present_student_ids],
+        all_enrolled_student_ids=[str(aid) for aid in all_enrolled_student_ids]
+    )
+    db.add(lecture_sess)
+
+    # 3. Update AttendanceLog rows for enrolled students (+1 total, +1 attended if present)
+    updated_count = 0
     for student_id in all_enrolled_student_ids:
         stmt = select(AttendanceLog).where(
             AttendanceLog.student_id == student_id,
@@ -260,10 +306,104 @@ async def mark_session_attendance(
     absent_count = len(all_enrolled_student_ids) - present_count
 
     return {
+        "session_id": str(lecture_sess.id),
+        "session_number": session_number,
         "subject": subject,
+        "session_date": session_date,
         "total_marked": updated_count,
         "present_count": present_count,
-        "absent_count": absent_count
+        "absent_count": absent_count,
+        "sessions_today": session_number,
+        "max_daily": 2
+    }
+
+
+async def fetch_marked_sessions_for_date(
+    db: AsyncSession,
+    faculty_id: uuid.UUID,
+    subject: str,
+    session_date: str
+) -> Dict[str, Any]:
+    """Fetches marked lecture sessions for a given date and subject to display session history & enable Undo."""
+    stmt = (
+        select(LectureSession)
+        .where(
+            LectureSession.faculty_id == faculty_id,
+            LectureSession.subject.ilike(f"%{subject}%"),
+            LectureSession.session_date == session_date
+        )
+        .order_by(LectureSession.session_number)
+    )
+    res = await db.execute(stmt)
+    sessions = res.scalars().all()
+
+    result_list = []
+    for s in sessions:
+        present_cnt = len(s.present_student_ids)
+        enrolled_cnt = len(s.all_enrolled_student_ids)
+        absent_cnt = enrolled_cnt - present_cnt
+        result_list.append({
+            "session_id": str(s.id),
+            "session_number": s.session_number,
+            "subject": s.subject,
+            "session_date": s.session_date,
+            "present_count": present_cnt,
+            "absent_count": absent_cnt,
+            "total_enrolled": enrolled_cnt,
+            "created_at": s.created_at.strftime("%H:%M:%S") if s.created_at else ""
+        })
+
+    return {
+        "sessions_marked_today": len(result_list),
+        "max_daily_sessions": 2,
+        "sessions": result_list
+    }
+
+
+async def undo_lecture_session(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    faculty_id: uuid.UUID
+) -> Dict[str, Any]:
+    """Reverts (undoes) a previously marked lecture session, decrementing total & attended classes."""
+    stmt = select(LectureSession).where(
+        LectureSession.id == session_id,
+        LectureSession.faculty_id == faculty_id
+    )
+    res = await db.execute(stmt)
+    lecture_sess = res.scalar_one_or_none()
+
+    if not lecture_sess:
+        raise ValueError("Lecture session not found or permission denied.")
+
+    subject = lecture_sess.subject
+    present_set = set(lecture_sess.present_student_ids)
+    all_enrolled = lecture_sess.all_enrolled_student_ids
+
+    # Revert attendance logs
+    for st_id_str in all_enrolled:
+        st_id = uuid.UUID(st_id_str)
+        log_stmt = select(AttendanceLog).where(
+            AttendanceLog.student_id == st_id,
+            AttendanceLog.subject.ilike(f"%{subject}%")
+        )
+        log_res = await db.execute(log_stmt)
+        log = log_res.scalar_one_or_none()
+
+        if log:
+            if log.total_classes > 0:
+                log.total_classes -= 1
+            if st_id_str in present_set and log.attended_classes > 0:
+                log.attended_classes -= 1
+
+    # Delete LectureSession row
+    await db.delete(lecture_sess)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Successfully undone Session #{lecture_sess.session_number} for '{subject}' on {lecture_sess.session_date}.",
+        "reverted_session_number": lecture_sess.session_number
     }
 
 
