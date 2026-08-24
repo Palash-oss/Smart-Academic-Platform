@@ -3,31 +3,48 @@
 import React, { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Filter } from 'lucide-react';
+import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen } from 'lucide-react';
 import Link from 'next/link';
+
+interface Department {
+  id: string;
+  name: string;
+  code: string;
+  divisions: { id: string; name: string; student_count: number }[];
+}
+
+interface Course {
+  id: string;
+  code: string;
+  name: string;
+  full_label: string;
+  semester: number;
+}
 
 interface Student {
   student_id: string;
   student_name: string;
   student_email: string;
-  overall_percentage: number;
-  overall_risk: boolean;
 }
 
-const SUBJECTS = [
-  "Data Structures & Algorithms",
-  "Operating Systems",
-  "Database Management Systems",
-  "Computer Networks"
-];
-
 export default function MarkAttendancePage() {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDeptCode, setSelectedDeptCode] = useState('COMP');
+  const [selectedDivName, setSelectedDivName] = useState('A');
+  
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseName, setSelectedCourseName] = useState('');
+  
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
-  const [sessionDate, setSessionDate] = useState('2026-08-19');
   const [presentStudentIds, setPresentStudentIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const [sessionDate, setSessionDate] = useState('2026-08-24');
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [resultBanner, setResultBanner] = useState<{
     subject: string;
     total: number;
@@ -35,26 +52,89 @@ export default function MarkAttendancePage() {
     absent: number;
   } | null>(null);
 
+  // 1. Fetch Departments & Divisions on Mount
   useEffect(() => {
-    loadEnrolledRoster();
+    loadDepartments();
   }, []);
 
-  const loadEnrolledRoster = async () => {
-    setLoading(true);
+  // 2. Fetch Courses when Department changes
+  useEffect(() => {
+    if (selectedDeptCode) {
+      loadCourses(selectedDeptCode);
+    }
+  }, [selectedDeptCode]);
+
+  // 3. Fetch Students when Department or Division changes
+  useEffect(() => {
+    if (selectedDeptCode && selectedDivName) {
+      loadStudents(selectedDeptCode, selectedDivName);
+    }
+  }, [selectedDeptCode, selectedDivName]);
+
+  const loadDepartments = async () => {
+    setLoadingDepartments(true);
     try {
-      const res = await fetchWithAuth('/api/attendance/faculty/overview');
+      const res = await fetchWithAuth('/api/attendance/faculty/departments');
       if (res.ok) {
-        const data: Student[] = await res.json();
-        // Sort students alphabetically by name
-        const sorted = data.sort((a, b) => a.student_name.localeCompare(b.student_name));
-        setStudents(sorted);
-        // Default all students as present
-        setPresentStudentIds(new Set(sorted.map((s) => s.student_id)));
+        const data: Department[] = await res.json();
+        setDepartments(data);
+        if (data.length > 0) {
+          setSelectedDeptCode(data[0].code);
+          if (data[0].divisions.length > 0) {
+            setSelectedDivName(data[0].divisions[0].name);
+          }
+        }
       }
     } catch (err) {
-      console.error('Failed to load roster:', err);
+      console.error('Failed to load departments:', err);
     } finally {
-      setLoading(false);
+      setLoadingDepartments(false);
+    }
+  };
+
+  const loadCourses = async (deptCode: string) => {
+    setLoadingCourses(true);
+    try {
+      const res = await fetchWithAuth(`/api/attendance/faculty/courses?dept_code=${deptCode}`);
+      if (res.ok) {
+        const data: Course[] = await res.json();
+        setCourses(data);
+        if (data.length > 0) {
+          setSelectedCourseName(data[0].full_label);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load courses:', err);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  const loadStudents = async (deptCode: string, divName: string) => {
+    setLoadingStudents(true);
+    try {
+      const res = await fetchWithAuth(`/api/attendance/faculty/students?dept_code=${deptCode}&div_name=${divName}`);
+      if (res.ok) {
+        const data: Student[] = await res.json();
+        setStudents(data);
+        // Default all students to Present
+        setPresentStudentIds(new Set(data.map((s) => s.student_id)));
+      }
+    } catch (err) {
+      console.error('Failed to load student roster:', err);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  const currentDeptObj = departments.find((d) => d.code === selectedDeptCode);
+  const availableDivisions = currentDeptObj ? currentDeptObj.divisions : [];
+
+  const handleDeptChange = (newDeptCode: string) => {
+    setSelectedDeptCode(newDeptCode);
+    const newDeptObj = departments.find((d) => d.code === newDeptCode);
+    if (newDeptObj && newDeptObj.divisions.length > 0) {
+      setSelectedDivName(newDeptObj.divisions[0].name);
     }
   };
 
@@ -76,6 +156,11 @@ export default function MarkAttendancePage() {
     }
   };
 
+  const filteredStudents = students.filter((st) =>
+    st.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    st.student_email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -89,7 +174,7 @@ export default function MarkAttendancePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subject: selectedSubject,
+          subject: selectedCourseName,
           session_date: sessionDate,
           present_student_ids: presentIds,
           all_enrolled_student_ids: allIds
@@ -128,16 +213,16 @@ export default function MarkAttendancePage() {
             </Link>
             <div>
               <h1 className="font-serif text-2xl font-bold tracking-wide text-paper">
-                Live Session Attendance Marker
+                Live Lecture Attendance Marker
               </h1>
               <p className="text-xs text-subtle font-sans mt-0.5">
-                Feature 2: Mark lecture session attendance to update Postgres database live
+                Department & Division Scoped Live Session Attendance Register
               </p>
             </div>
           </div>
 
-          <span className="text-xs font-mono px-3 py-1.5 bg-surface border border-border rounded-lg text-paper">
-            ENROLLED ROSTER: <strong>{students.length} STUDENTS</strong>
+          <span className="text-xs font-mono px-3 py-1.5 bg-surface border border-border rounded-lg text-paper font-semibold">
+            SELECTED CLASS: {selectedDeptCode}-{selectedDivName} ({students.length} STUDENTS)
           </span>
         </div>
 
@@ -145,90 +230,157 @@ export default function MarkAttendancePage() {
           <div className="p-4 bg-surface border-2 border-paper rounded-lg font-mono text-xs space-y-1 shadow-sm">
             <div className="flex items-center gap-2 font-bold text-sm text-paper">
               <CheckCircle2 className="h-4 w-4 text-paper" />
-              <span>Session Attendance Recorded Live in Postgres!</span>
+              <span>Session Attendance Successfully Recorded Live in Postgres!</span>
             </div>
             <p className="text-subtle">
-              Subject: <strong>{resultBanner.subject}</strong> | Total Session Roster: <strong>{resultBanner.total}</strong> | Present: <strong className="text-paper">{resultBanner.present}</strong> | Absent: <strong className="text-paper">{resultBanner.absent}</strong>
+              Course: <strong>{resultBanner.subject}</strong> | Total Class Roster: <strong>{resultBanner.total}</strong> | Present: <strong className="text-paper">{resultBanner.present}</strong> | Absent: <strong className="text-paper">{resultBanner.absent}</strong>
             </p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Controls: Subject & Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-surface p-5 border border-border rounded-lg shadow-xs">
+          {/* Controls: Department, Division, Course & Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-surface p-5 border border-border rounded-lg shadow-xs">
+            {/* Department Dropdown */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5">SELECT SUBJECT</label>
+              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
+                <Building2 className="h-3.5 w-3.5 text-paper" />
+                <span>DEPARTMENT / BRANCH</span>
+              </label>
               <select
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
+                value={selectedDeptCode}
+                onChange={(e) => handleDeptChange(e.target.value)}
+                disabled={loadingDepartments}
                 className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none"
               >
-                {SUBJECTS.map((sub) => (
-                  <option key={sub} value={sub}>{sub}</option>
+                {departments.map((d) => (
+                  <option key={d.code} value={d.code}>
+                    {d.code} — {d.name}
+                  </option>
                 ))}
               </select>
             </div>
 
+            {/* Division Dropdown */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5">SESSION DATE</label>
-              <div className="relative">
-                <Calendar className="h-4 w-4 absolute left-3 top-2.5 text-subtle" />
-                <input
-                  type="date"
-                  value={sessionDate}
-                  onChange={(e) => setSessionDate(e.target.value)}
-                  className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-paper focus:outline-none"
-                />
-              </div>
+              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
+                <Users className="h-3.5 w-3.5 text-paper" />
+                <span>DIVISION / CLASS</span>
+              </label>
+              <select
+                value={selectedDivName}
+                onChange={(e) => setSelectedDivName(e.target.value)}
+                disabled={availableDivisions.length === 0}
+                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none"
+              >
+                {availableDivisions.map((div) => (
+                  <option key={div.name} value={div.name}>
+                    Division {div.name} ({div.student_count} Capacity)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Course Dropdown */}
+            <div>
+              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
+                <BookOpen className="h-3.5 w-3.5 text-paper" />
+                <span>ASSIGNED COURSE</span>
+              </label>
+              <select
+                value={selectedCourseName}
+                onChange={(e) => setSelectedCourseName(e.target.value)}
+                disabled={loadingCourses || courses.length === 0}
+                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none truncate"
+              >
+                {courses.map((c) => (
+                  <option key={c.id} value={c.full_label}>
+                    {c.full_label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Session Date Picker */}
+            <div>
+              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-paper" />
+                <span>SESSION DATE</span>
+              </label>
+              <input
+                type="date"
+                value={sessionDate}
+                onChange={(e) => setSessionDate(e.target.value)}
+                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-mono text-paper focus:outline-none"
+              />
             </div>
           </div>
 
           {/* Student Roster Checkbox List */}
           <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
-            <div className="p-4 bg-ink border-b border-border flex items-center justify-between">
+            {/* Header & Quick Filter */}
+            <div className="p-4 bg-ink border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 font-serif text-sm font-semibold text-paper">
                 <Users className="h-4 w-4 text-paper" />
-                <span>Class Roster ({presentStudentIds.size} / {students.length} Present)</span>
+                <span>
+                  {selectedDeptCode}-{selectedDivName} Class Roster ({presentStudentIds.size} / {students.length} Present)
+                </span>
               </div>
-              <div className="flex items-center gap-2 font-mono text-xs">
-                <button
-                  type="button"
-                  onClick={() => toggleAll(true)}
-                  className="px-2.5 py-1 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
-                >
-                  Mark All Present
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleAll(false)}
-                  className="px-2.5 py-1 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
-                >
-                  Clear All
-                </button>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-subtle" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search student name..."
+                    className="bg-surface border border-border focus:border-paper rounded-lg pl-8 pr-3 py-1.5 text-xs text-paper placeholder-subtle focus:outline-none w-48"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 font-mono text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleAll(true)}
+                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
+                  >
+                    Mark All Present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleAll(false)}
+                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper"
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="divide-y divide-border max-h-[450px] overflow-y-auto font-sans">
-              {loading ? (
+            {/* Roster Table List */}
+            <div className="divide-y divide-border max-h-[500px] overflow-y-auto font-sans">
+              {loadingStudents ? (
                 <div className="p-8 text-center text-subtle font-mono text-xs">
-                  Loading class roster from database...
+                  Loading class roster for Division {selectedDeptCode}-{selectedDivName}...
                 </div>
-              ) : students.length === 0 ? (
+              ) : filteredStudents.length === 0 ? (
                 <div className="p-8 text-center text-subtle font-mono text-xs">
-                  No enrolled students found. Use Bulk Roster Import first.
+                  No students found matching your search filter.
                 </div>
               ) : (
-                students.map((st) => {
+                filteredStudents.map((st, idx) => {
                   const isPresent = presentStudentIds.has(st.student_id);
                   return (
                     <div
                       key={st.student_id}
                       onClick={() => toggleStudentPresent(st.student_id)}
                       className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${
-                        isPresent ? 'bg-surface hover:bg-surface-hover' : 'bg-ink/50 hover:bg-ink'
+                        isPresent ? 'bg-surface hover:bg-surface-hover' : 'bg-ink/60 hover:bg-ink'
                       }`}
                     >
                       <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-subtle w-6 shrink-0">{idx + 1}.</span>
                         {isPresent ? (
                           <CheckSquare className="h-5 w-5 text-paper shrink-0" />
                         ) : (
@@ -266,7 +418,7 @@ export default function MarkAttendancePage() {
               className="px-6 py-3 bg-paper text-ink font-semibold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 text-sm disabled:opacity-40 shadow-xs"
             >
               <Save className="h-4 w-4" />
-              <span>{submitting ? 'Submitting Session...' : 'Submit Session Attendance'}</span>
+              <span>{submitting ? 'Recording Live Session...' : `Submit Attendance for ${selectedDeptCode}-${selectedDivName}`}</span>
             </button>
           </div>
         </form>

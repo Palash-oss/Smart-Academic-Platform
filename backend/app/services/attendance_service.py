@@ -2,7 +2,7 @@ import uuid
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.db.models import AttendanceLog, User
+from app.db.models import AttendanceLog, User, Department, Division, Course, FacultyCourseDivision
 
 
 def calculate_attendance_percentage(attended: int, total: int) -> float:
@@ -83,10 +83,21 @@ async def fetch_student_attendance_records(
 
 
 async def fetch_all_students_faculty_overview(
-    db: AsyncSession
+    db: AsyncSession,
+    dept_code: str | None = None,
+    div_name: str | None = None
 ) -> List[Dict[str, Any]]:
-    """Fetches attendance summary for all students (Faculty Dashboard)."""
+    """Fetches attendance summary for all students (Faculty Dashboard), optionally filtered by department and division."""
     stmt = select(User).where(User.role == "STUDENT")
+
+    if dept_code or div_name:
+        stmt = stmt.join(Department, User.department_id == Department.id, isouter=True)
+        stmt = stmt.join(Division, User.division_id == Division.id, isouter=True)
+        if dept_code:
+            stmt = stmt.where(Department.code == dept_code)
+        if div_name:
+            stmt = stmt.where(Division.name == div_name)
+
     result = await db.execute(stmt)
     students = result.scalars().all()
 
@@ -109,6 +120,65 @@ async def fetch_all_students_faculty_overview(
     return overview
 
 
+async def fetch_faculty_departments_and_divisions(db: AsyncSession) -> List[Dict[str, Any]]:
+    """Returns list of departments and their corresponding divisions for dropdown filters."""
+    dept_stmt = select(Department)
+    dept_res = await db.execute(dept_stmt)
+    departments = dept_res.scalars().all()
+
+    result = []
+    for d in departments:
+        div_stmt = select(Division).where(Division.department_id == d.id)
+        div_res = await db.execute(div_stmt)
+        divisions = div_res.scalars().all()
+
+        result.append({
+            "id": str(d.id),
+            "name": d.name,
+            "code": d.code,
+            "divisions": [{"id": str(div.id), "name": div.name, "student_count": div.student_count} for div in divisions]
+        })
+    return result
+
+
+async def fetch_courses_by_department(db: AsyncSession, dept_code: str) -> List[Dict[str, Any]]:
+    """Returns list of courses belonging to a specific department code."""
+    stmt = select(Course).join(Department).where(Department.code == dept_code)
+    res = await db.execute(stmt)
+    courses = res.scalars().all()
+
+    return [{
+        "id": str(c.id),
+        "code": c.code,
+        "name": c.name,
+        "full_label": f"{c.name} ({c.code})",
+        "semester": c.semester
+    } for c in courses]
+
+
+async def fetch_students_by_division(
+    db: AsyncSession,
+    dept_code: str,
+    div_name: str
+) -> List[Dict[str, Any]]:
+    """Fetches exact student roster for a selected Department + Division."""
+    stmt = (
+        select(User)
+        .join(Department, User.department_id == Department.id)
+        .join(Division, User.division_id == Division.id)
+        .where(User.role == "STUDENT", Department.code == dept_code, Division.name == div_name)
+        .order_by(User.full_name)
+    )
+    res = await db.execute(stmt)
+    students = res.scalars().all()
+
+    return [{
+        "student_id": str(st.id),
+        "student_name": st.full_name,
+        "student_email": st.email
+    } for st in students]
+
+
 async def mark_session_attendance(
     db: AsyncSession,
     subject: str,
@@ -126,7 +196,7 @@ async def mark_session_attendance(
     for student_id in all_enrolled_student_ids:
         stmt = select(AttendanceLog).where(
             AttendanceLog.student_id == student_id,
-            AttendanceLog.subject == subject
+            AttendanceLog.subject.ilike(f"%{subject}%")
         )
         res = await db.execute(stmt)
         log = res.scalar_one_or_none()
@@ -163,19 +233,9 @@ async def bulk_import_roster(
     db: AsyncSession,
     students_data: List[Dict[str, str]]
 ) -> Dict[str, Any]:
-    """Bulk imports student roster from parsed CSV data:
-    - Creates student User if email doesn't exist
-    - Initializes attendance_logs rows for all subjects at (0, 0)
-    """
+    """Bulk imports student roster from parsed CSV data."""
     from app.core.security import hash_password
     import secrets
-
-    subjects = [
-        "Data Structures & Algorithms",
-        "Operating Systems",
-        "Database Management Systems",
-        "Computer Networks"
-    ]
 
     created_count = 0
     skipped_count = 0
@@ -205,15 +265,6 @@ async def bulk_import_roster(
         )
         db.add(new_user)
         await db.flush()
-
-        for sub in subjects:
-            log = AttendanceLog(
-                student_id=new_user.id,
-                subject=sub,
-                total_classes=0,
-                attended_classes=0
-            )
-            db.add(log)
 
         created_count += 1
         created_credentials.append({
