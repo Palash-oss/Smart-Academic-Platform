@@ -17,7 +17,7 @@ except ImportError:
     HAS_PYPDF = False
 
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 600, overlap: int = 80) -> List[str]:
     """Splits long text into overlapping chunks of approximately chunk_size characters."""
     chunks = []
     start = 0
@@ -38,8 +38,9 @@ def ingest_file(file_path: str, doc_title: str, doc_type: str = "policy"):
     content = ""
     if file_path.endswith(".pdf") and HAS_PYPDF:
         reader = PdfReader(file_path)
-        for page in reader.pages:
-            content += page.extract_text() + "\n"
+        for idx, page in enumerate(reader.pages):
+            page_text = page.extract_text() or ""
+            content += f"\n--- Page {idx + 1} ---\n" + page_text
     else:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -49,6 +50,12 @@ def ingest_file(file_path: str, doc_title: str, doc_type: str = "policy"):
 
     session = SyncSessionLocal()
     try:
+        # Delete any existing document with same title
+        existing_docs = session.query(Document).filter(Document.title == doc_title).all()
+        for ed in existing_docs:
+            session.delete(ed)
+        session.commit()
+
         doc = Document(
             title=doc_title,
             doc_type=doc_type,
@@ -68,7 +75,7 @@ def ingest_file(file_path: str, doc_title: str, doc_type: str = "policy"):
             session.add(doc_emb)
 
         session.commit()
-        print(f"Successfully ingested '{doc_title}' into pgvector!")
+        print(f"Successfully ingested '{doc_title}' ({len(chunks)} chunks) into pgvector!")
     except Exception as e:
         session.rollback()
         print(f"Failed to ingest file: {e}")

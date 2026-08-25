@@ -20,11 +20,23 @@ except ImportError:
     HAS_GEMINI = False
 
 
+def clean_text_formatting(text: str) -> str:
+    """Strips all asterisks (** and *), dollar symbols ($), backticks (`), and LaTeX markers for 100% clean plain text output."""
+    if not text:
+        return ""
+    
+    cleaned = text.replace("**", "").replace("*", "")
+    cleaned = cleaned.replace("$", "")
+    cleaned = cleaned.replace("`", "")
+    cleaned = cleaned.replace("\\(", "").replace("\\)", "").replace("\\[", "").replace("\\]", "")
+    return cleaned.strip()
+
+
 async def run_attendance_agent(
     state: AgentState,
     db: AsyncSession
 ) -> Dict[str, Any]:
-    """Attendance Agent: Computes attendance percentages & risk flags in Python, formatting clean responses without asterisks."""
+    """Attendance Agent: Computes attendance percentages & risk flags in Python, formatting clean responses without asterisks, dollars, or backticks."""
     user_id_str = state.get("user_id")
     role = state.get("role", "STUDENT")
     messages = state.get("messages", [])
@@ -80,7 +92,7 @@ async def run_attendance_agent(
             "You are the Academic Command Center Attendance Intelligence Engine for Faculty. "
             "You are providing department-level attendance analytics computed deterministically by the Python backend service. "
             "Do NOT perform arithmetic yourself. Answer the faculty member's question clearly and professionally. "
-            "CRITICAL: Do NOT use any asterisks (**), markdown bolding, or backticks in your output. Present clean plain text with bullet points."
+            "CRITICAL FORMATTING DIRECTIVE: Do NOT use any asterisks (** or *), dollar signs ($), LaTeX math wrappers, or backticks in your output. Present clean plain text with bullet points (•)."
         )
 
         full_prompt = (
@@ -163,7 +175,7 @@ async def run_attendance_agent(
             "You are the Student Attendance Assistant. "
             "The numerical attendance data below was computed deterministically by the backend Python service. "
             "Do NOT perform any arithmetic yourself. Present and explain the numbers clearly and professionally. "
-            "CRITICAL: Do NOT use any asterisks (**), markdown bolding, or backticks in your output. Present clean plain text with bullet points."
+            "CRITICAL FORMATTING DIRECTIVE: Do NOT use any asterisks (** or *), dollar signs ($), LaTeX math wrappers, or backticks in your output. Present clean plain text with bullet points (•)."
         )
 
         full_prompt = (
@@ -212,8 +224,8 @@ async def run_attendance_agent(
 
         context_data = attendance_data
 
-    # Strip any residual asterisks or backticks from final response
-    clean_response = response_text.replace("**", "").replace("`", "")
+    # Multi-stage strict sanitization: Removes ALL asterisks, dollar signs, backticks, and LaTeX wrappers
+    clean_response = clean_text_formatting(response_text)
 
     return {
         "tool_results": context_data,

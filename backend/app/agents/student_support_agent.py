@@ -1,4 +1,5 @@
 import uuid
+import re
 from typing import Dict, Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,6 +16,18 @@ try:
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
+
+
+def clean_text_formatting(text: str) -> str:
+    """Strips all asterisks (** and *), dollar symbols ($), backticks (`), and LaTeX markers for 100% clean plain text output."""
+    if not text:
+        return ""
+    
+    cleaned = text.replace("**", "").replace("*", "")
+    cleaned = cleaned.replace("$", "")
+    cleaned = cleaned.replace("`", "")
+    cleaned = cleaned.replace("\\(", "").replace("\\)", "").replace("\\[", "").replace("\\]", "")
+    return cleaned.strip()
 
 
 async def run_student_support_agent(
@@ -49,16 +62,16 @@ async def run_student_support_agent(
         context_str = "No specific policy document found matching your query. Rely on general academic regulations."
 
     system_prompt = (
-        "You are the official Academic Student Support Agent. "
-        "Your role is to answer policy, grading, academic regulation, and department syllabus questions strictly based on the provided retrieved documents.\n"
+        "You are the official Academic Student Support Agent for Fr. CRCE. "
+        "Your role is to answer policy, grading, exam, academic regulation, and department syllabus questions strictly based on the provided Academic Rule Book PDF chunks.\n"
         "ATTENDANCE SHORTAGE POLICY RULE: If attendance is below 75% in a subject, students must attend mandatory remedial classes and complete all assignments given by the respective subject teacher. If the attendance number is critically low without any valid reason, they must appear for a Special Examination conducted according to the official date announced in the department notice.\n"
-        "CRITICAL: Do NOT use any asterisks (**), markdown bolding, or backticks in your output. Present clean plain text with bullet points."
+        "CRITICAL FORMATTING DIRECTIVE: Do NOT use any asterisks (** or *), dollar signs ($), LaTeX math wrappers, or backticks in your output. Present clean, readable plain text with clear numbered items and bullet points (•)."
     )
 
     full_prompt = (
         f"{system_prompt}\n\n"
-        f"RETRIEVED CONTEXT:\n{context_str}\n\n"
-        f"STUDENT QUESTION: {user_query}\n\n"
+        f"RETRIEVED CONTEXT FROM ACADEMIC RULE BOOK:\n{context_str}\n\n"
+        f"USER QUESTION: {user_query}\n\n"
         "RESPONSE:"
     )
 
@@ -72,9 +85,10 @@ async def run_student_support_agent(
             print(f"[StudentSupportAgent] Gemini call failed: {e}")
 
     if not response_text:
-        citations = f"\n\nSource Documents Cited: " + ", ".join(set(d['document_title'] for d in docs)) if docs else "\n\nSource Documents Cited: Official University Academic Regulations Handbook"
+        doc_titles = ", ".join(set(d['document_title'] for d in docs)) if docs else "Official Academic Rule Book (Fr. CRCE 2024-25)"
+        citations = f"\n\nSource Documents Cited: {doc_titles}"
         
-        if "75" in user_query or "shortage" in query_lower or "policy" in query_lower:
+        if "75" in user_query or "shortage" in query_lower or "remedial" in query_lower:
             response_text = (
                 f"Official University Attendance Policy (Below 75% Shortage & Special Examination):\n\n"
                 f"If a student's attendance falls below 75% in any subject, they are required to attend mandatory remedial classes and complete all assignments assigned by the respective subject teacher for that subject to clear their academic risk.\n\n"
@@ -83,14 +97,22 @@ async def run_student_support_agent(
                 f"3. Special Examination: If a student's attendance number is critically low without any justified or valid reason, they must appear for a Special Examination, which will be conducted according to the schedule specified in the official department notice.\n"
                 f"4. Risk Clearance: Fulfilling remedial attendance, completing assignments, and passing the Special Examination (if applicable) clears the student's academic risk status and restores exam eligibility.{citations}"
             )
+        elif docs:
+            top_chunk = docs[0]['chunk_text'].strip()
+            clean_chunk = top_chunk.replace("--- Page", "Page").strip()
+            response_text = (
+                f"Based on the official Academic Rule Book (Fr. CRCE Regulations 2024-25):\n\n"
+                f"Regarding your query ('{user_query}'):\n\n"
+                f"{clean_chunk}{citations}"
+            )
         else:
             response_text = (
                 f"Based on official Academic Policy documentation:\n\n"
                 f"Regarding your query ('{user_query}'): Students are required to maintain satisfactory academic standing, adhere to course syllabus guidelines, and maintain a minimum of 75% attendance to remain eligible for examinations.{citations}"
             )
 
-    # Strip any residual asterisks or backticks from final response
-    clean_response = response_text.replace("**", "").replace("`", "")
+    # Multi-stage strict sanitization: Removes ALL asterisks, dollar signs, backticks, and LaTeX wrappers
+    clean_response = clean_text_formatting(response_text)
 
     return {
         "tool_results": {"retrieved_docs": docs},

@@ -55,14 +55,15 @@ async def retrieve_relevant_documents(
     db: AsyncSession,
     query: str,
     department_id: Optional[uuid.UUID] = None,
-    top_k: int = 3
+    top_k: int = 4
 ) -> List[Dict[str, Any]]:
-    """Retrieves top-k relevant document chunks using pgvector vector_cosine_ops distance.
+    """Retrieves top-k relevant document chunks using pgvector vector_cosine_ops or keyword matching fallback.
     Enforces Department Scoping: Returns general university policy documents + student's department syllabus.
     Excludes other departments' syllabi.
     """
     query_vector = get_text_embedding(query)
     
+    rows = []
     try:
         stmt = (
             select(DocumentEmbedding, Document)
@@ -80,7 +81,10 @@ async def retrieve_relevant_documents(
         stmt = stmt.order_by(DocumentEmbedding.embedding.cosine_distance(query_vector)).limit(top_k)
         result = await db.execute(stmt)
         rows = result.all()
-    except Exception:
+    except Exception as err:
+        await db.rollback()
+        # Fallback to ILIKE text search if vector distance operator fails
+        words = [w for w in query.split() if len(w) > 3]
         stmt = (
             select(DocumentEmbedding, Document)
             .join(Document, DocumentEmbedding.document_id == Document.id)
@@ -92,6 +96,11 @@ async def retrieve_relevant_documents(
                     Document.department_id.is_(None)
                 )
             )
+        
+        if words:
+            conditions = [DocumentEmbedding.chunk_text.ilike(f"%{w}%") for w in words[:3]]
+            stmt = stmt.where(or_(*conditions))
+            
         stmt = stmt.limit(top_k)
         result = await db.execute(stmt)
         rows = result.all()
