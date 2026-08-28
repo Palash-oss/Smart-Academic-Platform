@@ -2,11 +2,13 @@ import sys
 import os
 import uuid
 import random
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import or_
 from app.db.session import SyncSessionLocal, sync_engine
-from app.db.models import Department, Division, Course, User, AttendanceLog
+from app.db.models import Department, Division, Course, User, AttendanceLog, LectureSession
 from app.core.security import hash_password
 
 try:
@@ -24,6 +26,14 @@ DEMO_STUDENTS = [
         "dept_code": "COMP",
         "div_name": "A",
         "performance": "high"
+    },
+    {
+        "id": uuid.UUID("00000000-0000-0000-0000-000000000003"),
+        "email": "atrisk.student@academic.edu",
+        "full_name": "Rahul Sharma",
+        "dept_code": "COMP",
+        "div_name": "A",
+        "performance": "borderline"
     },
     {
         "id": uuid.UUID("00000000-0000-0000-0000-000000000002"),
@@ -105,9 +115,14 @@ def generate_310_students_and_attendance():
         print("GENERATING 310 UNIQUE STUDENTS ACROSS 5 DIVISIONS WITH HISTORICAL ATTENDANCE")
         print("="*80)
 
-        # Clear existing students and attendance logs
-        session.query(AttendanceLog).delete()
-        session.query(User).filter(User.role == "STUDENT").delete()
+        # 1. Delete all existing attendance logs & lecture sessions
+        session.query(AttendanceLog).delete(synchronize_session=False)
+        session.query(LectureSession).delete(synchronize_session=False)
+        
+        # 2. Delete all existing student accounts
+        session.query(User).filter(User.role == "STUDENT").delete(synchronize_session=False)
+        demo_ids = [d["id"] for d in DEMO_STUDENTS]
+        session.query(User).filter(User.id.in_(demo_ids)).delete(synchronize_session=False)
         session.commit()
 
         # Load departments and divisions
@@ -131,7 +146,7 @@ def generate_310_students_and_attendance():
         # Precompute bcrypt hash once for 310 users
         default_pwd_hash = hash_password("student123")
 
-        # 1. Add demo students first
+        # Add demo students first
         for demo in DEMO_STUDENTS:
             d_obj = dept_map[demo["dept_code"]]
             div_obj = div_map[f"{demo['dept_code']}-{demo['div_name']}"]
@@ -151,7 +166,7 @@ def generate_310_students_and_attendance():
 
         session.commit()
 
-        # 2. Generate remaining unique students for each division
+        # Generate remaining unique students for each division
         for div_key, total_needed in div_target_counts.items():
             dept_code, div_name = div_key.split("-")
             d_obj = dept_map[dept_code]
@@ -164,7 +179,6 @@ def generate_310_students_and_attendance():
 
             for i in range(1, needed + 1):
                 full_name = generate_unique_name(used_names)
-                # Create clean unique email
                 clean_name = full_name.lower().replace(" ", ".").replace("'", "")
                 email = f"{clean_name}.{i}@{dept_code.lower()}.academic.edu"
 
@@ -190,7 +204,7 @@ def generate_310_students_and_attendance():
         session.commit()
         print(f"Successfully Created {len(all_created_students)} Unique Student Accounts in Postgres.")
 
-        # 3. Seed 6-8 Weeks Historical Attendance Logs for ALL 310 Students across their Department's Courses
+        # Seed 6-8 Weeks Historical Attendance Logs for ALL 310 Students across their Department's Courses
         print("\nSeeding 6-8 Weeks Historical Attendance Logs across all department courses...")
         logs_to_insert = []
 
@@ -203,7 +217,7 @@ def generate_310_students_and_attendance():
                 if perf == "high":
                     target_pct = random.uniform(0.80, 0.96)
                 elif perf == "borderline":
-                    target_pct = random.uniform(0.70, 0.749)
+                    target_pct = random.uniform(0.71, 0.745)
                 else:  # at_risk
                     target_pct = random.uniform(0.40, 0.64)
 
@@ -218,26 +232,14 @@ def generate_310_students_and_attendance():
                 )
                 logs_to_insert.append(log)
 
-        session.add_all(logs_to_insert)
+        session.bulk_save_objects(logs_to_insert)
         session.commit()
-        print(f"Successfully Created {len(logs_to_insert)} Attendance Log Records across {len(all_created_students)} Students!")
-
-        print("\n" + "="*80)
-        print("SUMMARY VERIFICATION:")
-        print("="*80)
-        for div_key, div_obj in div_map.items():
-            count = session.query(User).filter(User.division_id == div_obj.id, User.role == "STUDENT").count()
-            print(f"Division {div_key:<8} | Actual Enrolled Students in DB: {count}")
-
-        total_students_in_db = session.query(User).filter(User.role == "STUDENT").count()
-        total_unique_names = len({st.full_name for st, _, _ in all_created_students})
-        print(f"\nGRAND TOTAL STUDENTS IN DB: {total_students_in_db} / 310")
-        print(f"UNIQUE FULL NAMES IN DB: {total_unique_names} / {total_students_in_db}")
+        print(f"Successfully Seeded {len(logs_to_insert)} Attendance Log Records in PostgreSQL.")
         print("="*80 + "\n")
 
     except Exception as e:
         session.rollback()
-        print(f"Error seeding 310 students: {e}")
+        print(f"ERROR Seeding Students: {e}")
         raise e
     finally:
         session.close()

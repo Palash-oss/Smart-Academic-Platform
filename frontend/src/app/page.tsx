@@ -14,7 +14,8 @@ import {
   MessageSquare,
   Zap,
   Award,
-  BookOpen
+  BookOpen,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -127,9 +128,10 @@ export default function LandingPage() {
             </div>
 
             {/* 1-Click Quick Credentials Bar */}
-            <div id="demo-access" className="mt-14 pt-8 border-t border-zinc-200/80 w-full max-w-2xl mx-auto">
+            <div id="demo-access" className="mt-14 pt-8 border-t border-zinc-200/80 w-full max-w-4xl mx-auto">
               <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Instant Demo Access Accounts</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Demo Student 1: Good Standing */}
                 <button
                   onClick={() => handleQuickDemoLogin('student@academic.edu', 'STUDENT')}
                   className="p-4 bg-white hover:bg-zinc-50 border border-zinc-200/90 rounded-xl text-left transition-all shadow-xs group"
@@ -137,13 +139,35 @@ export default function LandingPage() {
                   <div className="flex items-center justify-between text-xs font-semibold text-zinc-900">
                     <span className="flex items-center gap-1.5">
                       <GraduationCap className="h-4 w-4 text-zinc-500 group-hover:text-zinc-900 transition-colors" />
-                      Demo Student (COMP-A)
+                      Student 1 (Good Standing)
                     </span>
                     <span className="font-mono text-[10px] text-zinc-500">Alex Mercer</span>
                   </div>
                   <p className="text-[11px] font-mono text-zinc-500 mt-1">student@academic.edu</p>
+                  <span className="inline-block mt-2 font-mono text-[10px] px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-zinc-700 font-semibold">
+                    86.1% Overall (OK)
+                  </span>
                 </button>
 
+                {/* Demo Student 2: At-Risk / Near 75% */}
+                <button
+                  onClick={() => handleQuickDemoLogin('atrisk.student@academic.edu', 'STUDENT')}
+                  className="p-4 bg-white hover:bg-zinc-50 border border-zinc-300 rounded-xl text-left transition-all shadow-xs group"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-900">
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-zinc-700 group-hover:text-zinc-900 transition-colors" />
+                      Student 2 (Near 75% Risk)
+                    </span>
+                    <span className="font-mono text-[10px] text-zinc-500">Rahul Sharma</span>
+                  </div>
+                  <p className="text-[11px] font-mono text-zinc-500 mt-1">atrisk.student@academic.edu</p>
+                  <span className="inline-block mt-2 font-mono text-[10px] px-2 py-0.5 bg-zinc-900 text-white rounded font-bold">
+                    71.2% Overall ([!] AT RISK)
+                  </span>
+                </button>
+
+                {/* Demo Faculty */}
                 <button
                   onClick={() => handleQuickDemoLogin('faculty@academic.edu', 'FACULTY')}
                   className="p-4 bg-white hover:bg-zinc-50 border border-zinc-200/90 rounded-xl text-left transition-all shadow-xs group"
@@ -156,6 +180,9 @@ export default function LandingPage() {
                     <span className="font-mono text-[10px] text-zinc-500">Prof. Vance</span>
                   </div>
                   <p className="text-[11px] font-mono text-zinc-500 mt-1">faculty@academic.edu</p>
+                  <span className="inline-block mt-2 font-mono text-[10px] px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-zinc-700 font-semibold">
+                    140 Students Ledger
+                  </span>
                 </button>
               </div>
             </div>

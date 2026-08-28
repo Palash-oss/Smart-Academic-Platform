@@ -17,18 +17,23 @@ async def chat_stream(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """SSE Endpoint: Accepts query, runs LangGraph supervisor, and streams routing, token, and done events."""
+    """SSE Endpoint: Accepts query, runs LangGraph supervisor with conversation history, and streams events."""
     if not request.message or not request.message.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message content cannot be empty."
         )
 
+    history_dicts = None
+    if request.history:
+        history_dicts = [{"role": h.role, "content": h.content} for h in request.history]
+
     generator = stream_agent_execution(
         user_id=str(current_user.id),
         role=current_user.role,
         user_query=request.message,
-        db=db
+        db=db,
+        history=history_dicts
     )
 
     return StreamingResponse(

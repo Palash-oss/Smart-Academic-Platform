@@ -175,6 +175,7 @@ async def run_attendance_agent(
             "You are the Student Attendance Assistant. "
             "The numerical attendance data below was computed deterministically by the backend Python service. "
             "Do NOT perform any arithmetic yourself. Present and explain the numbers clearly and professionally. "
+            "If the student asks which lectures they need to sit more, explicitly list the subjects at risk (<75%) and tell them the exact number of consecutive classes they must attend to reach 75%."
             "CRITICAL FORMATTING DIRECTIVE: Do NOT use any asterisks (** or *), dollar signs ($), LaTeX math wrappers, or backticks in your output. Present clean plain text with bullet points (•)."
         )
 
@@ -198,7 +199,26 @@ async def run_attendance_agent(
                 print(f"[AttendanceAgent] Gemini call failed: {e}")
 
         if not response_text:
-            if subjects:
+            if "which" in query_lower or "sit" in query_lower or "more" in query_lower or "need" in query_lower:
+                if at_risk_subjects:
+                    risk_lines = "\n\n".join([
+                        f"• {s['subject']}:\n"
+                        f"  - Current Attendance: {s['attended_classes']} / {s['total_classes']} classes ({s['percentage']}%) — [!] AT RISK\n"
+                        f"  - Required Lectures: You must attend the next {s['classes_needed_to_clear_risk']} consecutive classes to reach 75%."
+                        for s in at_risk_subjects
+                    ])
+                    response_text = (
+                        f"Here are the lectures you need to attend more to clear academic risk for {attendance_data['student_name']}:\n\n"
+                        f"{risk_lines}\n\n"
+                        f"All other subjects meet the required 75% attendance threshold."
+                    )
+                else:
+                    response_text = (
+                        f"Great news, {attendance_data['student_name']}! All your enrolled subjects currently meet the required 75% attendance threshold. "
+                        f"You do not need additional lectures for any subject right now.\n\n"
+                        f"Overall Attendance: {overall_pct}% ([OK] Good Standing)"
+                    )
+            elif subjects:
                 risk_msg = ""
                 if at_risk_subjects:
                     risk_msg = "\n\n[!] Action Required:\nIf your attendance is below 75% in any subject, you are required to attend mandatory remedial classes and complete all assignments given by the respective subject teacher to clear your risk:\n" + "\n".join([

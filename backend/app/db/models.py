@@ -90,6 +90,9 @@ class User(Base):
     division_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("divisions.id", ondelete="SET NULL"), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
 
     department = relationship("Department", back_populates="users")
     division = relationship("Division", back_populates="students")
