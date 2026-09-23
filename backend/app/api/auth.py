@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 import uuid
 
 from app.db.session import get_db
@@ -61,8 +61,10 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
             detail="Role must be either 'STUDENT' or 'FACULTY'"
         )
 
+    clean_email = user_in.email.strip().lower()
+
     # Check if user with email exists
-    stmt = select(User).where(User.email == user_in.email)
+    stmt = select(User).where(func.lower(User.email) == clean_email)
     res = await db.execute(stmt)
     if res.scalar_one_or_none():
         raise HTTPException(
@@ -71,9 +73,9 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
         )
 
     user = User(
-        email=user_in.email,
+        email=clean_email,
         hashed_password=hash_password(user_in.password),
-        full_name=user_in.full_name,
+        full_name=user_in.full_name.strip(),
         role=user_in.role
     )
     db.add(user)
@@ -85,11 +87,14 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT access token."""
-    stmt = select(User).where(User.email == credentials.email)
+    clean_email = credentials.email.strip().lower()
+    clean_password = credentials.password.strip()
+
+    stmt = select(User).where(func.lower(User.email) == clean_email)
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
 
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    if not user or not verify_password(clean_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
