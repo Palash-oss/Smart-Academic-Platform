@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: 'STUDENT' | 'FACULTY';
+  role: 'STUDENT' | 'FACULTY' | 'ADMIN';
 }
 
 export interface TokenResponse {
@@ -11,7 +11,7 @@ export interface TokenResponse {
   user_id: string;
   email: string;
   full_name: string;
-  role: 'STUDENT' | 'FACULTY';
+  role: 'STUDENT' | 'FACULTY' | 'ADMIN';
 }
 
 export const getStoredToken = (): string | null => {

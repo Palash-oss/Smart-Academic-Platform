@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Building2,
   Globe,
+  MessageSquare,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -123,6 +124,7 @@ function UploadZone({
 // ─────────────────────────────────────────────────────────────────────────────
 function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
   const success = result.status === 'success';
+  const errors = result.errors || [];
 
   return (
     <div className={`rounded-2xl border p-6 ${
@@ -140,20 +142,20 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
         </div>
         <div>
           <p className={`font-semibold ${success ? 'text-emerald-300' : 'text-amber-300'}`}>
-            {success ? 'Allotment Complete' : 'Partial Success — Review Errors'}
+            {success ? 'Allotment Complete' : 'Upload Status — Review Details'}
           </p>
           <p className="text-xs text-zinc-400 mt-0.5">
-            {result.total_rows_processed} rows processed
+            {result.total_rows_processed ?? 0} rows processed
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Rows Processed', value: result.total_rows_processed, icon: FileSpreadsheet, color: 'text-blue-400' },
-          { label: 'Sections Created', value: result.sections_created, icon: Layers, color: 'text-violet-400' },
-          { label: 'Batches Created', value: result.batches_created, icon: FlaskConical, color: 'text-emerald-400' },
-          { label: 'Faculty Slots', value: result.faculty_slots_generated, icon: Users, color: 'text-amber-400' },
+          { label: 'Rows Processed', value: result.total_rows_processed ?? 0, icon: FileSpreadsheet, color: 'text-blue-400' },
+          { label: 'Sections Created', value: result.sections_created ?? 0, icon: Layers, color: 'text-violet-400' },
+          { label: 'Batches Created', value: result.batches_created ?? 0, icon: FlaskConical, color: 'text-emerald-400' },
+          { label: 'Faculty Slots', value: result.faculty_slots_generated ?? 0, icon: Users, color: 'text-amber-400' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 text-center">
             <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
@@ -164,22 +166,29 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
       </div>
 
       {/* Error list */}
-      {result.errors.length > 0 && (
+      {errors.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
-            {result.errors.length} validation error(s):
+            {errors.length} validation message(s):
           </p>
           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-            {result.errors.map((err: AllotmentRowError, i: number) => (
+            {errors.map((err: AllotmentRowError, i: number) => (
               <div
                 key={i}
                 className="flex items-start gap-2 bg-red-500/8 border border-red-500/20 rounded-lg p-2.5 text-xs"
               >
-                <span className="font-mono text-red-400 flex-shrink-0">Row {err.row}</span>
+                {err.row > 0 && (
+                  <span className="font-mono text-red-400 flex-shrink-0">Row {err.row}</span>
+                )}
                 <span className="text-zinc-400">
-                  <span className="text-zinc-300">{err.student_id}</span> /{' '}
-                  <span className="font-mono">{err.course_code}</span>: {err.error}
+                  {err.student_id && err.student_id !== '-' && (
+                    <><span className="text-zinc-300">{err.student_id}</span> / </>
+                  )}
+                  {err.course_code && err.course_code !== '-' && (
+                    <><span className="font-mono">{err.course_code}</span>: </>
+                  )}
+                  {err.error}
                 </span>
               </div>
             ))}
@@ -343,9 +352,35 @@ export default function AdminAllotmentPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
-      const data: AllotmentUploadResponse = await res.json();
-      setResult(data);
-      if (res.ok) {
+      const data = await res.json();
+      if (!res.ok) {
+        const errDetail =
+          typeof data?.detail === 'string'
+            ? data.detail
+            : Array.isArray(data?.detail)
+            ? JSON.stringify(data.detail)
+            : 'Upload failed. Check file format.';
+
+        setResult({
+          status: 'partial',
+          total_rows_processed: data?.total_rows_processed ?? 0,
+          sections_created: 0,
+          batches_created: 0,
+          faculty_slots_generated: 0,
+          errors:
+            Array.isArray(data?.errors) && data.errors.length > 0
+              ? data.errors
+              : [{ row: 0, student_id: '-', course_code: '-', error: errDetail }],
+        });
+      } else {
+        setResult({
+          status: data.status || 'success',
+          total_rows_processed: data.total_rows_processed ?? 0,
+          sections_created: data.sections_created ?? 0,
+          batches_created: data.batches_created ?? 0,
+          faculty_slots_generated: data.faculty_slots_generated ?? 0,
+          errors: data.errors || [],
+        });
         await loadOfferings();
         setFile(null);
       }
@@ -374,12 +409,49 @@ export default function AdminAllotmentPage() {
       {/* Nav */}
       <header className="relative z-10 border-b border-zinc-800/70 bg-zinc-950/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/chat" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-blue-600 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-sm text-zinc-200">Smart Academic</span>
+            <span className="font-semibold text-sm text-zinc-200">ACADEMIC COMMAND CENTER</span>
           </Link>
+
+          <nav className="hidden md:flex items-center gap-2">
+            <Link
+              href="/chat"
+              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              AI Chat
+            </Link>
+
+            <Link
+              href="/enrollments"
+              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              My Subjects
+            </Link>
+
+            {user?.role === 'FACULTY' && (
+              <Link
+                href="/faculty"
+                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
+              >
+                <Users className="w-3.5 h-3.5" />
+                Attendance Ledger
+              </Link>
+            )}
+
+            <Link
+              href="/admin/allotment"
+              className="flex items-center gap-1.5 text-xs text-white bg-zinc-800/80 border border-zinc-700/50 px-3 py-2 rounded-lg font-medium"
+            >
+              <Layers className="w-3.5 h-3.5 text-violet-400" />
+              Allotment Engine
+            </Link>
+          </nav>
+
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700/40">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
