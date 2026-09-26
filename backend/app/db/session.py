@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
+from app.db.models import Base
 
 # Lazy / robust async engine initialization
 try:
@@ -38,10 +39,6 @@ except Exception:
     sync_engine = None
     SyncSessionLocal = None
 
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 async def get_db():

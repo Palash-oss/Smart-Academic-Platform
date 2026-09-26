@@ -55,10 +55,10 @@ def require_role(allowed_roles: list[str]):
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     """Register a new student or faculty member."""
-    if user_in.role not in ["STUDENT", "FACULTY"]:
+    if user_in.role not in ["STUDENT", "FACULTY", "ADMIN"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role must be either 'STUDENT' or 'FACULTY'"
+            detail="Role must be one of: 'STUDENT', 'FACULTY', 'ADMIN'"
         )
 
     clean_email = user_in.email.strip().lower()
@@ -76,7 +76,9 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
         email=clean_email,
         hashed_password=hash_password(user_in.password),
         full_name=user_in.full_name.strip(),
-        role=user_in.role
+        role=user_in.role,
+        student_erp_id=user_in.student_erp_id.strip() if user_in.student_erp_id else None,
+        roll_no=user_in.roll_no.strip() if user_in.roll_no else None,
     )
     db.add(user)
     await db.commit()

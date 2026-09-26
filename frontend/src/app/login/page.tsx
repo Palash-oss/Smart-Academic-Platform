@@ -68,6 +68,8 @@ export default function LoginPage() {
 
       if (data.role === 'FACULTY') {
         router.push('/faculty');
+      } else if (data.role === 'ADMIN') {
+        router.push('/admin/allotment');
       } else {
         router.push('/chat');
       }
@@ -87,6 +89,12 @@ export default function LoginPage() {
   const fillDemoFaculty = () => {
     setEmail('faculty@academic.edu');
     setPassword('faculty123');
+    setIsRegister(false);
+  };
+
+  const fillDemoAdmin = () => {
+    setEmail('admin@academic.edu');
+    setPassword('admin123');
     setIsRegister(false);
   };
 
@@ -112,20 +120,27 @@ export default function LoginPage() {
         {/* Quick Demo Fill Buttons */}
         <div className="p-3 bg-ink border border-border rounded-lg space-y-2 text-xs">
           <p className="font-mono text-[10px] text-subtle uppercase tracking-wider text-center">1-Click Demo Quick Login</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={fillDemoStudent}
-              className="px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs"
+              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
             >
               Demo Student
             </button>
             <button
               type="button"
               onClick={fillDemoFaculty}
-              className="px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs"
+              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
             >
               Demo Faculty
+            </button>
+            <button
+              type="button"
+              onClick={fillDemoAdmin}
+              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
+            >
+              Demo Admin
             </button>
           </div>
         </div>

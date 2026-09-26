@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getStoredUser, clearAuthSession, User } from '@/lib/api';
-import { LogOut, GraduationCap, Users, MessageSquare } from 'lucide-react';
+import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -36,7 +36,7 @@ export const Navbar: React.FC = () => {
 
       <div className="flex items-center gap-6">
         {user && (
-          <nav className="flex items-center gap-4 text-sm font-sans">
+          <nav className="flex items-center gap-3 text-sm font-sans">
             <Link
               href="/chat"
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
@@ -46,7 +46,19 @@ export const Navbar: React.FC = () => {
               }`}
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              <span>Multi-Agent Chat</span>
+              <span>AI Chat</span>
+            </Link>
+
+            <Link
+              href="/enrollments"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
+                pathname === '/enrollments'
+                  ? 'bg-paper text-ink border border-paper font-bold'
+                  : 'text-subtle hover:text-paper hover:bg-ink'
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>My Subjects</span>
             </Link>
 
             {user.role === 'FACULTY' && (
@@ -60,6 +72,20 @@ export const Navbar: React.FC = () => {
               >
                 <Users className="h-3.5 w-3.5" />
                 <span>Attendance Ledger</span>
+              </Link>
+            )}
+
+            {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
+              <Link
+                href="/admin/allotment"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
+                  pathname === '/admin/allotment'
+                    ? 'bg-paper text-ink border border-paper font-bold'
+                    : 'text-subtle hover:text-paper hover:bg-ink'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Allotment Engine</span>
               </Link>
             )}
           </nav>

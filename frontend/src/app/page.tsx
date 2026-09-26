@@ -69,7 +69,6 @@ export default function LandingPage() {
             <a href="#architecture" className="hover:text-zinc-900 transition-colors duration-300">Ecosystem</a>
             <a href="#evolution" className="hover:text-zinc-900 transition-colors duration-300">AI Tutoring</a>
             <a href="#pillars" className="hover:text-zinc-900 transition-colors duration-300">Research & RAG</a>
-            <a href="#demo-access" className="hover:text-zinc-900 transition-colors duration-300">Demo Roster</a>
           </div>
 
           {/* Actions */}

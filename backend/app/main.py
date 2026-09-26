@@ -4,11 +4,16 @@ from app.core.config import settings
 from app.api.auth import router as auth_router
 from app.api.attendance import router as attendance_router
 from app.api.chat import router as chat_router
+from app.api.enrollments import router as enrollments_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Multi-Agent Academic Assistant Platform API"
+    description=(
+        "Smart Academic Platform API — Multi-Agent AI + Automated Allotment Engine "
+        "(Revision FRCRCE-3-26). Implements tier-based course enrollment, "
+        "balanced batch-splitting, and role-based student/faculty portals."
+    )
 )
 
 # CORS configuration
@@ -24,6 +29,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api")
 app.include_router(attendance_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
+app.include_router(enrollments_router, prefix="/api")
 
 
 @app.get("/")
