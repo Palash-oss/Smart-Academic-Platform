@@ -78,19 +78,16 @@ async def upload_allotment(
     file_bytes = await file.read()
 
     try:
-        async with db.begin():
-            engine = AllotmentEngine(db)
-            summary = await engine.process_file(file_bytes, file.filename)
-
-            if summary["errors"] and summary["status"] == "partial":
-                # Partial success — still committed what was valid
-                pass
-
+        engine = AllotmentEngine(db)
+        summary = await engine.process_file(file_bytes, file.filename)
+        await db.commit()
         return AllotmentUploadResponse(**summary)
 
     except ValueError as exc:
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Allotment processing failed: {exc}",
@@ -118,35 +115,35 @@ async def assign_faculty_to_section(
     For courses with delivery_mode in {INTEGRATED_TH_PR, THEORY_TUTORIAL},
     the assignment automatically cascades to all child PracticalBatches.
     """
-    async with db.begin():
-        # Fetch section with offering → course (for delivery_mode check)
-        stmt = (
-            select(ClassSection)
-            .where(ClassSection.id == section_id)
-            .options(
-                selectinload(ClassSection.offering).selectinload(CourseOffering.course),
-                selectinload(ClassSection.faculty),
-            )
+    # Fetch section with offering → course (for delivery_mode check)
+    stmt = (
+        select(ClassSection)
+        .where(ClassSection.id == section_id)
+        .options(
+            selectinload(ClassSection.offering).selectinload(CourseOffering.course),
+            selectinload(ClassSection.faculty),
         )
-        result = await db.execute(stmt)
-        section = result.scalar_one_or_none()
-        if section is None:
-            raise HTTPException(status_code=404, detail="Section not found")
+    )
+    result = await db.execute(stmt)
+    section = result.scalar_one_or_none()
+    if section is None:
+        raise HTTPException(status_code=404, detail="Section not found")
 
-        # Verify faculty user exists and has FACULTY role
-        fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
-        fac_result = await db.execute(fac_stmt)
-        faculty = fac_result.scalar_one_or_none()
-        if faculty is None:
-            raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
+    # Verify faculty user exists and has FACULTY role
+    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
+    fac_result = await db.execute(fac_stmt)
+    faculty = fac_result.scalar_one_or_none()
+    if faculty is None:
+        raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
 
-        section.faculty_id = payload.faculty_id
+    section.faculty_id = payload.faculty_id
 
-        # Cascade to batches when applicable
-        cascaded = 0
-        delivery_mode = section.offering.course.delivery_mode
-        if delivery_mode in CASCADE_MODES:
-            cascaded = await cascade_faculty_to_batches(db, section_id, payload.faculty_id)
+    # Cascade to batches when applicable
+    delivery_mode = section.offering.course.delivery_mode
+    if delivery_mode in CASCADE_MODES:
+        await cascade_faculty_to_batches(db, section_id, payload.faculty_id)
+
+    await db.commit()
 
     return ClassSectionRead(
         id=section.id,
@@ -176,20 +173,20 @@ async def assign_faculty_to_batch(
     Assign a FACULTY user to a specific practical batch.
     Required for PRACTICAL_ONLY courses where each batch has an independent faculty slot.
     """
-    async with db.begin():
-        stmt = select(PracticalBatch).where(PracticalBatch.id == batch_id)
-        result = await db.execute(stmt)
-        batch = result.scalar_one_or_none()
-        if batch is None:
-            raise HTTPException(status_code=404, detail="Batch not found")
+    stmt = select(PracticalBatch).where(PracticalBatch.id == batch_id)
+    result = await db.execute(stmt)
+    batch = result.scalar_one_or_none()
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Batch not found")
 
-        fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
-        fac_result = await db.execute(fac_stmt)
-        faculty = fac_result.scalar_one_or_none()
-        if faculty is None:
-            raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
+    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
+    fac_result = await db.execute(fac_stmt)
+    faculty = fac_result.scalar_one_or_none()
+    if faculty is None:
+        raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
 
-        batch.faculty_id = payload.faculty_id
+    batch.faculty_id = payload.faculty_id
+    await db.commit()
 
     return PracticalBatchRead(
         id=batch.id,
@@ -199,6 +196,90 @@ async def assign_faculty_to_batch(
         faculty_id=batch.faculty_id,
         faculty_name=faculty.full_name if faculty else None,
     )
+
+
+# ===========================================================================
+# ADMIN / FACULTY: List All Faculty Members
+# ===========================================================================
+
+@router.get(
+    "/v1/faculty/all",
+    summary="List all faculty members for assignment dropdowns",
+)
+async def list_all_faculty(
+    current_user: User = Depends(require_role(["ADMIN", "FACULTY"])),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(User).where(User.role == "FACULTY").order_by(User.full_name)
+    result = await db.execute(stmt)
+    faculty_list = result.scalars().all()
+    return [
+        {
+            "id": str(f.id),
+            "full_name": f.full_name,
+            "email": f.email,
+        }
+        for f in faculty_list
+    ]
+
+
+# ===========================================================================
+# ADMIN: Auto-Assign Faculty to All Unassigned Slots
+# ===========================================================================
+
+@router.post(
+    "/v1/admin/auto-assign-faculty",
+    summary="Auto-assign available faculty to unassigned sections and batches in an academic term",
+)
+async def auto_assign_faculty(
+    academic_term: str = Query(..., description="e.g. '2026-27-SEM5'"),
+    current_user: User = Depends(require_role(["ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    # Fetch all faculty
+    fac_stmt = select(User).where(User.role == "FACULTY").order_by(User.full_name)
+    fac_res = await db.execute(fac_stmt)
+    faculty_members = fac_res.scalars().all()
+    if not faculty_members:
+        raise HTTPException(status_code=400, detail="No faculty members found in database")
+
+    # Fetch offerings for the term
+    off_stmt = (
+        select(CourseOffering)
+        .where(CourseOffering.academic_term == academic_term)
+        .options(
+            selectinload(CourseOffering.course),
+            selectinload(CourseOffering.sections),
+            selectinload(CourseOffering.batches),
+        )
+    )
+    off_res = await db.execute(off_stmt)
+    offerings = off_res.scalars().all()
+
+    assigned_count = 0
+    fac_idx = 0
+    num_fac = len(faculty_members)
+
+    for off in offerings:
+        delivery_mode = off.course.delivery_mode
+        for sec in off.sections:
+            if not sec.faculty_id:
+                fac = faculty_members[fac_idx % num_fac]
+                sec.faculty_id = fac.id
+                fac_idx += 1
+                assigned_count += 1
+                if delivery_mode in CASCADE_MODES:
+                    await cascade_faculty_to_batches(db, sec.id, fac.id)
+
+        for b in off.batches:
+            if not b.faculty_id:
+                fac = faculty_members[fac_idx % num_fac]
+                b.faculty_id = fac.id
+                fac_idx += 1
+                assigned_count += 1
+
+    await db.commit()
+    return {"status": "success", "academic_term": academic_term, "slots_assigned": assigned_count}
 
 
 # ===========================================================================

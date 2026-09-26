@@ -23,7 +23,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -35,6 +35,10 @@ from app.schemas.allotment import AllotmentRowError
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Minimum students per batch / section constraint
+MIN_STUDENTS_PER_BATCH = 12      # Minimum batch threshold
+MIN_STUDENTS_PER_SECTION = 12    # Minimum section threshold
 
 # Batch size targets per tier
 CLASS_BATCH_MAX = 25        # Tier 1: class-level lab batches
@@ -51,13 +55,16 @@ CASCADE_MODES = {"INTEGRATED_TH_PR", "THEORY_TUTORIAL"}
 # Balanced Chunking Helper
 # ---------------------------------------------------------------------------
 
-def balanced_chunks(items: list, max_size: int) -> List[list]:
+def balanced_chunks(items: list, max_size: int, min_size: int = MIN_STUDENTS_PER_BATCH) -> List[list]:
     """
     Deterministically split `items` (pre-sorted) into balanced sublists
-    where each sublist has at most `max_size` elements.
+    where each sublist has at most `max_size` elements and at least `min_size`
+    elements (unless total items < min_size, in which case a single chunk is returned).
 
     Uses the formula:
-        k         = ceil(N / max_size)
+        Initial k = ceil(N / max_size)
+        If splitting into k chunks causes any chunk size to drop below min_size,
+        reduce k = max(1, N // min_size).
         base_size = floor(N / k)
         remainder = N % k
     First `remainder` chunks have base_size+1 elements; the rest have base_size.
@@ -65,7 +72,11 @@ def balanced_chunks(items: list, max_size: int) -> List[list]:
     N = len(items)
     if N == 0:
         return []
+    
     k = math.ceil(N / max_size)
+    if k > 1 and (N // k) < min_size:
+        k = max(1, N // min_size)
+
     base_size = N // k
     remainder = N % k
 
@@ -149,6 +160,8 @@ class AllotmentEngine:
         for (course_code, term), rows in groups.items():
             course = course_map[course_code]
             offering = await self._get_or_create_offering(course, term)
+            # Clear previous allocations for this offering to allow clean recalculation
+            await self._clear_offering_allocations(offering)
             await self._run_tier_allotment(course, offering, rows, student_map)
 
         return self._summary(total_rows)
@@ -160,9 +173,18 @@ class AllotmentEngine:
     def _parse_file(self, file_bytes: bytes, filename: str) -> pd.DataFrame:
         buf = io.BytesIO(file_bytes)
         if filename.lower().endswith(".csv"):
-            return pd.read_csv(buf, dtype=str)
+            df = pd.read_csv(buf, dtype=str)
         else:
-            return pd.read_excel(buf, dtype=str)
+            df = pd.read_excel(buf, dtype=str)
+
+        # Auto-detect if comma or semicolon separated text was pasted into a single Excel column
+        if len(df.columns) == 1 and ("," in str(df.columns[0]) or ";" in str(df.columns[0])):
+            header_str = str(df.columns[0])
+            delim = "," if "," in header_str else ";"
+            raw_lines = [header_str] + [str(v) for v in df.iloc[:, 0].dropna()]
+            df = pd.read_csv(io.StringIO("\n".join(raw_lines)), sep=delim, dtype=str)
+
+        return df
 
     # ------------------------------------------------------------------
     # DB Resolution Helpers
@@ -197,20 +219,23 @@ class AllotmentEngine:
 
     async def _resolve_courses(self, df: pd.DataFrame) -> Dict[str, Course]:
         """Fetch all Course rows from DB, keyed by code."""
-        codes = df["course_code"].unique().tolist()
-        stmt = select(Course).where(Course.code.in_(codes))
+        stmt = select(Course)
         result = await self.db.execute(stmt)
-        courses = result.scalars().all()
-        course_map = {c.code: c for c in courses}
+        all_courses = result.scalars().all()
+        course_db_map = {c.code.strip().upper(): c for c in all_courses}
 
+        course_map = {}
         for i, row in df.iterrows():
-            code = row["course_code"]
-            if code not in course_map:
+            code = str(row["course_code"]).strip()
+            code_upper = code.upper()
+            if code_upper in course_db_map:
+                course_map[code] = course_db_map[code_upper]
+            else:
                 self.errors.append(AllotmentRowError(
                     row=i + 2,
-                    student_id=row.get("student_id", ""),
+                    student_id=str(row.get("student_id", "")).strip(),
                     course_code=code,
-                    error=f"course_code '{code}' not found in the courses table"
+                    error=f"course_code '{code}' not found in the courses table (available: {', '.join(sorted(course_db_map.keys()))})"
                 ))
         return course_map
 
@@ -227,6 +252,19 @@ class AllotmentEngine:
             self.db.add(offering)
             await self.db.flush()  # get offering.id
         return offering
+
+    async def _clear_offering_allocations(self, offering: CourseOffering) -> None:
+        """Clear existing enrollments, batches, and sections for this offering before fresh re-allotment."""
+        await self.db.execute(
+            delete(StudentEnrollment).where(StudentEnrollment.offering_id == offering.id)
+        )
+        await self.db.execute(
+            delete(PracticalBatch).where(PracticalBatch.offering_id == offering.id)
+        )
+        await self.db.execute(
+            delete(ClassSection).where(ClassSection.offering_id == offering.id)
+        )
+        await self.db.flush()
 
     # ------------------------------------------------------------------
     # Tier-Based Allotment Dispatcher

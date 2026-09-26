@@ -199,11 +199,28 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
   );
 }
 
+interface FacultyOption {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Offerings Panel
 // ─────────────────────────────────────────────────────────────────────────────
-function OfferingsPanel({ offerings }: { offerings: OfferingInfo[] }) {
+function OfferingsPanel({
+  offerings,
+  facultyList,
+  onAssignSection,
+  onAssignBatch,
+}: {
+  offerings: OfferingInfo[];
+  facultyList: FacultyOption[];
+  onAssignSection: (sectionId: string, facultyId: string) => Promise<void>;
+  onAssignBatch: (batchId: string, facultyId: string) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   if (offerings.length === 0) {
     return (
@@ -251,7 +268,7 @@ function OfferingsPanel({ offerings }: { offerings: OfferingInfo[] }) {
                 {/* Sections */}
                 <div>
                   <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <BookOpen className="w-3 h-3" /> Theory Sections
+                    <BookOpen className="w-3 h-3 text-blue-400" /> Theory Sections
                   </p>
                   {o.sections.length === 0 ? (
                     <p className="text-xs text-zinc-600 italic">None</p>
@@ -259,13 +276,35 @@ function OfferingsPanel({ offerings }: { offerings: OfferingInfo[] }) {
                     <div className="space-y-2">
                       {o.sections.map((s) => (
                         <div key={s.id} className="bg-zinc-800/40 rounded-lg p-2.5 text-xs border border-zinc-700/30">
-                          <p className="font-mono text-blue-300 font-medium">{s.section_name}</p>
-                          <p className="text-zinc-400 mt-1">
-                            Faculty:{' '}
-                            <span className={s.faculty_name ? 'text-emerald-300' : 'text-zinc-500 italic'}>
-                              {s.faculty_name ?? 'To be assigned'}
-                            </span>
-                          </p>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-mono text-blue-300 font-semibold">{s.section_name}</span>
+                            {s.faculty_name && (
+                              <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                Assigned
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                            <select
+                              value={s.faculty_id || ''}
+                              disabled={assigningId === s.id}
+                              onChange={async (e) => {
+                                if (!e.target.value) return;
+                                setAssigningId(s.id);
+                                await onAssignSection(s.id, e.target.value);
+                                setAssigningId(null);
+                              }}
+                              className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                            >
+                              <option value="">-- Assign Faculty --</option>
+                              {facultyList.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.full_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -274,21 +313,43 @@ function OfferingsPanel({ offerings }: { offerings: OfferingInfo[] }) {
                 {/* Batches */}
                 <div>
                   <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <FlaskConical className="w-3 h-3" /> Practical Batches
+                    <FlaskConical className="w-3 h-3 text-purple-400" /> Practical Batches
                   </p>
                   {o.batches.length === 0 ? (
                     <p className="text-xs text-zinc-600 italic">None</p>
                   ) : (
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                       {o.batches.map((b) => (
                         <div key={b.id} className="bg-zinc-800/40 rounded-lg p-2.5 text-xs border border-zinc-700/30">
-                          <p className="font-mono text-violet-300 font-medium">{b.batch_name}</p>
-                          <p className="text-zinc-400 mt-1">
-                            Faculty:{' '}
-                            <span className={b.faculty_name ? 'text-emerald-300' : 'text-zinc-500 italic'}>
-                              {b.faculty_name ?? 'To be assigned'}
-                            </span>
-                          </p>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-mono text-violet-300 font-semibold">{b.batch_name}</span>
+                            {b.faculty_name && (
+                              <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                Assigned
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                            <select
+                              value={b.faculty_id || ''}
+                              disabled={assigningId === b.id}
+                              onChange={async (e) => {
+                                if (!e.target.value) return;
+                                setAssigningId(b.id);
+                                await onAssignBatch(b.id, e.target.value);
+                                setAssigningId(null);
+                              }}
+                              className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                            >
+                              <option value="">-- Assign Faculty --</option>
+                              {facultyList.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.full_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -314,7 +375,21 @@ export default function AdminAllotmentPage() {
   const [offerings, setOfferings] = useState<OfferingInfo[]>([]);
   const [loadingOfferings, setLoadingOfferings] = useState(false);
   const [selectedTerm, setSelectedTerm] = useState('2026-27-SEM5');
+  const [facultyList, setFacultyList] = useState<FacultyOption[]>([]);
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const user = typeof window !== 'undefined' ? getStoredUser() : null;
+
+  const loadFaculty = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/faculty/all');
+      if (res.ok) {
+        const data = await res.json();
+        setFacultyList(data);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const loadOfferings = useCallback(async () => {
     setLoadingOfferings(true);
@@ -337,7 +412,55 @@ export default function AdminAllotmentPage() {
     const token = getStoredToken();
     if (!token) { router.push('/login'); return; }
     loadOfferings();
-  }, [loadOfferings, router]);
+    loadFaculty();
+  }, [loadOfferings, loadFaculty, router]);
+
+  const handleAssignSection = async (sectionId: string, facultyId: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/v1/sections/${sectionId}/assign-faculty`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faculty_id: facultyId }),
+      });
+      if (res.ok) {
+        loadOfferings();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleAssignBatch = async (batchId: string, facultyId: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/v1/batches/${batchId}/assign-faculty`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faculty_id: facultyId }),
+      });
+      if (res.ok) {
+        loadOfferings();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleAutoAssign = async () => {
+    setAutoAssigning(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/admin/auto-assign-faculty?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      if (res.ok) {
+        await loadOfferings();
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -559,6 +682,14 @@ export default function AdminAllotmentPage() {
                   Course Offerings
                 </h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAutoAssign}
+                    disabled={autoAssigning || offerings.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/40 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${autoAssigning ? 'animate-spin' : ''}`} />
+                    {autoAssigning ? 'Assigning…' : '⚡ Auto-Assign Faculty'}
+                  </button>
                   <div className="relative">
                     <select
                       id="admin-term-select"
@@ -588,7 +719,12 @@ export default function AdminAllotmentPage() {
                   <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
                 </div>
               ) : (
-                <OfferingsPanel offerings={offerings} />
+                <OfferingsPanel
+                  offerings={offerings}
+                  facultyList={facultyList}
+                  onAssignSection={handleAssignSection}
+                  onAssignBatch={handleAssignBatch}
+                />
               )}
             </div>
           </div>
