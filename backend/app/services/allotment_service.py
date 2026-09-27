@@ -28,8 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     User, Course, CourseOffering, ClassSection, PracticalBatch, StudentEnrollment,
+    Department, Division,
 )
 from app.schemas.allotment import AllotmentRowError
+from sqlalchemy.orm import selectinload
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,94 @@ class AllotmentEngine:
 
         return self._summary(total_rows)
 
+    async def auto_enroll_core_for_term(self, academic_term: str) -> Dict[str, Any]:
+        """
+        Auto-enroll all students in active divisions into their mandatory Core courses (Tier 1: CLASS).
+        Zero manual CSV upload needed for Core courses!
+        """
+        import re
+        sem_match = re.search(r"SEM(\d+)", academic_term.upper())
+        target_sem = int(sem_match.group(1)) if sem_match else 5
+
+        # Query all divisions that belong to this semester
+        div_stmt = (
+            select(Division)
+            .where(Division.semester == target_sem)
+            .options(selectinload(Division.department))
+        )
+        div_res = await self.db.execute(div_stmt)
+        divisions = div_res.scalars().all()
+
+        total_enrolled = 0
+
+        for div in divisions:
+            dept = div.department
+            if not dept:
+                continue
+
+            # Query all CLASS-tier core courses for this department and semester
+            course_stmt = select(Course).where(
+                Course.department_id == dept.id,
+                Course.semester == target_sem,
+                Course.course_tier == "CLASS"
+            ).order_by(Course.code)
+            course_res = await self.db.execute(course_stmt)
+            core_courses = course_res.scalars().all()
+
+            if not core_courses:
+                continue
+
+            # Query all students in this division
+            student_stmt = select(User).where(
+                User.role == "STUDENT",
+                User.division_id == div.id
+            ).order_by(User.roll_no, User.student_erp_id, User.full_name)
+            student_res = await self.db.execute(student_stmt)
+            students = student_res.scalars().all()
+
+            if not students:
+                continue
+
+            div_label = f"{dept.code}-{div.name}"
+
+            for course in core_courses:
+                offering = await self._get_or_create_offering(course, academic_term)
+                mode = course.delivery_mode
+
+                # Theory section (if applicable)
+                section: Optional[ClassSection] = None
+                if mode in ("INTEGRATED_TH_PR", "THEORY_TUTORIAL", "THEORY_ONLY"):
+                    section_name = f"{div_label}-Theory"
+                    section = await self._get_or_create_section(offering, section_name)
+                    self.faculty_slots_generated += 1
+
+                if mode == "THEORY_ONLY":
+                    for std in students:
+                        await self._upsert_enrollment(std, offering, section=section, batch=None)
+                        total_enrolled += 1
+                    continue
+
+                # Balanced Practical / Tutorial Batches (≤25 students per batch)
+                batch_chunks = balanced_chunks(students, CLASS_BATCH_MAX)
+                for i, chunk in enumerate(batch_chunks, start=1):
+                    batch_name = f"{div_label}-B{i}"
+                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section)
+                    if mode == "PRACTICAL_ONLY":
+                        self.faculty_slots_generated += 1
+                    for std in chunk:
+                        await self._upsert_enrollment(std, offering, section=section, batch=batch)
+                        total_enrolled += 1
+
+        return {
+            "status": "success",
+            "academic_term": academic_term,
+            "target_semester": target_sem,
+            "total_enrollments_created": total_enrolled,
+            "sections_created": self.sections_created,
+            "batches_created": self.batches_created,
+            "faculty_slots_generated": self.faculty_slots_generated,
+        }
+
     # ------------------------------------------------------------------
     # File Parsing
     # ------------------------------------------------------------------
@@ -191,18 +281,38 @@ class AllotmentEngine:
     # ------------------------------------------------------------------
 
     async def _resolve_students(self, df: pd.DataFrame) -> Dict[str, User]:
-        """Fetch all student User rows from DB, keyed by student_erp_id. Auto-creates any missing student accounts."""
+        """Fetch all student User rows from DB, keyed by student_erp_id, roll_no, or email."""
         from app.core.security import hash_password
         erp_ids = [str(x).strip() for x in df["student_id"].unique().tolist() if pd.notna(x)]
-        stmt = select(User).where(User.student_erp_id.in_(erp_ids))
-        result = await self.db.execute(stmt)
-        users = result.scalars().all()
-        student_map = {u.student_erp_id: u for u in users}
+        rolls = [str(x).strip() for x in df["roll_no"].unique().tolist() if "roll_no" in df.columns and pd.notna(x)]
+        
+        conditions = []
+        if erp_ids:
+            conditions.append(User.student_erp_id.in_(erp_ids))
+        if rolls:
+            conditions.append(User.roll_no.in_(rolls))
+
+        if conditions:
+            stmt = select(User).where(User.role == "STUDENT", *([conditions[0] if len(conditions) == 1 else (conditions[0] | conditions[1])]))
+            result = await self.db.execute(stmt)
+            users = result.scalars().all()
+        else:
+            users = []
+
+        student_map = {}
+        for u in users:
+            if u.student_erp_id:
+                student_map[u.student_erp_id] = u
+            if u.roll_no:
+                student_map[u.roll_no] = u
 
         for _, row in df.iterrows():
             sid = str(row["student_id"]).strip()
-            if sid and sid not in student_map:
-                roll = str(row.get("roll_no", sid)).strip()
+            roll = str(row.get("roll_no", sid)).strip()
+            
+            matched = student_map.get(sid) or student_map.get(roll)
+            if not matched and sid:
+                # Auto-create student if truly new
                 student_user = User(
                     email=f"{sid.lower()}@student.academic.edu",
                     hashed_password=hash_password("student123"),
@@ -214,22 +324,31 @@ class AllotmentEngine:
                 self.db.add(student_user)
                 await self.db.flush()
                 student_map[sid] = student_user
+                student_map[roll] = student_user
+            elif matched:
+                student_map[sid] = matched
+                student_map[roll] = matched
 
         return student_map
 
     async def _resolve_courses(self, df: pd.DataFrame) -> Dict[str, Course]:
-        """Fetch all Course rows from DB, keyed by code."""
+        """Fetch all Course rows from DB, keyed by code or course name (case-insensitive)."""
         stmt = select(Course)
         result = await self.db.execute(stmt)
         all_courses = result.scalars().all()
         course_db_map = {c.code.strip().upper(): c for c in all_courses}
+        course_name_map = {c.name.strip().lower(): c for c in all_courses}
 
         course_map = {}
         for i, row in df.iterrows():
             code = str(row["course_code"]).strip()
             code_upper = code.upper()
+            code_lower = code.lower()
+
             if code_upper in course_db_map:
                 course_map[code] = course_db_map[code_upper]
+            elif code_lower in course_name_map:
+                course_map[code] = course_name_map[code_lower]
             else:
                 self.errors.append(AllotmentRowError(
                     row=i + 2,

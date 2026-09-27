@@ -21,6 +21,13 @@ import {
   Building2,
   Globe,
   MessageSquare,
+  Plus,
+  UserPlus,
+  Download,
+  Check,
+  Search,
+  Filter,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -199,6 +206,100 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Faculty Upload Result Card
+// ─────────────────────────────────────────────────────────────────────────────
+function FacultyUploadResultCard({
+  result,
+}: {
+  result: {
+    status: string;
+    total_assignments_processed: number;
+    sections_assigned: number;
+    batches_assigned: number;
+    errors: string[];
+  };
+}) {
+  const success = result.status === 'success';
+  const errors = result.errors || [];
+
+  return (
+    <div
+      className={`rounded-2xl border p-6 ${
+        success
+          ? 'bg-emerald-500/5 border-emerald-500/25'
+          : 'bg-amber-500/5 border-amber-500/25'
+      }`}
+    >
+      <div className="flex items-start gap-4 mb-5">
+        <div className={`p-2.5 rounded-xl ${success ? 'bg-emerald-500/15' : 'bg-amber-500/15'}`}>
+          {success ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-amber-400" />
+          )}
+        </div>
+        <div>
+          <p className={`font-semibold ${success ? 'text-emerald-300' : 'text-amber-300'}`}>
+            {success ? 'Faculty Teaching Matrix Ingested' : 'Faculty Allocation Complete with Warnings'}
+          </p>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {result.total_assignments_processed ?? 0} teaching assignments processed
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[
+          {
+            label: 'Assignments Processed',
+            value: result.total_assignments_processed ?? 0,
+            icon: FileSpreadsheet,
+            color: 'text-blue-400',
+          },
+          {
+            label: 'Theory Sections Allocated',
+            value: result.sections_assigned ?? 0,
+            icon: BookOpen,
+            color: 'text-violet-400',
+          },
+          {
+            label: 'Practical Batches Allocated',
+            value: result.batches_assigned ?? 0,
+            icon: FlaskConical,
+            color: 'text-emerald-400',
+          },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 text-center">
+            <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
+            <p className="text-xl font-bold text-white">{value}</p>
+            <p className="text-[10px] text-zinc-500">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {errors.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {errors.length} notice(s):
+          </p>
+          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+            {errors.map((err: string, i: number) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-xs text-amber-200"
+              >
+                <span>{err}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FacultyOption {
   id: string;
   full_name: string;
@@ -221,6 +322,9 @@ function OfferingsPanel({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deptFilter, setDeptFilter] = useState<'ALL' | 'COMP' | 'AIDS' | 'ECS' | 'MECH'>('COMP');
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'CLASS' | 'DEPARTMENT'>('ALL');
 
   if (offerings.length === 0) {
     return (
@@ -230,136 +334,291 @@ function OfferingsPanel({
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {offerings.map((o) => {
-        const isOpen = expanded === o.id;
-        const TierIcon = o.course_tier === 'CLASS' ? Layers : o.course_tier === 'DEPARTMENT' ? Building2 : Globe;
-        return (
-          <div key={o.id} className="bg-zinc-900/50 border border-zinc-800/60 rounded-xl overflow-hidden">
-            <button
-              onClick={() => setExpanded(isOpen ? null : o.id)}
-              className="w-full flex items-center gap-4 p-4 text-left hover:bg-zinc-800/30 transition-colors"
-            >
-              <div className="p-2 bg-zinc-800/60 rounded-lg">
-                <TierIcon className="w-4 h-4 text-violet-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-zinc-500">{o.course_code}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${TIER_COLORS[o.course_tier] ?? ''}`}>
-                    {o.course_tier}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-700/40">
-                    {MODE_LABELS[o.delivery_mode]}
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-zinc-200 truncate mt-0.5">{o.course_name}</p>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0 text-xs text-zinc-500">
-                <span>{o.sections.length} sections</span>
-                <span>{o.batches.length} batches</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
+  // Filter offerings
+  const filteredOfferings = offerings.filter((o) => {
+    if (deptFilter !== 'ALL') {
+      if (deptFilter === 'COMP' && !o.course_code.includes('CE')) return false;
+      if (deptFilter === 'AIDS' && !o.course_code.includes('CS') && !o.course_code.includes('AI')) return false;
+      if (deptFilter === 'ECS' && !o.course_code.includes('EC')) return false;
+      if (deptFilter === 'MECH' && !o.course_code.includes('ME')) return false;
+    }
+    if (tierFilter !== 'ALL' && o.course_tier !== tierFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const codeMatch = o.course_code.toLowerCase().includes(q);
+      const nameMatch = o.course_name.toLowerCase().includes(q);
+      const secMatch = o.sections.some(
+        (s) =>
+          s.section_name.toLowerCase().includes(q) ||
+          (s.faculty_name && s.faculty_name.toLowerCase().includes(q))
+      );
+      const batchMatch = o.batches.some(
+        (b) =>
+          b.batch_name.toLowerCase().includes(q) ||
+          (b.faculty_name && b.faculty_name.toLowerCase().includes(q))
+      );
+      if (!codeMatch && !nameMatch && !secMatch && !batchMatch) return false;
+    }
+    return true;
+  });
 
-            {isOpen && (
-              <div className="border-t border-zinc-800/60 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Sections */}
-                <div>
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <BookOpen className="w-3 h-3 text-blue-400" /> Theory Sections
-                  </p>
-                  {o.sections.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic">None</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {o.sections.map((s) => (
-                        <div key={s.id} className="bg-zinc-800/40 rounded-lg p-2.5 text-xs border border-zinc-700/30">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="font-mono text-blue-300 font-semibold">{s.section_name}</span>
-                            {s.faculty_name && (
-                              <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                                Assigned
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
-                            <select
-                              value={s.faculty_id || ''}
-                              disabled={assigningId === s.id}
-                              onChange={async (e) => {
-                                if (!e.target.value) return;
-                                setAssigningId(s.id);
-                                await onAssignSection(s.id, e.target.value);
-                                setAssigningId(null);
-                              }}
-                              className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
-                            >
-                              <option value="">-- Assign Faculty --</option>
-                              {facultyList.map((f) => (
-                                <option key={f.id} value={f.id}>
-                                  {f.full_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Batches */}
-                <div>
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <FlaskConical className="w-3 h-3 text-purple-400" /> Practical Batches
-                  </p>
-                  {o.batches.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic">None</p>
-                  ) : (
-                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {o.batches.map((b) => (
-                        <div key={b.id} className="bg-zinc-800/40 rounded-lg p-2.5 text-xs border border-zinc-700/30">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="font-mono text-violet-300 font-semibold">{b.batch_name}</span>
-                            {b.faculty_name && (
-                              <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                                Assigned
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
-                            <select
-                              value={b.faculty_id || ''}
-                              disabled={assigningId === b.id}
-                              onChange={async (e) => {
-                                if (!e.target.value) return;
-                                setAssigningId(b.id);
-                                await onAssignBatch(b.id, e.target.value);
-                                setAssigningId(null);
-                              }}
-                              className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
-                            >
-                              <option value="">-- Assign Faculty --</option>
-                              {facultyList.map((f) => (
-                                <option key={f.id} value={f.id}>
-                                  {f.full_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+  return (
+    <div className="space-y-3.5">
+      {/* Search & Department Filters Toolbar */}
+      <div className="space-y-2.5 pb-3 border-b border-zinc-800/80">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search by code, subject name, or teacher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-7 py-1.5 bg-zinc-950/70 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
-        );
-      })}
+
+          {/* Department Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+            {[
+              { id: 'COMP', label: 'Computer (COMP)' },
+              { id: 'AIDS', label: 'AI/DS' },
+              { id: 'ECS', label: 'ECS' },
+              { id: 'MECH', label: 'MECH' },
+              { id: 'ALL', label: 'All' },
+            ].map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setDeptFilter(d.id as any)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
+                  deptFilter === d.id
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50'
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Course Tier Pills & Summary Stats */}
+        <div className="flex items-center justify-between text-xs text-zinc-400 px-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-zinc-500 font-medium">Type:</span>
+            {[
+              { id: 'ALL', label: 'All' },
+              { id: 'CLASS', label: 'Core PCC/VSE' },
+              { id: 'DEPARTMENT', label: 'Electives PEC/PECL' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTierFilter(t.id as any)}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                  tierFilter === t.id
+                    ? 'bg-zinc-700 text-zinc-100 border border-zinc-600'
+                    : 'bg-zinc-900/60 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] text-zinc-400">
+            Showing <strong className="text-zinc-200">{filteredOfferings.length}</strong> of {offerings.length} courses
+          </span>
+        </div>
+      </div>
+
+      {/* Compact Scrollable List (Fixed Max Height Prevents Page Scrolling!) */}
+      <div className="max-h-[520px] overflow-y-auto pr-1 space-y-2">
+        {filteredOfferings.length === 0 ? (
+          <div className="text-center py-12 text-zinc-500 text-xs bg-zinc-900/20 rounded-xl border border-dashed border-zinc-800">
+            No courses match the active search or department filter.
+          </div>
+        ) : (
+          filteredOfferings.map((o) => {
+            const isOpen = expanded === o.id;
+            const TierIcon = o.course_tier === 'CLASS' ? Layers : o.course_tier === 'DEPARTMENT' ? Building2 : Globe;
+
+            // Allocation status calculation
+            const totalSlots = o.sections.length + o.batches.length;
+            const assignedSlots =
+              o.sections.filter((s) => s.faculty_id).length +
+              o.batches.filter((b) => b.faculty_id).length;
+            const isFullyAssigned = totalSlots > 0 && assignedSlots === totalSlots;
+            const isPartiallyAssigned = assignedSlots > 0 && assignedSlots < totalSlots;
+
+            return (
+              <div
+                key={o.id}
+                className={`border rounded-xl transition-all overflow-hidden ${
+                  isOpen
+                    ? 'bg-zinc-900/80 border-violet-500/40 shadow-lg'
+                    : 'bg-zinc-900/40 border-zinc-800/70 hover:border-zinc-700/80 hover:bg-zinc-800/30'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : o.id)}
+                  className="w-full flex items-center gap-3 p-3 text-left transition-colors"
+                >
+                  <div className="p-1.5 bg-zinc-800/80 rounded-lg flex-shrink-0">
+                    <TierIcon className="w-3.5 h-3.5 text-violet-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-xs text-zinc-400 font-semibold">{o.course_code}</span>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.2 rounded border font-medium ${
+                          TIER_COLORS[o.course_tier] ?? ''
+                        }`}
+                      >
+                        {o.course_tier}
+                      </span>
+                      <span className="text-[9px] text-zinc-400 bg-zinc-800/60 px-1.5 py-0.2 rounded border border-zinc-700/40">
+                        {MODE_LABELS[o.delivery_mode]}
+                      </span>
+                      {isFullyAssigned ? (
+                        <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
+                          Allocated
+                        </span>
+                      ) : isPartiallyAssigned ? (
+                        <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-medium">
+                          {assignedSlots}/{totalSlots} Slots
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-zinc-800 text-zinc-500 border border-zinc-700/50 px-1.5 py-0.2 rounded font-medium">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-semibold text-zinc-200 truncate mt-0.5">{o.course_name}</p>
+                  </div>
+                  <div className="flex items-center gap-2.5 flex-shrink-0 text-[11px] text-zinc-400">
+                    {o.sections.length > 0 && <span>{o.sections.length} sec</span>}
+                    {o.batches.length > 0 && <span>{o.batches.length} lab</span>}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-zinc-800/70 p-3.5 bg-zinc-950/40 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Theory Sections */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <BookOpen className="w-3 h-3 text-blue-400" /> Theory Sections
+                      </p>
+                      {o.sections.length === 0 ? (
+                        <p className="text-[11px] text-zinc-600 italic">None (Practical Only)</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {o.sections.map((s) => (
+                            <div
+                              key={s.id}
+                              className="bg-zinc-800/40 rounded-lg p-2 text-xs border border-zinc-700/30"
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-mono text-blue-300 font-semibold">{s.section_name}</span>
+                                {s.faculty_name && (
+                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                    Assigned
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                                <select
+                                  value={s.faculty_id || ''}
+                                  disabled={assigningId === s.id}
+                                  onChange={async (e) => {
+                                    if (!e.target.value) return;
+                                    setAssigningId(s.id);
+                                    await onAssignSection(s.id, e.target.value);
+                                    setAssigningId(null);
+                                  }}
+                                  className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                                >
+                                  <option value="">-- Assign Faculty --</option>
+                                  {facultyList.map((f) => (
+                                    <option key={f.id} value={f.id}>
+                                      {f.full_name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Practical Batches */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <FlaskConical className="w-3 h-3 text-purple-400" /> Practical Batches
+                      </p>
+                      {o.batches.length === 0 ? (
+                        <p className="text-[11px] text-zinc-600 italic">None</p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {o.batches.map((b) => (
+                            <div
+                              key={b.id}
+                              className="bg-zinc-800/40 rounded-lg p-2 text-xs border border-zinc-700/30"
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-mono text-violet-300 font-semibold">{b.batch_name}</span>
+                                {b.faculty_name && (
+                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                    Assigned
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                                <select
+                                  value={b.faculty_id || ''}
+                                  disabled={assigningId === b.id}
+                                  onChange={async (e) => {
+                                    if (!e.target.value) return;
+                                    setAssigningId(b.id);
+                                    await onAssignBatch(b.id, e.target.value);
+                                    setAssigningId(null);
+                                  }}
+                                  className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                                >
+                                  <option value="">-- Assign Faculty --</option>
+                                  {facultyList.map((f) => (
+                                    <option key={f.id} value={f.id}>
+                                      {f.full_name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -377,7 +636,30 @@ export default function AdminAllotmentPage() {
   const [selectedTerm, setSelectedTerm] = useState('2026-27-SEM5');
   const [facultyList, setFacultyList] = useState<FacultyOption[]>([]);
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoEnrollingCore, setAutoEnrollingCore] = useState(false);
   const user = typeof window !== 'undefined' ? getStoredUser() : null;
+
+  // Tabs: students vs faculty
+  const [uploadTab, setUploadTab] = useState<'students' | 'faculty'>('students');
+  const [facultyFile, setFacultyFile] = useState<File | null>(null);
+  const [uploadingFaculty, setUploadingFaculty] = useState(false);
+  const [facultyUploadResult, setFacultyUploadResult] = useState<{
+    status: string;
+    total_assignments_processed: number;
+    sections_assigned: number;
+    batches_assigned: number;
+    errors: string[];
+  } | null>(null);
+
+  // Manual Add Faculty Modal State
+  const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
+  const [newFacultyName, setNewFacultyName] = useState('');
+  const [newFacultyEmail, setNewFacultyEmail] = useState('');
+  const [newFacultyDept, setNewFacultyDept] = useState('COMP');
+  const [newFacultyPassword, setNewFacultyPassword] = useState('faculty123');
+  const [addingFaculty, setAddingFaculty] = useState(false);
+  const [addFacultySuccess, setAddFacultySuccess] = useState<string | null>(null);
+  const [addFacultyError, setAddFacultyError] = useState<string | null>(null);
 
   const loadFaculty = useCallback(async () => {
     try {
@@ -445,6 +727,23 @@ export default function AdminAllotmentPage() {
     }
   };
 
+  const handleAutoEnrollCore = async () => {
+    setAutoEnrollingCore(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/admin/auto-enroll-core?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      if (res.ok) {
+        await loadOfferings();
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setAutoEnrollingCore(false);
+    }
+  };
+
   const handleAutoAssign = async () => {
     setAutoAssigning(true);
     try {
@@ -460,6 +759,111 @@ export default function AdminAllotmentPage() {
     } finally {
       setAutoAssigning(false);
     }
+  };
+
+  const handleCreateFaculty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingFaculty(true);
+    setAddFacultySuccess(null);
+    setAddFacultyError(null);
+    try {
+      const res = await fetchWithAuth('/api/v1/faculty/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: newFacultyName,
+          email: newFacultyEmail,
+          department_code: newFacultyDept,
+          password: newFacultyPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAddFacultyError(data?.detail || 'Failed to create faculty member');
+      } else {
+        setAddFacultySuccess(`Prof. ${newFacultyName} registered successfully!`);
+        setNewFacultyName('');
+        setNewFacultyEmail('');
+        await loadFaculty();
+        setTimeout(() => {
+          setShowAddFacultyModal(false);
+          setAddFacultySuccess(null);
+        }, 1500);
+      }
+    } catch {
+      setAddFacultyError('Network error while registering faculty member');
+    } finally {
+      setAddingFaculty(false);
+    }
+  };
+
+  const handleUploadFacultyMatrix = async () => {
+    if (!facultyFile) return;
+    setUploadingFaculty(true);
+    setFacultyUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', facultyFile);
+      const token = getStoredToken();
+      const res = await fetch(
+        `/api/v1/admin/upload-faculty-allocation?academic_term=${encodeURIComponent(selectedTerm)}`,
+        {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setFacultyUploadResult({
+          status: 'partial',
+          total_assignments_processed: data?.total_assignments_processed ?? 0,
+          sections_assigned: 0,
+          batches_assigned: 0,
+          errors: Array.isArray(data?.detail) ? data.detail : [data?.detail || 'Upload failed'],
+        });
+      } else {
+        setFacultyUploadResult(data);
+        await loadOfferings();
+        await loadFaculty();
+        setFacultyFile(null);
+      }
+    } catch {
+      setFacultyUploadResult({
+        status: 'error',
+        total_assignments_processed: 0,
+        sections_assigned: 0,
+        batches_assigned: 0,
+        errors: ['Network error while uploading faculty matrix'],
+      });
+    } finally {
+      setUploadingFaculty(false);
+    }
+  };
+
+  const downloadSampleFacultyMatrix = () => {
+    const csvContent =
+      'faculty_email,faculty_name,course_code,class_div,batch_name,academic_term\n' +
+      'anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PCC13CE14,COMP-A,ALL,2026-27-SEM5\n' +
+      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PCC13CE19,COMP-A,ALL,2026-27-SEM5\n' +
+      'sneha.deshmukh@academic.edu,Prof. Sneha Deshmukh,25PCC13CE21,COMP-A,ALL,2026-27-SEM5\n' +
+      'vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PCC13CE22,COMP-A,ALL,2026-27-SEM5\n' +
+      'arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B1,2026-27-SEM5\n' +
+      'arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B2,2026-27-SEM5\n' +
+      'priya.sharma@academic.edu,Prof. Priya Sharma,25VSE13CE04,COMP-A,COMP-A-B3,2026-27-SEM5\n' +
+      'vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PEC13CE11,COMP-A,ALL,2026-27-SEM5\n' +
+      'priya.sharma@academic.edu,Prof. Priya Sharma,25PEC13CE12,COMP-A,ALL,2026-27-SEM5\n' +
+      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PEC13CE13,COMP-A,ALL,2026-27-SEM5\n' +
+      'anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PEC13CE14,COMP-A,ALL,2026-27-SEM5\n' +
+      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PECL13CE15,COMP-A,COMP-A-B1,2026-27-SEM5\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_faculty_allocation_matrix.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleUpload = async () => {
@@ -607,72 +1011,185 @@ export default function AdminAllotmentPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Left: Upload Panel */}
           <div className="lg:col-span-2 space-y-5">
-            <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-2">
-                <Upload className="w-4 h-4 text-violet-400" />
-                Upload Allotment Sheet
-              </h2>
-              <p className="text-xs text-zinc-500 mb-5">
-                Required columns: student_id, roll_no, department, class_div, course_code, academic_term
-              </p>
-              <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
+            {/* Segmented Upload Tabs */}
+            <div className="flex items-center gap-1 p-1 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setUploadTab('students')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                  uploadTab === 'students'
+                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Student Allotment
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadTab('faculty')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                  uploadTab === 'faculty'
+                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                }`}
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                Faculty Matrix
+              </button>
+            </div>
 
-              {file && (
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    id="upload-submit-btn"
-                    onClick={handleUpload}
-                    disabled={uploading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-violet-500/20"
-                  >
-                    {uploading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Processing…
-                      </>
-                    ) : (
-                      <>
-                        <ArrowRight className="w-4 h-4" />
-                        Run Allotment Engine
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { setFile(null); setResult(null); }}
-                    className="p-3 bg-zinc-800/60 hover:bg-zinc-700/60 rounded-xl border border-zinc-700/40 transition-all"
-                  >
-                    <X className="w-4 h-4 text-zinc-400" />
-                  </button>
+            {/* TAB 1: Student Allotment */}
+            {uploadTab === 'students' && (
+              <>
+                <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
+                  <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-violet-400" />
+                    Upload Student Allotment Sheet
+                  </h2>
+                  <p className="text-xs text-zinc-500 mb-5">
+                    Required columns: student_id, roll_no, department, class_div, course_code, academic_term
+                  </p>
+                  <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
+
+                  {file && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <button
+                        id="upload-submit-btn"
+                        onClick={handleUpload}
+                        disabled={uploading}
+                        className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-violet-500/20"
+                      >
+                        {uploading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Processing…
+                          </>
+                        ) : (
+                          <>
+                            <ArrowRight className="w-4 h-4" />
+                            Run Allotment Engine
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { setFile(null); setResult(null); }}
+                        className="p-3 bg-zinc-800/60 hover:bg-zinc-700/60 rounded-xl border border-zinc-700/40 transition-all"
+                      >
+                        <X className="w-4 h-4 text-zinc-400" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Column Reference */}
-            <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-5">
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                Excel Column Reference
-              </p>
-              <div className="space-y-2">
-                {[
-                  ['student_id', 'ST2024001', 'ERP student identifier'],
-                  ['roll_no', '24CE101', 'Used for deterministic sort'],
-                  ['department', 'Computer', 'Department name'],
-                  ['class_div', 'CE-A', 'Class division'],
-                  ['course_code', '25PCC13CE19', 'Must exist in courses table'],
-                  ['academic_term', '2026-27-SEM5', 'Matches offerings'],
-                ].map(([col, ex, desc]) => (
-                  <div key={col} className="flex items-start gap-2 text-xs">
-                    <span className="font-mono text-violet-300 w-28 flex-shrink-0">{col}</span>
-                    <span className="text-zinc-500 flex-1">{desc}</span>
+                {/* Column Reference */}
+                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-5">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                    Excel Column Reference
+                  </p>
+                  <div className="space-y-2">
+                    {[
+                      ['student_id', 'ST2024001', 'ERP student identifier'],
+                      ['roll_no', '24CE101', 'Used for deterministic sort'],
+                      ['department', 'Computer', 'Department name'],
+                      ['class_div', 'CE-A', 'Class division'],
+                      ['course_code', '25PCC13CE19', 'Must exist in courses table'],
+                      ['academic_term', '2026-27-SEM5', 'Matches offerings'],
+                    ].map(([col, ex, desc]) => (
+                      <div key={col} className="flex items-start gap-2 text-xs">
+                        <span className="font-mono text-violet-300 w-28 flex-shrink-0">{col}</span>
+                        <span className="text-zinc-500 flex-1">{desc}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
+
+            {/* TAB 2: Faculty Teaching Matrix */}
+            {uploadTab === 'faculty' && (
+              <>
+                <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-emerald-400" />
+                      Upload Faculty Teaching Matrix
+                    </h2>
+                  </div>
+                  <p className="text-xs text-zinc-500 mb-4">
+                    Auto-allocate teachers to proper classes & batches based on teaching specifications.
+                  </p>
+
+                  <div className="mb-4">
+                    <button
+                      type="button"
+                      onClick={downloadSampleFacultyMatrix}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 font-medium transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      Download Sample Faculty Matrix CSV
+                    </button>
+                  </div>
+
+                  <UploadZone onFileSelect={setFacultyFile} file={facultyFile} loading={uploadingFaculty} />
+
+                  {facultyFile && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <button
+                        onClick={handleUploadFacultyMatrix}
+                        disabled={uploadingFaculty}
+                        className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+                      >
+                        {uploadingFaculty ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Allocating Faculty…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Run Faculty Allocation
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { setFacultyFile(null); setFacultyUploadResult(null); }}
+                        className="p-3 bg-zinc-800/60 hover:bg-zinc-700/60 rounded-xl border border-zinc-700/40 transition-all"
+                      >
+                        <X className="w-4 h-4 text-zinc-400" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Faculty Column Reference */}
+                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-5">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                    Faculty Matrix Column Reference
+                  </p>
+                  <div className="space-y-2">
+                    {[
+                      ['faculty_email', 'anita.kulkarni@academic.edu', 'Teacher identifier / email / name'],
+                      ['course_code', '25PCC13CE14', 'Course / subject code in curriculum'],
+                      ['class_div', 'COMP-A', 'Class division to teach'],
+                      ['batch_name', 'ALL / COMP-A-B1', 'ALL for theory section; B1/B2 for specific lab'],
+                      ['academic_term', '2026-27-SEM5', 'Semester term (optional, defaults to selected)'],
+                    ].map(([col, ex, desc]) => (
+                      <div key={col} className="flex items-start gap-2 text-xs">
+                        <span className="font-mono text-emerald-300 w-28 flex-shrink-0">{col}</span>
+                        <span className="text-zinc-500 flex-1">{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Right: Results + Offerings */}
           <div className="lg:col-span-3 space-y-6">
             {result && <UploadResultCard result={result} />}
+            {facultyUploadResult && <FacultyUploadResultCard result={facultyUploadResult} />}
 
             {/* Offerings Panel */}
             <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
@@ -681,7 +1198,22 @@ export default function AdminAllotmentPage() {
                   <Layers className="w-4 h-4 text-violet-400" />
                   Course Offerings
                 </h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setShowAddFacultyModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-medium transition-all"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    + Add Faculty
+                  </button>
+                  <button
+                    onClick={handleAutoEnrollCore}
+                    disabled={autoEnrollingCore}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                  >
+                    <BookOpen className={`w-3 h-3 ${autoEnrollingCore ? 'animate-spin' : ''}`} />
+                    {autoEnrollingCore ? 'Enrolling…' : '🎯 Auto-Enroll Core'}
+                  </button>
                   <button
                     onClick={handleAutoAssign}
                     disabled={autoAssigning || offerings.length === 0}
@@ -730,6 +1262,114 @@ export default function AdminAllotmentPage() {
           </div>
         </div>
       </main>
+
+      {/* Manual Add Faculty Modal */}
+      {showAddFacultyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-700/80 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/15 rounded-xl text-emerald-400 border border-emerald-500/20">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Add New Faculty</h3>
+                  <p className="text-xs text-zinc-400">Register instructor for class and batch allocation</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddFacultyModal(false)}
+                className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {addFacultySuccess && (
+              <div className="mb-4 p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                {addFacultySuccess}
+              </div>
+            )}
+
+            {addFacultyError && (
+              <div className="mb-4 p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {addFacultyError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateFaculty} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Prof. Anita Kulkarni"
+                  value={newFacultyName}
+                  onChange={(e) => setNewFacultyName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. anita.kulkarni@academic.edu"
+                  value={newFacultyEmail}
+                  onChange={(e) => setNewFacultyEmail(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Department</label>
+                <select
+                  value={newFacultyDept}
+                  onChange={(e) => setNewFacultyDept(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="COMP">Computer Engineering (COMP)</option>
+                  <option value="AIDS">Artificial Intelligence & Data Science (AIDS)</option>
+                  <option value="ECS">Electronics & Computer Science (ECS)</option>
+                  <option value="MECH">Mechanical Engineering (MECH)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Initial Password</label>
+                <input
+                  type="text"
+                  value={newFacultyPassword}
+                  onChange={(e) => setNewFacultyPassword(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 font-mono text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-zinc-500 mt-1">Faculty can change this after logging in.</p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddFacultyModal(false)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingFaculty}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all"
+                >
+                  {addingFaculty ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {addingFaculty ? 'Creating...' : 'Create Faculty'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,16 @@
+faculty_email,faculty_name,course_code,class_div,batch_name,academic_term
+anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PCC13CE14,COMP-A,ALL,2026-27-SEM5
+rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PCC13CE19,COMP-A,ALL,2026-27-SEM5
+sneha.deshmukh@academic.edu,Prof. Sneha Deshmukh,25PCC13CE21,COMP-A,ALL,2026-27-SEM5
+vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PCC13CE22,COMP-A,ALL,2026-27-SEM5
+arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B1,2026-27-SEM5
+arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B2,2026-27-SEM5
+priya.sharma@academic.edu,Prof. Priya Sharma,25VSE13CE04,COMP-A,COMP-A-B3,2026-27-SEM5
+vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PEC13CE11,COMP-A,ALL,2026-27-SEM5
+priya.sharma@academic.edu,Prof. Priya Sharma,25PEC13CE12,COMP-A,ALL,2026-27-SEM5
+rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PEC13CE13,COMP-A,ALL,2026-27-SEM5
+anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PEC13CE14,COMP-A,ALL,2026-27-SEM5
+rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PECL13CE15,COMP-A,COMP-A-B1,2026-27-SEM5
+priya.sharma@academic.edu,Prof. Priya Sharma,25PECL13CE12,COMP-A,COMP-A-B1,2026-27-SEM5
+sneha.deshmukh@academic.edu,Prof. Sneha Deshmukh,25PECL13CE11,COMP-A,COMP-A-B1,2026-27-SEM5
+arjun.nair@academic.edu,Prof. Arjun Nair,25PECL13CE13,COMP-A,COMP-A-B1,2026-27-SEM5

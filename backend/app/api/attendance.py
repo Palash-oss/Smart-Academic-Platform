@@ -27,11 +27,12 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 @router.get("/my")
 async def get_my_attendance(
+    semester: Optional[int] = Query(None, description="Optional semester filter, defaults to student active semester"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Fetch attendance summary and per-subject risk calculation for current authenticated student."""
-    return await fetch_student_attendance_records(db, current_user.id)
+    return await fetch_student_attendance_records(db, current_user.id, target_semester=semester)
 
 
 @router.get("/students/{student_id}")

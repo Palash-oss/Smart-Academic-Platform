@@ -14,6 +14,8 @@ Student Portal:
 from __future__ import annotations
 
 import uuid
+import io
+import pandas as pd
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -22,8 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.auth import get_current_user, require_role
+from app.core.security import hash_password
 from app.db.models import (
-    ClassSection, Course, CourseOffering, PracticalBatch, StudentEnrollment, User,
+    ClassSection, Course, CourseOffering, PracticalBatch, StudentEnrollment, User, Department,
 )
 from app.db.session import get_db
 from app.schemas.allotment import (
@@ -40,6 +43,8 @@ from app.schemas.allotment import (
     FacultyCourseItem,
     FacultySectionItem,
     FacultyBatchItem,
+    CreateFacultyRequest,
+    FacultyAllocationUploadResponse,
 )
 from app.services.allotment_service import AllotmentEngine, CASCADE_MODES, cascade_faculty_to_batches
 
@@ -221,6 +226,339 @@ async def list_all_faculty(
         }
         for f in faculty_list
     ]
+
+
+# ===========================================================================
+# ADMIN: Manually Create a New Faculty Member
+# ===========================================================================
+
+@router.post(
+    "/v1/faculty/create",
+    summary="Create / manually add a new faculty member",
+)
+async def create_faculty(
+    payload: CreateFacultyRequest,
+    current_user: User = Depends(require_role(["ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Manually add a new professor/instructor to the platform.
+    Automatically assigns them the FACULTY role and links their department.
+    """
+    clean_email = payload.email.strip().lower()
+    stmt = select(User).where(User.email == clean_email)
+    res = await db.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User with email '{payload.email}' already exists.",
+        )
+
+    # Department lookup
+    dept = None
+    if payload.department_code:
+        dept_stmt = select(Department).where(
+            (Department.code == payload.department_code.strip().upper())
+            | (Department.name.ilike(f"%{payload.department_code.strip()}%"))
+        )
+        dept_res = await db.execute(dept_stmt)
+        dept = dept_res.scalars().first()
+
+    raw_pw = payload.password or "faculty123"
+    new_faculty = User(
+        email=clean_email,
+        full_name=payload.full_name.strip(),
+        hashed_password=hash_password(raw_pw),
+        role="FACULTY",
+        department_id=dept.id if dept else None,
+    )
+    db.add(new_faculty)
+    await db.commit()
+    await db.refresh(new_faculty)
+
+    return {
+        "id": str(new_faculty.id),
+        "full_name": new_faculty.full_name,
+        "email": new_faculty.email,
+        "department": dept.name if dept else (payload.department_code or "Computer Engineering"),
+        "message": f"Faculty member {new_faculty.full_name} created successfully.",
+    }
+
+
+# ===========================================================================
+# ADMIN: Upload Faculty Allocation / Teaching Matrix CSV or Excel
+# ===========================================================================
+
+@router.post(
+    "/v1/admin/upload-faculty-allocation",
+    response_model=FacultyAllocationUploadResponse,
+    summary="Upload Faculty Allocation / Teaching Matrix CSV to auto-assign teachers to classes and batches",
+)
+async def upload_faculty_allocation(
+    file: UploadFile = File(..., description="Faculty allocation matrix CSV or Excel"),
+    academic_term: Optional[str] = Query(None, description="Fallback term, e.g. '2026-27-SEM5'"),
+    current_user: User = Depends(require_role(["ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Ingest a Faculty Teaching Matrix CSV/Excel to auto-allocate professors to:
+      1. Proper Class / Theory Sections (with cascade to child batches if integrated)
+      2. Specific Practical Lab Batches (e.g., COMP-A-B1, COMP-A-B2)
+    
+    Accepts flexible column headers:
+      - faculty_email / email / faculty_name
+      - course_code / course / subject_code
+      - class_div / division / section
+      - batch_name / batch (optional: leave empty/ALL for theory class)
+      - academic_term (optional: falls back to academic_term query parameter)
+    """
+    if not file.filename.lower().endswith((".xlsx", ".csv")):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Only .xlsx or .csv files are accepted",
+        )
+
+    file_bytes = await file.read()
+    try:
+        if file.filename.lower().endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str)
+        else:
+            df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to parse file: {str(e)}",
+        )
+
+    # Normalize column names: strip and lowercase
+    col_map = {str(c).strip().lower(): c for c in df.columns}
+
+    # Locate faculty column
+    faculty_col = None
+    for cand in ["faculty_email", "email", "faculty", "faculty_name", "teacher", "professor"]:
+        if cand in col_map:
+            faculty_col = col_map[cand]
+            break
+
+    # Locate course column
+    course_col = None
+    for cand in ["course_code", "course", "subject_code", "code", "subject"]:
+        if cand in col_map:
+            course_col = col_map[cand]
+            break
+
+    if not faculty_col or not course_col:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV/Excel must contain at least faculty (email/name) and course_code columns.",
+        )
+
+    div_col = None
+    for cand in ["class_div", "division", "section", "section_name", "class"]:
+        if cand in col_map:
+            div_col = col_map[cand]
+            break
+
+    batch_col = None
+    for cand in ["batch_name", "batch", "batches", "lab_batch"]:
+        if cand in col_map:
+            batch_col = col_map[cand]
+            break
+
+    term_col = None
+    for cand in ["academic_term", "term", "semester"]:
+        if cand in col_map:
+            term_col = col_map[cand]
+            break
+
+    default_term = academic_term or "2026-27-SEM5"
+
+    total_processed = 0
+    sections_assigned = 0
+    batches_assigned = 0
+    errors: list[str] = []
+
+    # Cache faculty members
+    all_fac_res = await db.execute(select(User).where(User.role == "FACULTY"))
+    existing_faculties = {u.email.lower(): u for u in all_fac_res.scalars().all()}
+    faculties_by_name = {u.full_name.lower(): u for u in existing_faculties.values()}
+
+    for row_idx, row in df.iterrows():
+        raw_fac = str(row[faculty_col]).strip() if pd.notna(row[faculty_col]) else ""
+        raw_course = str(row[course_col]).strip() if pd.notna(row[course_col]) else ""
+
+        if not raw_fac or not raw_course:
+            continue
+
+        row_term = default_term
+        if term_col and pd.notna(row[term_col]) and str(row[term_col]).strip():
+            row_term = str(row[term_col]).strip()
+
+        raw_div = str(row[div_col]).strip() if div_col and pd.notna(row[div_col]) else ""
+        raw_batch = str(row[batch_col]).strip() if batch_col and pd.notna(row[batch_col]) else ""
+
+        total_processed += 1
+
+        # 1. Resolve Faculty User
+        fac_user = None
+        if raw_fac.lower() in existing_faculties:
+            fac_user = existing_faculties[raw_fac.lower()]
+        elif raw_fac.lower() in faculties_by_name:
+            fac_user = faculties_by_name[raw_fac.lower()]
+        else:
+            for fn, u in faculties_by_name.items():
+                if raw_fac.lower() in fn or fn in raw_fac.lower():
+                    fac_user = u
+                    break
+
+        if not fac_user:
+            # Auto-create faculty member so matrix upload is self-healing
+            email = raw_fac.lower() if "@" in raw_fac else f"{raw_fac.lower().replace(' ', '.')}@academic.edu"
+            full_name = raw_fac if "@" not in raw_fac else raw_fac.split("@")[0].replace(".", " ").title()
+            fac_user = User(
+                email=email,
+                full_name=full_name,
+                hashed_password=hash_password("faculty123"),
+                role="FACULTY",
+            )
+            db.add(fac_user)
+            await db.flush()
+            existing_faculties[email] = fac_user
+            faculties_by_name[full_name.lower()] = fac_user
+
+        # 2. Resolve Course Offering
+        off_stmt = (
+            select(CourseOffering)
+            .join(CourseOffering.course)
+            .where(
+                CourseOffering.academic_term == row_term,
+                (Course.code.ilike(raw_course)) | (Course.name.ilike(f"%{raw_course}%")),
+            )
+            .options(
+                selectinload(CourseOffering.course),
+                selectinload(CourseOffering.sections),
+                selectinload(CourseOffering.batches),
+            )
+        )
+        off_res = await db.execute(off_stmt)
+        offering = off_res.scalar_one_or_none()
+
+        if not offering:
+            errors.append(f"Row {row_idx + 1}: Offering for course '{raw_course}' in term '{row_term}' not found.")
+            continue
+
+        # 3. Allocation to Section or Batch
+        is_batch_specific = raw_batch and raw_batch.lower() not in {"all", "theory", "none", "", "nan"}
+
+        if is_batch_specific:
+            # Specific practical batch(es) assigned
+            batch_tokens = [b.strip() for b in raw_batch.replace(";", ",").split(",") if b.strip()]
+            for b_token in batch_tokens:
+                matched_b = None
+                t_lower = b_token.lower()
+                for b in offering.batches:
+                    b_name_lower = b.batch_name.lower()
+                    # Check exact match, substring match, or alias (B1 <-> Lab1)
+                    is_match = False
+                    if b_name_lower == t_lower or t_lower in b_name_lower:
+                        is_match = True
+                    elif "b1" in t_lower and ("lab1" in b_name_lower or "b1" in b_name_lower):
+                        is_match = True
+                    elif "b2" in t_lower and ("lab2" in b_name_lower or "b2" in b_name_lower):
+                        is_match = True
+                    elif "b3" in t_lower and ("lab3" in b_name_lower or "b3" in b_name_lower):
+                        is_match = True
+                    elif "b4" in t_lower and ("lab4" in b_name_lower or "b4" in b_name_lower):
+                        is_match = True
+                    elif "b5" in t_lower and ("lab5" in b_name_lower or "b5" in b_name_lower):
+                        is_match = True
+                    elif "b6" in t_lower and ("lab6" in b_name_lower or "b6" in b_name_lower):
+                        is_match = True
+
+                    if is_match:
+                        # If division specified, prefer batch with division prefix, otherwise pick match
+                        if raw_div and raw_div.lower() in b_name_lower:
+                            matched_b = b
+                            break
+                        elif not matched_b:
+                            matched_b = b
+
+                if matched_b:
+                    matched_b.faculty_id = fac_user.id
+                    batches_assigned += 1
+                else:
+                    errors.append(f"Row {row_idx + 1}: Batch '{b_token}' not found under offering '{raw_course}'.")
+        else:
+            # Theory Section assignment (with automatic cascade if integrated/tutorial)
+            matched_sec = None
+            if offering.sections:
+                for s in offering.sections:
+                    if raw_div:
+                        if raw_div.lower() in s.section_name.lower() or s.section_name.lower() in raw_div.lower():
+                            matched_sec = s
+                            break
+                    else:
+                        matched_sec = s
+                        break
+                # Fallback: If only 1 section exists under this offering (e.g. PEC elective), allocate to it!
+                if not matched_sec and len(offering.sections) == 1:
+                    matched_sec = offering.sections[0]
+
+            if matched_sec:
+                matched_sec.faculty_id = fac_user.id
+                sections_assigned += 1
+                if offering.course.delivery_mode in CASCADE_MODES:
+                    c_count = await cascade_faculty_to_batches(db, matched_sec.id, fac_user.id)
+                    batches_assigned += c_count
+            elif not offering.sections and offering.batches:
+                # PRACTICAL_ONLY course (batches link directly to offering, e.g. Linux lab or PECL)
+                matched_any = False
+                for b in offering.batches:
+                    if not raw_div or raw_div.lower() in b.batch_name.lower():
+                        b.faculty_id = fac_user.id
+                        batches_assigned += 1
+                        matched_any = True
+                if not matched_any and offering.batches:
+                    for b in offering.batches:
+                        b.faculty_id = fac_user.id
+                        batches_assigned += 1
+            else:
+                errors.append(f"Row {row_idx + 1}: No matching section found for division '{raw_div}' in course '{raw_course}'.")
+
+    await db.commit()
+
+    return FacultyAllocationUploadResponse(
+        status="success" if not errors else "partial",
+        academic_term=default_term,
+        total_assignments_processed=total_processed,
+        sections_assigned=sections_assigned,
+        batches_assigned=batches_assigned,
+        errors=errors,
+    )
+
+
+# ===========================================================================
+# ADMIN: Auto-Enroll All Students into Mandatory Core Courses
+# ===========================================================================
+
+@router.post(
+    "/v1/admin/auto-enroll-core",
+    summary="Auto-enroll students of active divisions into Core PCC/VSEC courses",
+)
+async def auto_enroll_core(
+    academic_term: str = Query(..., description="e.g. '2026-27-SEM5'"),
+    current_user: User = Depends(require_role(["ADMIN", "FACULTY"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Auto-enrolls all students in active divisions into their mandatory Core courses.
+    Zero manual CSV upload needed for Core courses!
+    """
+    engine = AllotmentEngine(db)
+    summary = await engine.auto_enroll_core_for_term(academic_term)
+    await db.commit()
+    return summary
 
 
 # ===========================================================================

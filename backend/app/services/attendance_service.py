@@ -34,22 +34,49 @@ def calculate_classes_needed_for_target(attended: int, total: int, target_pct: f
 
 async def fetch_student_attendance_records(
     db: AsyncSession,
-    student_id: uuid.UUID
+    student_id: uuid.UUID,
+    target_semester: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Fetches attendance records for a specific student and computes exact risk flags & percentages."""
+    """Fetches attendance records for a specific student and computes exact risk flags & percentages, scoped to their active semester."""
+    import re
+    user_stmt = select(User).where(User.id == student_id)
+    user_res = await db.execute(user_stmt)
+    student = user_res.scalar_one_or_none()
+
+    # If target_semester is not specified, determine it from the student's active division
+    if target_semester is None and student and student.division_id:
+        div_res = await db.execute(select(Division).where(Division.id == student.division_id))
+        div = div_res.scalar_one_or_none()
+        if div and div.semester:
+            target_semester = div.semester
+
     stmt = select(AttendanceLog).where(AttendanceLog.student_id == student_id)
     result = await db.execute(stmt)
     logs = result.scalars().all()
 
-    user_stmt = select(User).where(User.id == student_id)
-    user_res = await db.execute(user_stmt)
-    student = user_res.scalar_one_or_none()
+    # Pre-fetch course semester map for strict semester filtering
+    course_sem_map = {}
+    if target_semester:
+        c_res = await db.execute(select(Course.id, Course.code, Course.semester))
+        for cid, code, sem in c_res.all():
+            course_sem_map[cid] = sem
+            course_sem_map[code.strip().upper()] = sem
 
     subject_records = []
     total_attended_all = 0
     total_classes_all = 0
 
     for log in logs:
+        # Semester isolation check: Skip courses from other semesters
+        if target_semester and course_sem_map:
+            c_sem = course_sem_map.get(log.course_id)
+            if c_sem is None:
+                code_match = re.search(r"\(([A-Z0-9]+)\)", log.subject)
+                if code_match:
+                    c_sem = course_sem_map.get(code_match.group(1).upper())
+            if c_sem is not None and c_sem != target_semester:
+                continue
+
         pct = calculate_attendance_percentage(log.attended_classes, log.total_classes)
         at_risk = is_attendance_at_risk(pct)
         classes_needed = calculate_classes_needed_for_target(log.attended_classes, log.total_classes, 75.0)
@@ -73,6 +100,7 @@ async def fetch_student_attendance_records(
     return {
         "student_id": str(student_id),
         "student_name": student.full_name if student else "Unknown Student",
+        "semester": target_sem if (target_sem := target_semester) else 5,
         "overall_percentage": overall_pct,
         "overall_risk": overall_risk,
         "total_subjects": len(subject_records),

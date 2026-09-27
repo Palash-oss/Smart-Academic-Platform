@@ -160,3 +160,19 @@ class FacultySubjectsResponse(BaseModel):
     total_students: int = 0
     courses: List[FacultyCourseItem] = []
 
+
+class CreateFacultyRequest(BaseModel):
+    full_name: str
+    email: str
+    department_code: str = "COMP"
+    password: Optional[str] = "faculty123"
+
+
+class FacultyAllocationUploadResponse(BaseModel):
+    status: str = "success"
+    academic_term: str
+    total_assignments_processed: int
+    sections_assigned: int
+    batches_assigned: int
+    errors: List[str] = []
+
