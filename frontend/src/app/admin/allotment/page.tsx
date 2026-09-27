@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Navbar } from '@/components/Navbar';
 import {
   Upload,
   FileSpreadsheet,
@@ -719,6 +720,10 @@ export default function AdminAllotmentPage() {
     const stored = getStoredUser();
     if (stored) {
       setCurrentUser(stored);
+      if (stored.role !== 'ADMIN') {
+        router.push(stored.role === 'FACULTY' ? '/faculty' : '/chat');
+        return;
+      }
     }
     loadOfferings();
     loadFaculty();
@@ -960,67 +965,8 @@ export default function AdminAllotmentPage() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1f_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1f_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
       </div>
 
-      {/* Nav */}
-      <header className="relative z-10 border-b border-zinc-800/70 bg-zinc-950/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/chat" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-blue-600 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-semibold text-sm text-zinc-200">ACADEMIC COMMAND CENTER</span>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-2">
-            <Link
-              href="/chat"
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              AI Chat
-            </Link>
-
-            <Link
-              href="/enrollments"
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              My Subjects
-            </Link>
-
-            {currentUser?.role === 'FACULTY' && (
-              <Link
-                href="/faculty"
-                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
-              >
-                <Users className="w-3.5 h-3.5" />
-                Attendance Ledger
-              </Link>
-            )}
-
-            <Link
-              href="/admin/allotment"
-              className="flex items-center gap-1.5 text-xs text-white bg-zinc-800/80 border border-zinc-700/50 px-3 py-2 rounded-lg font-medium"
-            >
-              <Layers className="w-3.5 h-3.5 text-violet-400" />
-              Allotment Engine
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700/40">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span className="text-xs text-zinc-300">{currentUser?.full_name ?? 'Admin'}</span>
-              <span className="text-[10px] text-zinc-500 font-mono">{currentUser?.role ?? 'ADMIN'}</span>
-            </div>
-            <button
-              onClick={() => { clearAuthSession(); router.push('/login'); }}
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-red-400 px-3 py-2 rounded-lg transition-all"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Unified Role-Aware Navbar */}
+      <Navbar />
 
       <main className="relative z-10 max-w-7xl mx-auto px-6 py-10">
         <div className="mb-8">

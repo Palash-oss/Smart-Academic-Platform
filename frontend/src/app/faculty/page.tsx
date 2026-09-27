@@ -43,8 +43,54 @@ interface StudentOverview {
   subjects: SubjectRecord[];
 }
 
+interface FacultyAssignedSection {
+  id: string;
+  section_name: string;
+  student_count: number;
+  division: string;
+  component_type: string;
+}
+
+interface FacultyAssignedBatch {
+  id: string;
+  batch_name: string;
+  student_count: number;
+  section_name: string;
+  division: string;
+  batch_label: string;
+  component_type: string;
+}
+
+interface FacultyAssignedCourse {
+  offering_id: string;
+  course_code: string;
+  course_name: string;
+  tier: string;
+  delivery_mode: string;
+  th_hours: number;
+  pr_hours: number;
+  tu_hours: number;
+  sections: FacultyAssignedSection[];
+  batches: FacultyAssignedBatch[];
+  total_students: number;
+  divisions: string[];
+}
+
+interface FacultyTeachingLoad {
+  faculty_id: string;
+  faculty_name: string;
+  department_name: string;
+  academic_term: string;
+  total_courses: number;
+  total_sections: number;
+  total_batches: number;
+  total_students: number;
+  courses: FacultyAssignedCourse[];
+}
+
 export default function FacultyDashboardPage() {
   const [students, setStudents] = useState<StudentOverview[]>([]);
+  const [teachingLoad, setTeachingLoad] = useState<FacultyTeachingLoad | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDivisionTab, setSelectedDivisionTab] = useState<string>('ALL');
@@ -58,10 +104,18 @@ export default function FacultyDashboardPage() {
   const loadFacultyData = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth('/api/attendance/faculty/overview');
-      if (res.ok) {
-        const data: StudentOverview[] = await res.json();
+      const [overviewRes, loadRes] = await Promise.all([
+        fetchWithAuth('/api/attendance/faculty/overview'),
+        fetchWithAuth('/api/v1/faculty/my-subjects?academic_term=2026-27-SEM5')
+      ]);
+
+      if (overviewRes.ok) {
+        const data: StudentOverview[] = await overviewRes.json();
         setStudents(data);
+      }
+      if (loadRes.ok) {
+        const loadData: FacultyTeachingLoad = await loadRes.json();
+        setTeachingLoad(loadData);
       }
     } catch (err) {
       console.error('Failed to load faculty overview:', err);
@@ -143,6 +197,59 @@ export default function FacultyDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* My Allocated Teaching Load (Live from Allotment Engine) */}
+        {teachingLoad && teachingLoad.courses.length > 0 && (
+          <div className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-paper" />
+                <h2 className="font-serif font-bold text-paper text-base">
+                  My Allocated Teaching Load
+                </h2>
+                <span className="text-[11px] font-mono px-2 py-0.5 bg-paper/10 border border-border text-paper rounded">
+                  {teachingLoad.academic_term}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-mono text-subtle">
+                <span>Instructor: <strong className="text-paper">{teachingLoad.faculty_name}</strong></span>
+                <span>•</span>
+                <span>Total Students: <strong className="text-paper">{teachingLoad.total_students}</strong></span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {teachingLoad.courses.map((course) => (
+                <div key={course.offering_id} className="bg-ink/60 border border-border rounded-lg p-3.5 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-xs text-subtle">{course.course_code}</span>
+                      <h3 className="font-bold text-paper text-sm">{course.course_name}</h3>
+                    </div>
+                    <span className="px-2 py-0.5 text-[10px] font-mono bg-paper/15 text-paper rounded border border-border">
+                      {course.delivery_mode}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs font-mono pt-1">
+                    {course.sections.map((sec) => (
+                      <span key={sec.id} className="px-2 py-1 bg-surface border border-border rounded flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-paper"></span>
+                        <span>Theory: {sec.section_name} ({sec.student_count} students)</span>
+                      </span>
+                    ))}
+                    {course.batches.map((batch) => (
+                      <span key={batch.id} className="px-2 py-1 bg-surface border border-border rounded flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-subtle"></span>
+                        <span>Lab: {batch.batch_name} ({batch.student_count} students)</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Division Folders / Tabs Bar */}
         <div className="flex items-center justify-between border-b border-border pb-2 overflow-x-auto">

@@ -49,33 +49,50 @@ export const Navbar: React.FC = () => {
               <span>AI Chat</span>
             </Link>
 
-            <Link
-              href="/enrollments"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
-                pathname === '/enrollments'
-                  ? 'bg-paper text-ink border border-paper font-bold'
-                  : 'text-subtle hover:text-paper hover:bg-ink'
-              }`}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span>My Subjects</span>
-            </Link>
-
-            {user.role === 'FACULTY' && (
+            {/* Students and Faculty see their subjects; Admins do not take subjects */}
+            {user.role !== 'ADMIN' && (
               <Link
-                href="/faculty"
+                href="/enrollments"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
-                  pathname === '/faculty'
+                  pathname === '/enrollments'
                     ? 'bg-paper text-ink border border-paper font-bold'
                     : 'text-subtle hover:text-paper hover:bg-ink'
                 }`}
               >
-                <Users className="h-3.5 w-3.5" />
-                <span>Attendance Ledger</span>
+                <BookOpen className="h-3.5 w-3.5" />
+                <span>{user.role === 'FACULTY' ? 'Teaching Subjects' : 'My Subjects'}</span>
               </Link>
             )}
 
-            {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
+            {user.role === 'FACULTY' && (
+              <>
+                <Link
+                  href="/faculty"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
+                    pathname === '/faculty'
+                      ? 'bg-paper text-ink border border-paper font-bold'
+                      : 'text-subtle hover:text-paper hover:bg-ink'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  <span>Attendance Ledger</span>
+                </Link>
+
+                <Link
+                  href="/faculty/mark"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${
+                    pathname === '/faculty/mark'
+                      ? 'bg-paper text-ink border border-paper font-bold'
+                      : 'text-subtle hover:text-paper hover:bg-ink'
+                  }`}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>Mark Attendance</span>
+                </Link>
+              </>
+            )}
+
+            {user.role === 'ADMIN' && (
               <Link
                 href="/admin/allotment"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs uppercase tracking-wider font-medium transition-colors ${

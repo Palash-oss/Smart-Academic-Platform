@@ -124,8 +124,8 @@ python -m venv .venv
 # Install Dependencies
 pip install -r backend/requirements.txt
 
-# Populate Realistic Classroom Demo Dataset
-python backend/scripts/generate_demo_data.py
+# Populate Clean COMPS Classroom Demo Dataset (COMP-A 70 & COMP-B 70)
+python backend/scripts/seed_db.py
 
 # Start Backend API Server (Port 8000)
 .\start_backend.bat

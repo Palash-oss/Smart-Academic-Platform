@@ -1,193 +1,566 @@
-import sys
+import asyncio
 import os
+import sys
 import uuid
-from datetime import datetime
+import random
 
-# Add parent dir to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.db.session import SyncSessionLocal, sync_engine, Base
-from app.db.models import User, AttendanceLog, Document, DocumentEmbedding
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from app.db.session import AsyncSessionLocal, sync_engine, Base
+from app.db.models import (
+    Department,
+    Division,
+    Course,
+    CourseOffering,
+    ClassSection,
+    PracticalBatch,
+    StudentEnrollment,
+    AttendanceLog,
+    User,
+    FacultyCourseDivision,
+)
 from app.core.security import hash_password
-from app.services.retrieval_service import get_text_embedding
+
+ACADEMIC_TERM = "2026-27-SEM5"
+
+# Realistic names for 70 students in COMP-A
+FIRST_NAMES_A = [
+    "Alex", "Jayden", "Pooja", "Ella", "Xiu", "Michael", "Sophia", "Daniel", "Ananya", "Liam",
+    "Emma", "Ethan", "Olivia", "Noah", "Ava", "Lucas", "Mia", "Mason", "Isabella", "Oliver",
+    "Aria", "Elijah", "Chloe", "Aiden", "Harper", "James", "Amelia", "Benjamin", "Evelyn", "Alexander",
+    "Abigail", "Henry", "Emily", "Sebastian", "Elizabeth", "Jack", "Mila", "William", "Ella", "Samuel",
+    "Avery", "David", "Scarlett", "Joseph", "Grace", "Matthew", "Lily", "Jackson", "Zoey", "Levi",
+    "Hannah", "Mateo", "Lillian", "Owen", "Addison", "John", "Aubrey", "Wyatt", "Ellie", "Luke",
+    "Stella", "Asher", "Natalie", "Carter", "Zoe", "Julian", "Leah", "Grayson", "Hazel", "Leo"
+]
+
+LAST_NAMES_A = [
+    "Mercer", "Lee", "Martinez", "Gupta", "Wong", "Smith", "Johnson", "Brown", "Patel", "Jones",
+    "Garcia", "Miller", "Davis", "Rodriguez", "Shah", "Wilson", "Anderson", "Thomas", "Taylor", "Moore",
+    "Jackson", "Martin", "Kulkarni", "Deshmukh", "Joshi", "Iyer", "Nair", "Verma", "Rao", "Reddy",
+    "Kapoor", "Bhatia", "Malhotra", "Chopra", "Khanna", "Mehta", "Sen", "Roy", "Bose", "Dutta",
+    "Banerjee", "Das", "Mukherjee", "Chatterjee", "Ghosh", "Sengupta", "Choudhury", "Bhattacharya", "Chakraborty", "Saha",
+    "Mishra", "Pandey", "Trivedi", "Pathak", "Dubey", "Tiwari", "Shukla", "Tripathi", "Dwivedi", "Chaturvedi",
+    "Natarajan", "Subramanian", "Ranganathan", "Venkatesh", "Krishnan", "Balasubramanian", "Sundaram", "Swaminathan", "Ramachandran", "Srinivasan"
+]
+
+# Realistic names for 70 students in COMP-B
+FIRST_NAMES_B = [
+    "Aarav", "Diya", "Rohan", "Ananya", "Kabir", "Ishaan", "Tanvi", "Aditya", "Meera", "Arjun",
+    "Rhea", "Vivaan", "Saanvi", "Reyansh", "Anika", "Ayaan", "Tara", "Kavya", "Vihaan", "Samaira",
+    "Shaurya", "Myra", "Atharv", "Prisha", "Advait", "Siya", "Dhruv", "Anvi", "Dev", "Ira",
+    "Samar", "Sara", "Kian", "Navya", "Rudra", "Kyra", "Arnav", "Avani", "Parth", "Ahana",
+    "Aarush", "Arya", "Darsh", "Riddhi", "Hridaan", "Nisha", "Yuvan", "Pari", "Neil", "Anaya",
+    "Madhav", "Kashvi", "Tanay", "Mishti", "Raghav", "Veda", "Harsh", "Mira", "Ayush", "Sanvi",
+    "Pranav", "Zoya", "Kunal", "Tia", "Nirvaan", "Ruhi", "Shlok", "Isha", "Manan", "Kiara"
+]
+
+LAST_NAMES_B = [
+    "Patel", "Sen", "Desai", "Roy", "Mehta", "Nair", "Kulkarni", "Joshi", "Iyer", "Verma",
+    "Shah", "Sharma", "Bhatia", "Malhotra", "Chopra", "Khanna", "Kapoor", "Dubey", "Tiwari", "Pandey",
+    "Mishra", "Trivedi", "Pathak", "Shukla", "Tripathi", "Dwivedi", "Chaturvedi", "Banerjee", "Chatterjee", "Mukherjee",
+    "Ghosh", "Bose", "Dutta", "Das", "Saha", "Bhattacharya", "Chakraborty", "Sengupta", "Rao", "Reddy",
+    "Natarajan", "Subramanian", "Krishnan", "Sundaram", "Swaminathan", "Balasubramanian", "Venkatesh", "Ramachandran", "Srinivasan", "Ranganathan",
+    "Fernandes", "D'Souza", "Pereira", "Rodrigues", "Gonsalves", "Lobo", "Almeida", "Pinto", "Cardozo", "Sequeira",
+    "Vance", "Sterling", "Holloway", "Blackwood", "Sinclair", "Vanderbilt", "Hastings", "Montgomery", "Kensington", "Lancaster"
+]
+
+FACULTY_PROFILES = [
+    {"name": "Prof. Anita Kulkarni", "email": "anita.kulkarni@academic.edu"},
+    {"name": "Prof. Rajesh Iyer", "email": "rajesh.iyer@academic.edu"},
+    {"name": "Prof. Sneha Deshmukh", "email": "sneha.deshmukh@academic.edu"},
+    {"name": "Prof. Vikram Malhotra", "email": "vikram.malhotra@academic.edu"},
+    {"name": "Prof. Priya Sharma", "email": "priya.sharma@academic.edu"},
+    {"name": "Prof. Arjun Nair", "email": "arjun.nair@academic.edu"},
+    {"name": "Prof. David Vance", "email": "faculty@academic.edu"},
+]
+
+# The 5 Core Semester 5 Courses for Computer Engineering (Strictly COMPS)
+CORE_COURSES = [
+    {
+        "code": "25PCC13CE14",
+        "name": "Data Warehousing and Mining",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 3,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "anita.kulkarni@academic.edu",
+        "theory_fac_b": "anita.kulkarni@academic.edu",
+        "lab_fac_a": ["anita.kulkarni@academic.edu", "anita.kulkarni@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
+        "lab_fac_b": ["anita.kulkarni@academic.edu", "anita.kulkarni@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE19",
+        "name": "Cryptography and System Security",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 3,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "rajesh.iyer@academic.edu",
+        "theory_fac_b": "rajesh.iyer@academic.edu",
+        "lab_fac_a": ["rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu"],
+        "lab_fac_b": ["rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE21",
+        "name": "Theory of Computer Science",
+        "delivery_mode": "THEORY_TUTORIAL",
+        "th_hours": 3,
+        "pr_hours": 0,
+        "tu_hours": 1,
+        "theory_fac_a": "vikram.malhotra@academic.edu",
+        "theory_fac_b": "sneha.deshmukh@academic.edu",
+        "lab_fac_a": ["vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
+        "lab_fac_b": ["sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE22",
+        "name": "Computer Networks",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 3,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "faculty@academic.edu",
+        "theory_fac_b": "priya.sharma@academic.edu",
+        "lab_fac_a": ["faculty@academic.edu", "faculty@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
+        "lab_fac_b": ["priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu"],
+    },
+    {
+        "code": "25VSE13CE04",
+        "name": "Cloud Computing Laboratory",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": None,
+        "theory_fac_b": None,
+        "lab_fac_a": ["arjun.nair@academic.edu", "arjun.nair@academic.edu", "arjun.nair@academic.edu", "arjun.nair@academic.edu"],
+        "lab_fac_b": ["priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu"],
+    },
+]
+
+ELECTIVE_COURSES = [
+    {"code": "25PEC13CE11", "name": "Blockchain Technology", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PEC13CE12", "name": "Deep Learning and Reinforcement Learning", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PEC13CE13", "name": "Cyber Security", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PEC13CE14", "name": "Big Data Analytics", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PECL13CE11", "name": "Image Processing Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PECL13CE12", "name": "Natural Language Processing Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PECL13CE13", "name": "Industrial IoT Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+    {"code": "25PECL13CE15", "name": "Ethical Hacking Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+]
 
 
-def ensure_database_exists():
-    from app.core.config import settings
-    import psycopg2
-    from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-    try:
-        conn = psycopg2.connect(
-            user=settings.POSTGRES_USER,
-            password=settings.POSTGRES_PASSWORD,
-            host=settings.EFFECTIVE_POSTGRES_HOST,
-            port=settings.POSTGRES_PORT,
-            dbname="postgres"
-        )
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{settings.POSTGRES_DB}'")
-        exists = cursor.fetchone()
-        if not exists:
-            print(f"Creating database '{settings.POSTGRES_DB}'...")
-            cursor.execute(f"CREATE DATABASE {settings.POSTGRES_DB};")
-            print(f"Database '{settings.POSTGRES_DB}' created successfully.")
-        cursor.close()
-        conn.close()
-
-        # Connect to smart_academic_db and enable vector extension
-        conn2 = psycopg2.connect(
-            user=settings.POSTGRES_USER,
-            password=settings.POSTGRES_PASSWORD,
-            host=settings.EFFECTIVE_POSTGRES_HOST,
-            port=settings.POSTGRES_PORT,
-            dbname=settings.POSTGRES_DB
-        )
-        conn2.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor2 = conn2.cursor()
-        try:
-            cursor2.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-            print("Extension 'vector' enabled successfully.")
-        except Exception as ext_err:
-            print(f"[Notice] Vector extension enable warning: {ext_err}")
-        cursor2.close()
-        conn2.close()
-    except Exception as e:
-        print(f"[Notice] Auto-database check skipped: {e}")
-
-
-def seed_database():
-    ensure_database_exists()
-    print("Creating tables (if not existing)...")
+async def seed_database():
+    """
+    Primary Database Seeder for Smart Academic Platform.
+    Seeds exclusively Computer Engineering (COMPS) department:
+      - Division COMP-A: Exactly 70 students (Roll 1-70, Batches B1-B4)
+      - Division COMP-B: Exactly 70 students (Roll 1-70, Batches B1-B4)
+      - Total 140 students
+      - 5 Core Courses auto-enrolled with realistic attendance (85-96%)
+      - 8 Electives offered (4 PEC + 4 PECL)
+      - Demo Student Alex Mercer (student@academic.edu) has chosen PEC (7 subjects)
+      - All other 139 students have exactly 5 core subjects
+      - Faculty assignments for all theory sections and practical batches
+    """
+    print("[*] Ensuring database tables exist...")
     Base.metadata.create_all(bind=sync_engine)
 
-    session = SyncSessionLocal()
-    try:
-        # 1. Check if seed users exist
-        existing_student = session.query(User).filter_by(email="student@academic.edu").first()
-        if existing_student:
-            print("Database already seeded with demo data!")
-            return
+    pw_hash_student = hash_password("student123")
+    pw_hash_faculty = hash_password("faculty123")
+    pw_hash_admin = hash_password("admin123")
 
-        print("Seeding Demo Users...")
-        # Demo Student
-        demo_student_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
-        demo_student = User(
-            id=demo_student_id,
-            email="student@academic.edu",
-            hashed_password=hash_password("student123"),
-            full_name="Alex Mercer",
-            role="STUDENT"
+    async with AsyncSessionLocal() as db:
+        print("[*] Starting COMPS department seeding...")
+
+        # -------------------------------------------------------------
+        # 1. Clean out non-COMP departments & unwanted courses
+        # -------------------------------------------------------------
+        await db.execute(delete(Department).where(Department.code != "COMP"))
+
+        res = await db.execute(select(Department).where(Department.code == "COMP"))
+        dept_comp = res.scalar_one_or_none()
+        if not dept_comp:
+            dept_comp = Department(id=uuid.uuid4(), code="COMP", name="Computer Engineering")
+            db.add(dept_comp)
+            await db.flush()
+
+        # Delete all existing student accounts and old allotments
+        await db.execute(delete(User).where(User.role == "STUDENT"))
+        await db.execute(delete(StudentEnrollment))
+        await db.execute(delete(AttendanceLog))
+        await db.execute(delete(ClassSection))
+        await db.execute(delete(PracticalBatch))
+        await db.execute(delete(CourseOffering))
+        await db.execute(delete(FacultyCourseDivision))
+        await db.flush()
+
+        # Clean any unwanted courses not in COMPS core or electives
+        all_allowed_codes = {c["code"] for c in CORE_COURSES} | {el["code"] for el in ELECTIVE_COURSES}
+        await db.execute(delete(Course).where(~Course.code.in_(all_allowed_codes)))
+        await db.flush()
+
+        # -------------------------------------------------------------
+        # 2. Setup Divisions: COMP-A (70) and COMP-B (70)
+        # -------------------------------------------------------------
+        await db.execute(delete(Division).where(Division.department_id == dept_comp.id))
+        await db.flush()
+
+        div_a = Division(
+            id=uuid.uuid4(),
+            department_id=dept_comp.id,
+            name="A",
+            semester=5,
+            student_count=70
         )
-        session.add(demo_student)
-
-        # Additional Demo Student (At Risk)
-        student2_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
-        student2 = User(
-            id=student2_id,
-            email="sarah@academic.edu",
-            hashed_password=hash_password("sarah123"),
-            full_name="Sarah Jenkins",
-            role="STUDENT"
+        div_b = Division(
+            id=uuid.uuid4(),
+            department_id=dept_comp.id,
+            name="B",
+            semester=5,
+            student_count=70
         )
-        session.add(student2)
+        db.add_all([div_a, div_b])
+        await db.flush()
+        print(f"[*] Created Divisions: COMP-A ({div_a.id}) & COMP-B ({div_b.id})")
 
-        # Demo Faculty
-        demo_faculty = User(
-            id=uuid.UUID("00000000-0000-0000-0000-000000000003"),
-            email="faculty@academic.edu",
-            hashed_password=hash_password("faculty123"),
-            full_name="Prof. David Vance",
-            role="FACULTY"
-        )
-        session.add(demo_faculty)
+        # -------------------------------------------------------------
+        # 3. Setup Faculty Members & Admin
+        # -------------------------------------------------------------
+        faculty_map = {}
+        for f_data in FACULTY_PROFILES:
+            res = await db.execute(select(User).where(User.email == f_data["email"]))
+            fac_user = res.scalar_one_or_none()
+            if not fac_user:
+                fac_user = User(
+                    id=uuid.uuid4(),
+                    email=f_data["email"],
+                    hashed_password=pw_hash_faculty,
+                    full_name=f_data["name"],
+                    role="FACULTY",
+                    department_id=dept_comp.id,
+                )
+                db.add(fac_user)
+                await db.flush()
+            else:
+                fac_user.department_id = dept_comp.id
+            faculty_map[f_data["email"]] = fac_user
 
-        session.commit()
-        print("Demo Users Created Successfully.")
-
-        # 2. Seed Attendance Logs for Alex Mercer (Demo Student)
-        print("Seeding Attendance Logs...")
-        attendance_records = [
-            # Data Structures: 14/20 = 70.0% (AT RISK)
-            AttendanceLog(student_id=demo_student_id, subject="Data Structures & Algorithms", total_classes=20, attended_classes=14),
-            # Operating Systems: 18/20 = 90.0% (OK)
-            AttendanceLog(student_id=demo_student_id, subject="Operating Systems", total_classes=20, attended_classes=18),
-            # Database Management Systems: 13/20 = 65.0% (AT RISK)
-            AttendanceLog(student_id=demo_student_id, subject="Database Management Systems", total_classes=20, attended_classes=13),
-            # Computer Networks: 16/20 = 80.0% (OK)
-            AttendanceLog(student_id=demo_student_id, subject="Computer Networks", total_classes=20, attended_classes=16),
-            
-            # Attendance for Sarah Jenkins (Student 2)
-            AttendanceLog(student_id=student2_id, subject="Data Structures & Algorithms", total_classes=20, attended_classes=12),
-            AttendanceLog(student_id=student2_id, subject="Operating Systems", total_classes=20, attended_classes=15),
-            AttendanceLog(student_id=student2_id, subject="Database Management Systems", total_classes=20, attended_classes=11),
-            AttendanceLog(student_id=student2_id, subject="Computer Networks", total_classes=20, attended_classes=17),
-        ]
-        session.add_all(attendance_records)
-
-        # 3. Seed Sample Academic Policy Documents & Embeddings
-        print("Seeding Sample Academic Policies & Embeddings...")
-        doc1 = Document(
-            title="University Attendance & Minimum Requirement Policy 2026",
-            doc_type="policy",
-            source_path="/docs/policy_attendance_2026.pdf"
-        )
-        doc2 = Document(
-            title="Academic Grading, Examination & Evaluation Rules",
-            doc_type="handbook",
-            source_path="/docs/academic_rules_2026.pdf"
-        )
-        session.add_all([doc1, doc2])
-        session.commit()
-
-        # Document Chunks
-        policy_chunks = [
-            (
-                doc1.id,
-                "ATTENDANCE MANDATE SECTION 4.1: All registered undergraduate and postgraduate students must maintain a minimum of 75% attendance in every enrolled course to be eligible to sit for end-semester examinations.",
-                0
-            ),
-            (
-                doc1.id,
-                "MEDICAL CONDONATION & CONDONATION FEE SECTION 4.3: Attendance between 65% and 74.9% may be condoned by the Dean of Academic Affairs upon submission of certified hospital medical certificates within 7 working days of absence, subject to payment of a condonation fee of $50 per subject.",
-                1
-            ),
-            (
-                doc1.id,
-                "EXAM HALL TICKET DEBARMENT SECTION 4.5: Students with overall attendance falling below 65% in any subject are automatically debarred from taking the end-semester final examination and must re-register for the course in the subsequent semester.",
-                2
-            ),
-            (
-                doc2.id,
-                "GRADING SYSTEM & GPA SCALE SECTION 2.1: The university operates on a 10-point Letter Grading scale (S: 10, A: 9, B: 8, C: 7, D: 6, E: 5, F: 0). A minimum Cumulative Grade Point Average (CGPA) of 5.0 is required for degree award.",
-                0
-            ),
-            (
-                doc2.id,
-                "RE-EVALUATION & RE-COUNTING PROCEDURE SECTION 5.2: Any student dissatisfied with their end-semester result may apply for re-evaluation within 14 calendar days of result publication via the Academic Portal.",
-                1
-            ),
-        ]
-
-        for doc_id, chunk_text, idx in policy_chunks:
-            embedding_vec = get_text_embedding(chunk_text)
-            embedding_obj = DocumentEmbedding(
-                document_id=doc_id,
-                chunk_text=chunk_text,
-                embedding=embedding_vec,
-                chunk_index=idx
+        res = await db.execute(select(User).where(User.email == "admin@academic.edu"))
+        admin_user = res.scalar_one_or_none()
+        if not admin_user:
+            admin_user = User(
+                id=uuid.uuid4(),
+                email="admin@academic.edu",
+                hashed_password=pw_hash_admin,
+                full_name="Academic Administrator",
+                role="ADMIN",
+                department_id=dept_comp.id,
             )
-            session.add(embedding_obj)
+            db.add(admin_user)
+            await db.flush()
 
-        session.commit()
-        print("Database Seed Completed Successfully!")
+        # -------------------------------------------------------------
+        # 4. Create EXACTLY 70 Students in COMP-A and 70 in COMP-B
+        # -------------------------------------------------------------
+        students_a = []
+        students_b = []
 
-    except Exception as e:
-        session.rollback()
-        print(f"Error seeding database: {e}")
-    finally:
-        session.close()
+        # COMP-A: 70 Students
+        for i in range(1, 71):
+            if i == 1:
+                name = "Alex Mercer"
+                email = "student@academic.edu"
+            else:
+                first = FIRST_NAMES_A[(i - 1) % len(FIRST_NAMES_A)]
+                last = LAST_NAMES_A[(i - 1) % len(LAST_NAMES_A)]
+                name = f"{first} {last}"
+                email = f"student.a.{i:02d}@comp.academic.edu"
+
+            # Batch distribution: B1 (1-18), B2 (19-35), B3 (36-53), B4 (54-70)
+            if i <= 18:
+                batch_key = "B1"
+            elif i <= 35:
+                batch_key = "B2"
+            elif i <= 53:
+                batch_key = "B3"
+            else:
+                batch_key = "B4"
+
+            u = User(
+                id=uuid.uuid4(),
+                email=email,
+                hashed_password=pw_hash_student,
+                full_name=name,
+                role="STUDENT",
+                student_erp_id=f"COMP2024A{i:03d}",
+                roll_no=f"COMP-A-{i:02d}",
+                department_id=dept_comp.id,
+                division_id=div_a.id,
+            )
+            db.add(u)
+            students_a.append((u, batch_key, i))
+
+        # COMP-B: 70 Students
+        for i in range(1, 71):
+            first = FIRST_NAMES_B[(i - 1) % len(FIRST_NAMES_B)]
+            last = LAST_NAMES_B[(i - 1) % len(LAST_NAMES_B)]
+            name = f"{first} {last}"
+            email = f"student.b.{i:02d}@comp.academic.edu"
+
+            if i <= 18:
+                batch_key = "B1"
+            elif i <= 35:
+                batch_key = "B2"
+            elif i <= 53:
+                batch_key = "B3"
+            else:
+                batch_key = "B4"
+
+            u = User(
+                id=uuid.uuid4(),
+                email=email,
+                hashed_password=pw_hash_student,
+                full_name=name,
+                role="STUDENT",
+                student_erp_id=f"COMP2024B{i:03d}",
+                roll_no=f"COMP-B-{i:02d}",
+                department_id=dept_comp.id,
+                division_id=div_b.id,
+            )
+            db.add(u)
+            students_b.append((u, batch_key, i))
+
+        await db.flush()
+        print(f"[*] Seeded {len(students_a)} students in COMP-A and {len(students_b)} students in COMP-B (Total: 140)")
+
+        # -------------------------------------------------------------
+        # 5. Create Core Course Offerings, Sections, and Batches
+        # -------------------------------------------------------------
+        core_offering_map = {}
+        batch_objects_a = {}
+        batch_objects_b = {}
+        section_objects_a = {}
+        section_objects_b = {}
+
+        for c_data in CORE_COURSES:
+            res = await db.execute(select(Course).where(Course.code == c_data["code"]))
+            course = res.scalar_one_or_none()
+            if not course:
+                course = Course(
+                    id=uuid.uuid4(),
+                    code=c_data["code"],
+                    name=c_data["name"],
+                    department_id=dept_comp.id,
+                    semester=5,
+                    course_tier="CLASS",
+                    delivery_mode=c_data["delivery_mode"],
+                    th_hours=c_data["th_hours"],
+                    pr_hours=c_data["pr_hours"],
+                    tu_hours=c_data["tu_hours"],
+                )
+                db.add(course)
+                await db.flush()
+            else:
+                course.department_id = dept_comp.id
+                course.delivery_mode = c_data["delivery_mode"]
+                course.course_tier = "CLASS"
+
+            off = CourseOffering(
+                id=uuid.uuid4(),
+                course_id=course.id,
+                academic_term=ACADEMIC_TERM
+            )
+            db.add(off)
+            await db.flush()
+            core_offering_map[c_data["code"]] = off
+            batch_objects_a[c_data["code"]] = {}
+            batch_objects_b[c_data["code"]] = {}
+
+            # Sections for COMP-A and COMP-B (if theory component exists)
+            sec_a = None
+            sec_b = None
+            if c_data["delivery_mode"] != "PRACTICAL_ONLY":
+                fac_a = faculty_map.get(c_data["theory_fac_a"])
+                fac_b = faculty_map.get(c_data["theory_fac_b"])
+                sec_a = ClassSection(
+                    id=uuid.uuid4(),
+                    offering_id=off.id,
+                    section_name="COMP-A-Theory",
+                    faculty_id=fac_a.id if fac_a else None,
+                )
+                sec_b = ClassSection(
+                    id=uuid.uuid4(),
+                    offering_id=off.id,
+                    section_name="COMP-B-Theory",
+                    faculty_id=fac_b.id if fac_b else None,
+                )
+                db.add_all([sec_a, sec_b])
+                await db.flush()
+                section_objects_a[c_data["code"]] = sec_a
+                section_objects_b[c_data["code"]] = sec_b
+
+            # 4 Practical Batches for COMP-A (B1, B2, B3, B4)
+            for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
+                fac_email = c_data["lab_fac_a"][idx] if idx < len(c_data["lab_fac_a"]) else None
+                fac_obj = faculty_map.get(fac_email) if fac_email else None
+                b_obj = PracticalBatch(
+                    id=uuid.uuid4(),
+                    offering_id=off.id,
+                    section_id=sec_a.id if sec_a else None,
+                    batch_name=f"COMP-A-{b_name}",
+                    faculty_id=fac_obj.id if fac_obj else None,
+                )
+                db.add(b_obj)
+                batch_objects_a[c_data["code"]][b_name] = b_obj
+
+            # 4 Practical Batches for COMP-B (B1, B2, B3, B4)
+            for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
+                fac_email = c_data["lab_fac_b"][idx] if idx < len(c_data["lab_fac_b"]) else None
+                fac_obj = faculty_map.get(fac_email) if fac_email else None
+                b_obj = PracticalBatch(
+                    id=uuid.uuid4(),
+                    offering_id=off.id,
+                    section_id=sec_b.id if sec_b else None,
+                    batch_name=f"COMP-B-{b_name}",
+                    faculty_id=fac_obj.id if fac_obj else None,
+                )
+                db.add(b_obj)
+                batch_objects_b[c_data["code"]][b_name] = b_obj
+
+            await db.flush()
+
+        print("[*] Created 5 Core Course Offerings with theory sections and 4 lab batches each for COMP-A & COMP-B.")
+
+        # -------------------------------------------------------------
+        # 6. Create Elective Offerings
+        # -------------------------------------------------------------
+        elective_offerings = {}
+        for el in ELECTIVE_COURSES:
+            res = await db.execute(select(Course).where(Course.code == el["code"]))
+            c_el = res.scalar_one_or_none()
+            if not c_el:
+                c_el = Course(
+                    id=uuid.uuid4(),
+                    code=el["code"],
+                    name=el["name"],
+                    department_id=dept_comp.id,
+                    semester=5,
+                    course_tier=el["tier"],
+                    delivery_mode=el["delivery_mode"],
+                    th_hours=el["th_hours"],
+                    pr_hours=el["pr_hours"],
+                    tu_hours=el["tu_hours"],
+                )
+                db.add(c_el)
+                await db.flush()
+            else:
+                c_el.department_id = dept_comp.id
+                c_el.course_tier = el["tier"]
+                c_el.delivery_mode = el["delivery_mode"]
+
+            off_el = CourseOffering(
+                id=uuid.uuid4(),
+                course_id=c_el.id,
+                academic_term=ACADEMIC_TERM
+            )
+            db.add(off_el)
+            await db.flush()
+            elective_offerings[el["code"]] = (off_el, c_el)
+
+        print(f"[*] Created {len(elective_offerings)} Elective Course Offerings.")
+
+        # -------------------------------------------------------------
+        # 7. Auto-Enroll all 140 Students into the 5 Core Subjects
+        # -------------------------------------------------------------
+        all_students = students_a + students_b
+        enrollment_count = 0
+        log_count = 0
+
+        for student_user, batch_key, roll in all_students:
+            is_div_a = student_user.division_id == div_a.id
+            target_batches = batch_objects_a if is_div_a else batch_objects_b
+            target_sections = section_objects_a if is_div_a else section_objects_b
+
+            for c_data in CORE_COURSES:
+                code = c_data["code"]
+                off = core_offering_map[code]
+                sec = target_sections.get(code)
+                batch = target_batches[code][batch_key]
+
+                enr = StudentEnrollment(
+                    id=uuid.uuid4(),
+                    student_id=student_user.id,
+                    offering_id=off.id,
+                    section_id=sec.id if sec else None,
+                    batch_id=batch.id if batch else None,
+                )
+                db.add(enr)
+                enrollment_count += 1
+
+                total_classes = 28
+                if student_user.email == "student@academic.edu":
+                    attended = 26
+                else:
+                    attended = random.randint(23, 27)
+
+                log = AttendanceLog(
+                    id=uuid.uuid4(),
+                    student_id=student_user.id,
+                    course_id=off.course_id,
+                    subject=f"{c_data['name']} ({code})",
+                    total_classes=total_classes,
+                    attended_classes=attended,
+                )
+                db.add(log)
+                log_count += 1
+
+        # -------------------------------------------------------------
+        # 8. For Alex Mercer (student@academic.edu), add the chosen PEC
+        # -------------------------------------------------------------
+        alex_user = students_a[0][0]
+        # Alex has elected 25PEC13CE11 (Blockchain Technology) & 25PECL13CE15 (Ethical Hacking Lab)
+        for pec_code in ["25PEC13CE11", "25PECL13CE15"]:
+            off_pec, c_pec = elective_offerings[pec_code]
+            enr_pec = StudentEnrollment(
+                id=uuid.uuid4(),
+                student_id=alex_user.id,
+                offering_id=off_pec.id,
+                section_id=None,
+                batch_id=None,
+            )
+            db.add(enr_pec)
+            enrollment_count += 1
+
+            log_pec = AttendanceLog(
+                id=uuid.uuid4(),
+                student_id=alex_user.id,
+                course_id=off_pec.course_id,
+                subject=f"{c_pec.name} ({pec_code})",
+                total_classes=27,
+                attended_classes=25,
+            )
+            db.add(log_pec)
+            log_count += 1
+
+        await db.commit()
+        print("\n" + "=" * 70)
+        print("[SUCCESS] COMPS ECOSYSTEM SEEDED SUCCESSFULLY:")
+        print(f"  - Division COMP-A: Exactly 70 students (Roll 1-70, Batches B1-B4)")
+        print(f"  - Division COMP-B: Exactly 70 students (Roll 1-70, Batches B1-B4)")
+        print(f"  - Total Students: 140")
+        print(f"  - Core Offerings: 5 (Enrolled by all 140 students)")
+        print(f"  - Elective Offerings: 8 (4 PEC + 4 PECL)")
+        print(f"  - Total Student Enrollments: {enrollment_count}")
+        print(f"  - Total Attendance Logs: {log_count}")
+        print(f"  - Alex Mercer (student@academic.edu): 7 subjects (5 Core + 2 PEC/PECL)")
+        print(f"  - All other 139 students: Exactly 5 subjects (until electives chosen)")
+        print("=" * 70 + "\n")
 
 
 if __name__ == "__main__":
-    seed_database()
+    asyncio.run(seed_database())
