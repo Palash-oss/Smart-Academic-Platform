@@ -700,6 +700,37 @@ async def my_enrollments(
     )
 
 
+def _parse_division_and_batch(name: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extracts human-readable (division_label, batch_label) from section or batch names.
+    Examples:
+      'COMP-A-Theory'       -> ('COMP Div A', None)
+      'COMP-B-B3'           -> ('COMP Div B', 'Batch B3')
+      'PEC13CE14-Sec1'      -> ('Elective Cohort 1', None)
+      'PEC13CE14-Sec1-Lab2' -> ('Elective Cohort 1', 'Lab Batch 2')
+    """
+    if not name:
+        return (None, None)
+    import re
+    # COMP-A-B1
+    m_batch = re.match(r'^([A-Z]+)-([A-Z])-B(\d+)', name)
+    if m_batch:
+        return (f"{m_batch.group(1)} Div {m_batch.group(2)}", f"Batch B{m_batch.group(3)}")
+    # COMP-A-Theory or COMP-A
+    m_sec = re.match(r'^([A-Z]+)-([A-Z])', name)
+    if m_sec:
+        return (f"{m_sec.group(1)} Div {m_sec.group(2)}", None)
+    # Elective Lab: PEC13CE14-Sec1-Lab2
+    m_elab = re.search(r'Sec(\d+)-Lab(\d+)', name)
+    if m_elab:
+        return (f"Elective Sec {m_elab.group(1)}", f"Lab Batch {m_elab.group(2)}")
+    # Elective Section: PEC13CE14-Sec1
+    m_esec = re.search(r'Sec(\d+)', name)
+    if m_esec:
+        return (f"Elective Sec {m_esec.group(1)}", None)
+    return (name, None)
+
+
 # ===========================================================================
 # FACULTY PORTAL: My Assigned Subjects & Batches
 # ===========================================================================
@@ -761,11 +792,14 @@ async def faculty_my_subjects(
             for enr in s.enrollments:
                 course_student_ids.add(enr.student_id)
                 total_distinct_students.add(enr.student_id)
+            div_label, _ = _parse_division_and_batch(s.section_name)
             sec_items.append(
                 FacultySectionItem(
                     id=s.id,
                     section_name=s.section_name,
                     student_count=count,
+                    division=div_label,
+                    component_type="THEORY",
                 )
             )
 
@@ -776,17 +810,30 @@ async def faculty_my_subjects(
                 course_student_ids.add(enr.student_id)
                 total_distinct_students.add(enr.student_id)
             sec_name = b.section.section_name if b.section else None
+            div_label, batch_lbl = _parse_division_and_batch(b.batch_name)
+            if not div_label and sec_name:
+                div_label, _ = _parse_division_and_batch(sec_name)
             batch_items.append(
                 FacultyBatchItem(
                     id=b.id,
                     batch_name=b.batch_name,
                     student_count=count,
                     section_name=sec_name,
+                    division=div_label,
+                    batch_label=batch_lbl,
+                    component_type="PRACTICAL",
                 )
             )
 
         total_sections_count += len(sec_items)
         total_batches_count += len(batch_items)
+
+        course_divisions = sorted(list({item.division for item in sec_items + batch_items if item.division}))
+        assigned_types = []
+        if sec_items:
+            assigned_types.append("THEORY")
+        if batch_items:
+            assigned_types.append("PRACTICAL")
 
         assigned_courses.append(
             FacultyCourseItem(
@@ -801,6 +848,8 @@ async def faculty_my_subjects(
                 sections=sec_items,
                 batches=batch_items,
                 total_students=len(course_student_ids),
+                divisions=course_divisions,
+                assigned_types=assigned_types,
             )
         )
 

@@ -94,12 +94,17 @@ export interface FacultyBatchItem {
   batch_name: string;
   student_count: number;
   section_name: string | null;
+  division?: string | null;
+  batch_label?: string | null;
+  component_type?: string;
 }
 
 export interface FacultySectionItem {
   id: string;
   section_name: string;
   student_count: number;
+  division?: string | null;
+  component_type?: string;
 }
 
 export interface FacultyCourseItem {
@@ -114,6 +119,8 @@ export interface FacultyCourseItem {
   sections: FacultySectionItem[];
   batches: FacultyBatchItem[];
   total_students: number;
+  divisions?: string[];
+  assigned_types?: string[];
 }
 
 export interface FacultySubjectsResponse {

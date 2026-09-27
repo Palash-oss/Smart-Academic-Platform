@@ -127,12 +127,17 @@ class FacultyBatchItem(BaseModel):
     batch_name: str
     student_count: int = 0
     section_name: Optional[str] = None
+    division: Optional[str] = None
+    batch_label: Optional[str] = None
+    component_type: str = "PRACTICAL"
 
 
 class FacultySectionItem(BaseModel):
     id: uuid.UUID
     section_name: str
     student_count: int = 0
+    division: Optional[str] = None
+    component_type: str = "THEORY"
 
 
 class FacultyCourseItem(BaseModel):
@@ -147,6 +152,8 @@ class FacultyCourseItem(BaseModel):
     sections: List[FacultySectionItem] = []
     batches: List[FacultyBatchItem] = []
     total_students: int = 0
+    divisions: List[str] = []
+    assigned_types: List[str] = []
 
 
 class FacultySubjectsResponse(BaseModel):

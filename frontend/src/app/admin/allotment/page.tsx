@@ -28,6 +28,8 @@ import {
   Search,
   Filter,
   SlidersHorizontal,
+  Sparkles,
+  Clock,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -323,8 +325,7 @@ function OfferingsPanel({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [deptFilter, setDeptFilter] = useState<'ALL' | 'COMP' | 'AIDS' | 'ECS' | 'MECH'>('COMP');
-  const [tierFilter, setTierFilter] = useState<'ALL' | 'CLASS' | 'DEPARTMENT'>('ALL');
+  const [activeTab, setActiveTab] = useState<'CLASS' | 'DEPARTMENT' | 'ALL'>('CLASS');
 
   if (offerings.length === 0) {
     return (
@@ -334,15 +335,13 @@ function OfferingsPanel({
     );
   }
 
+  // Count core vs electives
+  const coreCount = offerings.filter((o) => o.course_tier === 'CLASS').length;
+  const electiveCount = offerings.filter((o) => o.course_tier === 'DEPARTMENT').length;
+
   // Filter offerings
   const filteredOfferings = offerings.filter((o) => {
-    if (deptFilter !== 'ALL') {
-      if (deptFilter === 'COMP' && !o.course_code.includes('CE')) return false;
-      if (deptFilter === 'AIDS' && !o.course_code.includes('CS') && !o.course_code.includes('AI')) return false;
-      if (deptFilter === 'ECS' && !o.course_code.includes('EC')) return false;
-      if (deptFilter === 'MECH' && !o.course_code.includes('ME')) return false;
-    }
-    if (tierFilter !== 'ALL' && o.course_tier !== tierFilter) return false;
+    if (activeTab !== 'ALL' && o.course_tier !== activeTab) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const codeMatch = o.course_code.toLowerCase().includes(q);
@@ -363,19 +362,60 @@ function OfferingsPanel({
   });
 
   return (
-    <div className="space-y-3.5">
-      {/* Search & Department Filters Toolbar */}
+    <div className="space-y-3">
+      {/* Clean Header Toolbar: Department Badge + Category Segmented Control + Search */}
       <div className="space-y-2.5 pb-3 border-b border-zinc-800/80">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          {/* Syllabus Category Segmented Control */}
+          <div className="flex items-center gap-1 p-1 bg-zinc-950/80 rounded-xl border border-zinc-800/80">
+            <button
+              type="button"
+              onClick={() => setActiveTab('CLASS')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'CLASS'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Core Subjects ({coreCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('DEPARTMENT')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'DEPARTMENT'
+                  ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/20'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Electives ({electiveCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('ALL')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                activeTab === 'ALL'
+                  ? 'bg-zinc-700 text-white shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>All ({offerings.length})</span>
+            </button>
+          </div>
+
           {/* Search Box */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search by code, subject name, or teacher..."
+              placeholder="Search subject or teacher..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-7 py-1.5 bg-zinc-950/70 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-500"
+              className="w-full pl-8 pr-7 py-1.5 bg-zinc-950/70 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-500"
             />
             {searchQuery && (
               <button
@@ -386,66 +426,29 @@ function OfferingsPanel({
               </button>
             )}
           </div>
-
-          {/* Department Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
-            {[
-              { id: 'COMP', label: 'Computer (COMP)' },
-              { id: 'AIDS', label: 'AI/DS' },
-              { id: 'ECS', label: 'ECS' },
-              { id: 'MECH', label: 'MECH' },
-              { id: 'ALL', label: 'All' },
-            ].map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => setDeptFilter(d.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
-                  deptFilter === d.id
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50'
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Course Tier Pills & Summary Stats */}
-        <div className="flex items-center justify-between text-xs text-zinc-400 px-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-zinc-500 font-medium">Type:</span>
-            {[
-              { id: 'ALL', label: 'All' },
-              { id: 'CLASS', label: 'Core PCC/VSE' },
-              { id: 'DEPARTMENT', label: 'Electives PEC/PECL' },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTierFilter(t.id as any)}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                  tierFilter === t.id
-                    ? 'bg-zinc-700 text-zinc-100 border border-zinc-600'
-                    : 'bg-zinc-900/60 text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* Informative Subline */}
+        <div className="flex items-center justify-between text-[11px] text-zinc-400 px-0.5">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 font-semibold text-zinc-300">
+              <Building2 className="w-3 h-3 text-violet-400" />
+              Computer Engineering (COMPS)
+            </span>
+            <span>•</span>
+            <span>Official Syllabus Scheme</span>
           </div>
-          <span className="text-[11px] text-zinc-400">
-            Showing <strong className="text-zinc-200">{filteredOfferings.length}</strong> of {offerings.length} courses
+          <span>
+            Showing <strong className="text-zinc-200">{filteredOfferings.length}</strong> {activeTab === 'CLASS' ? 'core courses' : 'courses'}
           </span>
         </div>
       </div>
 
-      {/* Compact Scrollable List (Fixed Max Height Prevents Page Scrolling!) */}
-      <div className="max-h-[520px] overflow-y-auto pr-1 space-y-2">
+      {/* Compact Course List Container */}
+      <div className="max-h-[480px] overflow-y-auto pr-1 space-y-2">
         {filteredOfferings.length === 0 ? (
-          <div className="text-center py-12 text-zinc-500 text-xs bg-zinc-900/20 rounded-xl border border-dashed border-zinc-800">
-            No courses match the active search or department filter.
+          <div className="text-center py-10 text-zinc-500 text-xs bg-zinc-900/20 rounded-xl border border-dashed border-zinc-800">
+            No courses match the active search filter.
           </div>
         ) : (
           filteredOfferings.map((o) => {
@@ -463,53 +466,73 @@ function OfferingsPanel({
             return (
               <div
                 key={o.id}
-                className={`border rounded-xl transition-all overflow-hidden ${
+                className={`border rounded-xl transition-all duration-200 overflow-hidden ${
                   isOpen
-                    ? 'bg-zinc-900/80 border-violet-500/40 shadow-lg'
-                    : 'bg-zinc-900/40 border-zinc-800/70 hover:border-zinc-700/80 hover:bg-zinc-800/30'
+                    ? 'bg-zinc-900/90 border-violet-500/50 shadow-lg shadow-black/30'
+                    : 'bg-zinc-900/40 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-800/40'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => setExpanded(isOpen ? null : o.id)}
-                  className="w-full flex items-center gap-3 p-3 text-left transition-colors"
+                  className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors"
                 >
-                  <div className="p-1.5 bg-zinc-800/80 rounded-lg flex-shrink-0">
-                    <TierIcon className="w-3.5 h-3.5 text-violet-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono text-xs text-zinc-400 font-semibold">{o.course_code}</span>
-                      <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded border font-medium ${
-                          TIER_COLORS[o.course_tier] ?? ''
-                        }`}
-                      >
-                        {o.course_tier}
-                      </span>
-                      <span className="text-[9px] text-zinc-400 bg-zinc-800/60 px-1.5 py-0.2 rounded border border-zinc-700/40">
-                        {MODE_LABELS[o.delivery_mode]}
-                      </span>
-                      {isFullyAssigned ? (
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
-                          Allocated
-                        </span>
-                      ) : isPartiallyAssigned ? (
-                        <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-medium">
-                          {assignedSlots}/{totalSlots} Slots
-                        </span>
-                      ) : (
-                        <span className="text-[9px] bg-zinc-800 text-zinc-500 border border-zinc-700/50 px-1.5 py-0.2 rounded font-medium">
-                          Unassigned
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="p-1.5 bg-zinc-800 rounded-lg flex-shrink-0 border border-zinc-700/50">
+                      <TierIcon className="w-3.5 h-3.5 text-violet-400" />
                     </div>
-                    <p className="text-xs font-semibold text-zinc-200 truncate mt-0.5">{o.course_name}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-xs text-white font-bold tracking-wide">
+                          {o.course_code}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded border font-medium ${
+                            TIER_COLORS[o.course_tier] ?? ''
+                          }`}
+                        >
+                          {o.course_tier === 'CLASS' ? 'Core' : 'Elective'}
+                        </span>
+                        <span className="text-[9px] text-zinc-400 bg-zinc-800/80 px-1.5 py-0.2 rounded border border-zinc-700/40">
+                          {MODE_LABELS[o.delivery_mode]}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-zinc-200 truncate mt-0.5">
+                        {o.course_name}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2.5 flex-shrink-0 text-[11px] text-zinc-400">
-                    {o.sections.length > 0 && <span>{o.sections.length} sec</span>}
-                    {o.batches.length > 0 && <span>{o.batches.length} lab</span>}
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    {/* Allocation Status Indicator */}
+                    {isFullyAssigned ? (
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        Allocated
+                      </span>
+                    ) : isPartiallyAssigned ? (
+                      <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        {assignedSlots}/{totalSlots} Slots
+                      </span>
+                    ) : (
+                      <span className="text-[9px] bg-zinc-800 text-zinc-400 border border-zinc-700/60 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-zinc-500" />
+                        Unassigned
+                      </span>
+                    )}
+
+                    <span className="hidden sm:inline-block font-mono text-[11px] text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded border border-zinc-700/40">
+                      {o.sections.length > 0 && `${o.sections.length} sec`}
+                      {o.sections.length > 0 && o.batches.length > 0 && ' • '}
+                      {o.batches.length > 0 && `${o.batches.length} lab`}
+                    </span>
+
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
+                        isOpen ? 'rotate-180 text-violet-400' : ''
+                      }`}
+                    />
                   </div>
                 </button>
 
@@ -637,7 +660,7 @@ export default function AdminAllotmentPage() {
   const [facultyList, setFacultyList] = useState<FacultyOption[]>([]);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [autoEnrollingCore, setAutoEnrollingCore] = useState(false);
-  const user = typeof window !== 'undefined' ? getStoredUser() : null;
+  const [currentUser, setCurrentUser] = useState<{ full_name?: string; role?: string } | null>(null);
 
   // Tabs: students vs faculty
   const [uploadTab, setUploadTab] = useState<'students' | 'faculty'>('students');
@@ -693,6 +716,10 @@ export default function AdminAllotmentPage() {
   useEffect(() => {
     const token = getStoredToken();
     if (!token) { router.push('/login'); return; }
+    const stored = getStoredUser();
+    if (stored) {
+      setCurrentUser(stored);
+    }
     loadOfferings();
     loadFaculty();
   }, [loadOfferings, loadFaculty, router]);
@@ -960,7 +987,7 @@ export default function AdminAllotmentPage() {
               My Subjects
             </Link>
 
-            {user?.role === 'FACULTY' && (
+            {currentUser?.role === 'FACULTY' && (
               <Link
                 href="/faculty"
                 className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/60 px-3 py-2 rounded-lg transition-all"
@@ -982,8 +1009,8 @@ export default function AdminAllotmentPage() {
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700/40">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span className="text-xs text-zinc-300">{user?.full_name ?? 'Admin'}</span>
-              <span className="text-[10px] text-zinc-500 font-mono">{user?.role}</span>
+              <span className="text-xs text-zinc-300">{currentUser?.full_name ?? 'Admin'}</span>
+              <span className="text-[10px] text-zinc-500 font-mono">{currentUser?.role ?? 'ADMIN'}</span>
             </div>
             <button
               onClick={() => { clearAuthSession(); router.push('/login'); }}

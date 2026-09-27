@@ -205,7 +205,7 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
 
       <div className="p-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <span className="font-mono text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/25">
@@ -220,11 +220,43 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
               <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${modeColor}`}>
                 {modeLabel}
               </span>
+
+              {/* Teaching Role Indicators */}
+              {course.sections.length > 0 && (
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 inline-flex items-center gap-1">
+                  <BookOpen className="w-2.5 h-2.5" />
+                  Theory Lecture
+                </span>
+              )}
+              {course.batches.length > 0 && (
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30 inline-flex items-center gap-1">
+                  <FlaskConical className="w-2.5 h-2.5" />
+                  Lab Practical
+                </span>
+              )}
             </div>
+
             <h3 className="text-lg font-bold text-white leading-snug">
               {course.course_name}
             </h3>
-            <p className="text-xs text-zinc-400 mt-1 flex items-center gap-3">
+
+            {/* Division & Batch Quick Summary */}
+            {course.divisions && course.divisions.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap mt-2.5">
+                <span className="text-[11px] text-zinc-400 font-medium">Assigned Divisions:</span>
+                {course.divisions.map((div) => (
+                  <span
+                    key={div}
+                    className="text-[11px] font-semibold font-mono px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1"
+                  >
+                    <Building2 className="w-3 h-3 text-emerald-400" />
+                    {div}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-400 mt-2 flex items-center gap-3">
               <span>Theory: <strong className="text-zinc-200">{course.th_hours} hrs/wk</strong></span>
               <span>•</span>
               <span>Practical: <strong className="text-zinc-200">{course.pr_hours} hrs/wk</strong></span>
@@ -244,7 +276,7 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
         </div>
 
         {/* Breakdown: Theory Sections & Practical Batches */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           {/* Assigned Theory Sections */}
           <div className="bg-zinc-950/60 border border-zinc-800/70 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -252,34 +284,50 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
                 <div className="p-1.5 rounded-lg bg-blue-500/15">
                   <BookOpen className="w-4 h-4 text-blue-400" />
                 </div>
-                <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  Theory Sections ({course.sections.length})
-                </span>
+                <div>
+                  <span className="text-xs font-semibold text-zinc-200 uppercase tracking-wider block">
+                    Theory Sections ({course.sections.length})
+                  </span>
+                  <span className="text-[10px] text-zinc-500">Class Lecture Allocation</span>
+                </div>
               </div>
             </div>
 
             {course.sections.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {course.sections.map((sec) => (
                   <div
                     key={sec.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/20"
+                    className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors"
                   >
-                    <div>
-                      <p className="font-mono text-xs font-bold text-blue-300">
-                        {sec.section_name}
-                      </p>
-                      <p className="text-[10px] text-zinc-400">Lecture Faculty In-Charge</p>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div>
+                        <p className="font-mono text-xs font-bold text-blue-300">
+                          {sec.section_name}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-zinc-300 bg-zinc-800/90 px-2 py-0.5 rounded border border-zinc-700/50">
+                        <Users className="w-3 h-3 text-blue-400" />
+                        {sec.student_count} Students
+                      </span>
                     </div>
-                    <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-zinc-300 bg-zinc-800/80 px-2 py-1 rounded">
-                      <Users className="w-3 h-3 text-blue-400" />
-                      {sec.student_count} Students
-                    </span>
+
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-zinc-800/60 text-[10px]">
+                      <span className="px-2 py-0.5 rounded font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                        Division: {sec.division || 'Allotted Class'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        Type: Theory Lecture
+                      </span>
+                      <span className="text-zinc-500 ml-auto">
+                        In-Charge
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic py-2">
+              <p className="text-xs text-zinc-500 italic py-4 text-center">
                 No theory sections assigned for this course.
               </p>
             )}
@@ -292,36 +340,53 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
                 <div className="p-1.5 rounded-lg bg-violet-500/15">
                   <FlaskConical className="w-4 h-4 text-violet-400" />
                 </div>
-                <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  Assigned Lab Batches ({course.batches.length})
-                </span>
+                <div>
+                  <span className="text-xs font-semibold text-zinc-200 uppercase tracking-wider block">
+                    Assigned Lab Batches ({course.batches.length})
+                  </span>
+                  <span className="text-[10px] text-zinc-500">Practical & Tutorial Batches</span>
+                </div>
               </div>
             </div>
 
             {course.batches.length > 0 ? (
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                 {course.batches.map((batch) => (
                   <div
                     key={batch.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-violet-500/5 border border-violet-500/20"
+                    className="p-3 rounded-lg bg-violet-500/5 border border-violet-500/20 hover:border-violet-500/40 transition-colors"
                   >
-                    <div>
-                      <p className="font-mono text-xs font-bold text-violet-300">
-                        {batch.batch_name}
-                      </p>
-                      {batch.section_name && (
-                        <p className="text-[10px] text-zinc-400">Section: {batch.section_name}</p>
-                      )}
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div>
+                        <p className="font-mono text-xs font-bold text-violet-300">
+                          {batch.batch_name}
+                        </p>
+                        {batch.section_name && (
+                          <p className="text-[10px] text-zinc-400">Parent: {batch.section_name}</p>
+                        )}
+                      </div>
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-zinc-300 bg-zinc-800/90 px-2 py-0.5 rounded border border-zinc-700/50">
+                        <Users className="w-3 h-3 text-violet-400" />
+                        {batch.student_count} Students
+                      </span>
                     </div>
-                    <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-zinc-300 bg-zinc-800/80 px-2 py-1 rounded">
-                      <Users className="w-3 h-3 text-violet-400" />
-                      {batch.student_count} Students
-                    </span>
+
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-zinc-800/60 text-[10px]">
+                      <span className="px-2 py-0.5 rounded font-medium bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        Division: {batch.division || 'Allotted Class'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded font-medium bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                        Batch: {batch.batch_label || batch.batch_name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        Type: Practical Lab
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic py-2">
+              <p className="text-xs text-zinc-500 italic py-4 text-center">
                 No practical batches assigned for this course.
               </p>
             )}
