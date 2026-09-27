@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { setAuthSession, TokenResponse } from '@/lib/api';
-import { GraduationCap, Lock, Mail, User as UserIcon, ShieldAlert, ArrowRight } from 'lucide-react';
+import { GraduationCap, Lock, Mail, User as UserIcon, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [role, setRole] = useState<'STUDENT' | 'FACULTY'>('STUDENT');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const router = useRouter();
 
@@ -80,176 +82,376 @@ export default function LoginPage() {
     }
   };
 
-  const fillDemoStudent = () => {
-    setEmail('student@academic.edu');
-    setPassword('student123');
+  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
     setIsRegister(false);
+    setErrorMsg('');
+    setLoading(true);
+
+    try {
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: demoEmail, password: demoPassword }),
+      });
+
+      if (!loginRes.ok) {
+        let errText = 'Invalid email or password';
+        try {
+          const errData = await loginRes.json();
+          errText = errData.detail || errText;
+        } catch {
+          errText = 'Backend server offline. Please start the FastAPI backend on port 8000.';
+        }
+        throw new Error(errText);
+      }
+
+      const data: TokenResponse = await loginRes.json();
+      setAuthSession(data.access_token, {
+        id: data.user_id,
+        email: data.email,
+        full_name: data.full_name,
+        role: data.role,
+      });
+
+      if (data.role === 'FACULTY') {
+        router.push('/faculty');
+      } else if (data.role === 'ADMIN') {
+        router.push('/admin/allotment');
+      } else {
+        router.push('/chat');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const fillDemoFaculty = () => {
-    setEmail('faculty@academic.edu');
-    setPassword('faculty123');
-    setIsRegister(false);
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#09090B',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    marginBottom: '6px',
   };
 
-  const fillDemoAdmin = () => {
-    setEmail('admin@academic.edu');
-    setPassword('admin123');
-    setIsRegister(false);
+  const inputWrapStyle: React.CSSProperties = {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: '#FFFFFF',
+    border: '1px solid #E4E4E7',
+    borderRadius: '6px',
+    padding: '10px 12px 10px 38px',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    color: '#09090B',
+    outline: 'none',
+    transition: 'border-color 0.15s',
   };
 
   return (
-    <div className="min-h-screen bg-ink flex flex-col justify-center items-center p-4 font-sans text-paper relative overflow-hidden">
-      {/* Subtle monochrome grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#E4E4E730_1px,transparent_1px),linear-gradient(to_bottom,#E4E4E730_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none" />
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#ECECEE',
+        display: 'flex',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Left decorative technical panel (SS3 Style) */}
+      <div
+        style={{
+          display: 'none',
+          width: '42%',
+          background: '#09090B',
+          padding: '52px',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden',
+          borderRight: '1px solid #27272A',
+        }}
+        className="hidden lg:flex"
+      >
+        {/* Subtle Technical Grid */}
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
-      <div className="max-w-md w-full bg-surface border border-border rounded-xl p-8 shadow-md relative z-10 space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="h-12 w-12 bg-ink border border-paper text-paper rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
-            <GraduationCap className="h-6 w-6" />
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', position: 'relative', zIndex: 1 }}>
+          <div style={{ width: '34px', height: '34px', background: '#18181B', borderRadius: '6px', border: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <GraduationCap style={{ width: '18px', height: '18px', color: '#FFFFFF' }} />
+            <span style={{ position: 'absolute', top: '-2px', right: '-2px', width: '6px', height: '6px', background: '#FF5500', borderRadius: '50%' }} />
           </div>
-          <h1 className="font-serif text-2xl font-bold tracking-wide text-paper">
-            ACADEMIC COMMAND CENTER
-          </h1>
-          <p className="text-xs text-subtle font-sans">
-            Multi-Agent Academic Assistant & Attendance Platform
+          <div>
+            <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 800, fontSize: '16px', color: '#FFFFFF' }}>Smart Academic</span>
+            <span style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '9px', color: '#71717A', letterSpacing: '0.08em', textTransform: 'uppercase' }}>LABS // ERP 2.0</span>
+          </div>
+        </Link>
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '2px 8px', background: '#18181B', border: '1px solid #27272A', borderRadius: '4px', marginBottom: '16px' }}>
+            <span style={{ width: '6px', height: '6px', background: '#FF5500' }} />
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>SYSTEM ARCHITECTURE</span>
+          </div>
+
+          <h2 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '32px', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' }}>
+            Academic Intelligence<br />Command Center
+          </h2>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14.5px', color: '#A1A1AA', lineHeight: 1.6, maxWidth: '440px' }}>
+            Real-time deterministic attendance tracking, pgvector ordinance assistance, and autonomous faculty batch distribution.
           </p>
-        </div>
 
-        {/* Quick Demo Fill Buttons */}
-        <div className="p-3 bg-ink border border-border rounded-lg space-y-2 text-xs">
-          <p className="font-mono text-[10px] text-subtle uppercase tracking-wider text-center">1-Click Demo Quick Login</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={fillDemoStudent}
-              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
-            >
-              Demo Student
-            </button>
-            <button
-              type="button"
-              onClick={fillDemoFaculty}
-              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
-            >
-              Demo Faculty
-            </button>
-            <button
-              type="button"
-              onClick={fillDemoAdmin}
-              className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-paper transition-colors text-center font-medium shadow-xs text-xs"
-            >
-              Demo Admin
-            </button>
+          <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              'pgvector RAG for university statutes & ordinances',
+              'Deterministic 75% attendance threshold ledger',
+              'Automated cohort sectioning & practical lab matrix',
+            ].map((item) => (
+              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ width: '5px', height: '5px', background: '#FF5500', flexShrink: 0 }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#D4D4D8' }}>{item}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {errorMsg && (
-          <div className="p-3 bg-ink border border-border-strong rounded-lg text-paper text-xs flex items-center gap-2 font-mono">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-paper" />
-            <span>[ERROR] {errorMsg}</span>
-          </div>
-        )}
+        <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', position: 'relative', zIndex: 1 }}>
+          // AUTONOMOUS SCHEME · PRODUCTION RELEASE
+        </p>
+      </div>
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          {isRegister && (
+      {/* Right login panel */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 24px',
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: '420px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '36px', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+
+          {/* Heading */}
+          <div style={{ marginBottom: '24px' }}>
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', color: '#FF5500', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: '4px' }}>
+              // AUTHENTICATION GATEWAY
+            </span>
+            <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '24px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+              {isRegister ? 'Create Your Account' : 'Sign In to Console'}
+            </h1>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#71717A' }}>
+              {isRegister
+                ? 'Register to access academic records & tools'
+                : 'Access your student or faculty workspace'}
+            </p>
+          </div>
+
+          {/* Demo Quick-Fill */}
+          <div style={{ background: '#FAFAFB', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '12px', marginBottom: '20px' }}>
+            <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', textAlign: 'center' }}>
+              QUICK DEMO ACCOUNTS
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+              {[
+                { label: 'Student', email: 'student@academic.edu', pwd: 'student123' },
+                { label: 'Faculty', email: 'faculty@academic.edu', pwd: 'faculty123' },
+                { label: 'Admin', email: 'admin@academic.edu', pwd: 'admin123' },
+              ].map((d) => (
+                <button
+                  key={d.label}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleDemoLogin(d.email, d.pwd)}
+                  style={{
+                    padding: '8px 4px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '4px',
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#09090B',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF5500'; e.currentTarget.style.color = '#FF5500'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E4E4E7'; e.currentTarget.style.color = '#09090B'; }}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Error */}
+          {errorMsg && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', padding: '10px 12px', marginBottom: '18px' }}>
+              <AlertCircle style={{ width: '15px', height: '15px', color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12.5px', color: '#DC2626', lineHeight: 1.4 }}>{errorMsg}</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {isRegister && (
+              <div>
+                <label style={labelStyle}>Full Name</label>
+                <div style={inputWrapStyle}>
+                  <UserIcon style={{ width: '15px', height: '15px', color: '#71717A', position: 'absolute', left: '12px' }} />
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your full name"
+                    style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#FF5500'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#E4E4E7'; }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="block text-xs font-mono text-subtle mb-1">FULL NAME</label>
-              <div className="relative">
-                <UserIcon className="h-4 w-4 absolute left-3 top-3 text-subtle" />
+              <label style={labelStyle}>Email Address</label>
+              <div style={inputWrapStyle}>
+                <Mail style={{ width: '15px', height: '15px', color: '#71717A', position: 'absolute', left: '12px' }} />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Alex Mercer"
-                  className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-4 py-2.5 text-sm text-paper placeholder-subtle focus:outline-none"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@academic.edu"
+                  style={inputStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#FF5500'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E4E4E7'; }}
                 />
               </div>
             </div>
-          )}
 
-          <div>
-            <label className="block text-xs font-mono text-subtle mb-1">EMAIL ADDRESS</label>
-            <div className="relative">
-              <Mail className="h-4 w-4 absolute left-3 top-3 text-subtle" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="student@academic.edu"
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-4 py-2.5 text-sm text-paper placeholder-subtle focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-subtle mb-1">PASSWORD</label>
-            <div className="relative">
-              <Lock className="h-4 w-4 absolute left-3 top-3 text-subtle" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg pl-9 pr-4 py-2.5 text-sm text-paper placeholder-subtle focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {isRegister && (
             <div>
-              <label className="block text-xs font-mono text-subtle mb-1">ACCOUNT ROLE</label>
-              <div className="grid grid-cols-2 gap-3">
+              <label style={labelStyle}>Password</label>
+              <div style={inputWrapStyle}>
+                <Lock style={{ width: '15px', height: '15px', color: '#71717A', position: 'absolute', left: '12px' }} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  style={{ ...inputStyle, paddingRight: '40px' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#FF5500'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E4E4E7'; }}
+                />
                 <button
                   type="button"
-                  onClick={() => setRole('STUDENT')}
-                  className={`py-2 rounded-lg border text-xs font-medium transition-colors ${
-                    role === 'STUDENT'
-                      ? 'bg-paper text-ink border-paper font-bold'
-                      : 'bg-ink border-border text-subtle'
-                  }`}
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '12px', background: 'none', border: 'none', cursor: 'pointer', color: '#71717A', padding: '0', display: 'flex' }}
                 >
-                  Student
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('FACULTY')}
-                  className={`py-2 rounded-lg border text-xs font-medium transition-colors ${
-                    role === 'FACULTY'
-                      ? 'bg-paper text-ink border-paper font-bold'
-                      : 'bg-ink border-border text-subtle'
-                  }`}
-                >
-                  Faculty Member
+                  {showPassword ? <EyeOff style={{ width: '14px', height: '14px' }} /> : <Eye style={{ width: '14px', height: '14px' }} />}
                 </button>
               </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-paper text-ink font-semibold rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 text-sm mt-2 shadow-xs"
-          >
-            <span>{loading ? 'Authenticating...' : isRegister ? 'Create Account' : 'Sign In to Command Center'}</span>
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </form>
+            {isRegister && (
+              <div>
+                <label style={labelStyle}>Account Role</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {(['STUDENT', 'FACULTY'] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      style={{
+                        padding: '8px',
+                        border: role === r ? '1.5px solid #18181B' : '1px solid #E4E4E7',
+                        borderRadius: '4px',
+                        background: role === r ? '#18181B' : '#FFFFFF',
+                        color: role === r ? '#FFFFFF' : '#71717A',
+                        fontFamily: '"Plus Jakarta Sans", sans-serif',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {r === 'STUDENT' ? 'Student' : 'Faculty Member'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        <div className="text-center pt-2 border-t border-border">
-          <button
-            type="button"
-            onClick={() => setIsRegister(!isRegister)}
-            className="text-xs text-subtle hover:text-paper transition-colors"
-          >
-            {isRegister ? 'Already have an account? Sign In' : 'Need a new account? Register'}
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '11px 20px',
+                background: loading ? '#D4D4D8' : '#FF5500',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                fontFamily: '"Plus Jakarta Sans", sans-serif',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.15s ease',
+                boxShadow: loading ? 'none' : '0 2px 10px rgba(255, 85, 0, 0.3)',
+                marginTop: '4px',
+              }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = '#E64D00'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+              onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = '#FF5500'; e.currentTarget.style.transform = 'translateY(0)'; } }}
+            >
+              <span>{loading ? 'Authenticating...' : isRegister ? 'Create Account' : 'Sign In'}</span>
+              {!loading && <ArrowRight style={{ width: '15px', height: '15px' }} />}
+            </button>
+          </form>
+
+          <div style={{ textAlign: 'center', marginTop: '18px', paddingTop: '16px', borderTop: '1px solid #E4E4E7' }}>
+            <button
+              type="button"
+              onClick={() => { setIsRegister(!isRegister); setErrorMsg(''); }}
+              style={{ fontFamily: 'Inter, sans-serif', fontSize: '12.5px', color: '#FF5500', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+            >
+              {isRegister ? 'Already have an account? Sign In' : 'No account yet? Register'}
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+            <Link href="/" style={{ fontFamily: 'Inter, sans-serif', fontSize: '11.5px', color: '#71717A', textDecoration: 'none' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#09090B'}
+              onMouseLeave={e => e.currentTarget.style.color = '#71717A'}
+            >
+              ← Back to Overview
+            </Link>
+          </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        .hidden { display: none !important; }
+        @media (min-width: 1024px) {
+          .lg\\:flex { display: flex !important; }
+          .lg\\:hidden { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

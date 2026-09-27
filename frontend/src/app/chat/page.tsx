@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { LiveRoutingTrace } from '@/components/LiveRoutingTrace';
 import { getStoredToken, getStoredUser, fetchWithAuth, User as UserType } from '@/lib/api';
-import { Send, Bot, User as UserIcon, Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Bot, User as UserIcon, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface ChatMessage {
   id: string;
@@ -50,17 +50,10 @@ export default function ChatPage() {
 
     const isFaculty = currentUser?.role === 'FACULTY';
     const welcomeText = isFaculty
-      ? `Welcome ${currentUser.full_name}! Ask me anything regarding your department attendance analytics, division risk summaries, or official university policy rules.`
-      : `Welcome ${currentUser?.full_name || 'Student'}! Ask me anything regarding your course attendance records or official university policy rules.`;
+      ? `Welcome, ${currentUser.full_name}. Ask me anything regarding your department attendance analytics, division risk summaries, or official university policy rules.`
+      : `Welcome, ${currentUser?.full_name || 'Student'}. Ask me anything regarding your course attendance records or official university policy rules.`;
 
-    setMessages([
-      {
-        id: 'welcome-msg',
-        role: 'assistant',
-        content: welcomeText,
-        agent: 'student_support'
-      }
-    ]);
+    setMessages([{ id: 'welcome-msg', role: 'assistant', content: welcomeText, agent: 'student_support' }]);
 
     if (currentUser && currentUser.role === 'STUDENT') {
       loadAttendanceSnapshot();
@@ -88,53 +81,42 @@ export default function ChatPage() {
     if (!query.trim() || isStreaming) return;
 
     const userToken = getStoredToken();
-    if (!userToken) {
-      window.location.href = '/login';
-      return;
-    }
+    if (!userToken) { window.location.href = '/login'; return; }
 
     const userMessageId = Date.now().toString();
-    const newUserMsg: ChatMessage = {
-      id: userMessageId,
-      role: 'user',
-      content: query
-    };
-
-    setMessages((prev) => [...prev, newUserMsg]);
+    setMessages((prev) => [...prev, { id: userMessageId, role: 'user', content: query }]);
     if (!customPrompt) setInputQuery('');
     setIsStreaming(true);
     setActiveAgent(null);
     setRoutingReasoning('Supervisor evaluating intent...');
 
     const assistantMessageId = (Date.now() + 1).toString();
-    
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: '',
-        agent: null
-      }
-    ]);
+    setMessages((prev) => [...prev, { id: assistantMessageId, role: 'assistant', content: '', agent: null }]);
 
     try {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
-        },
-        body: JSON.stringify({ message: query })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
+        body: JSON.stringify({ message: query }),
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to establish SSE stream');
+      if (!response.ok) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: 'Error connecting to the intelligence backend.' }
+              : msg
+          )
+        );
+        return;
       }
 
-      const reader = response.body.getReader();
+      const reader = response.body?.getReader();
       const decoder = new TextDecoder('utf-8');
+      if (!reader) return;
+
       let buffer = '';
+      let detectedAgent: string | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -145,51 +127,40 @@ export default function ChatPage() {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data: ')) {
-            const dataJsonStr = trimmed.substring(6);
-            try {
-              const eventData = JSON.parse(dataJsonStr);
-
-              if (eventData.type === 'routing') {
-                setActiveAgent(eventData.agent);
-                const isFaculty = user?.role === 'FACULTY';
-                const agentTag = eventData.agent === 'attendance'
-                  ? (isFaculty ? 'Department Attendance Agent' : 'Student Attendance Agent')
-                  : (isFaculty ? 'Faculty Policy & Syllabus Agent' : 'Student Support Agent');
-
-                setRoutingReasoning(`Routed to ${agentTag}`);
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessageId ? { ...msg, agent: eventData.agent } : msg
-                  )
-                );
-              } else if (eventData.type === 'token') {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, content: msg.content + eventData.content }
-                      : msg
-                  )
-                );
-              } else if (eventData.type === 'done') {
-                setIsStreaming(false);
-                if (activeAgent === 'attendance' && user?.role === 'STUDENT') {
-                  loadAttendanceSnapshot();
-                }
-              }
-            } catch (err) {
-              console.error('SSE JSON parse error:', err);
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const parsed = JSON.parse(line.replace('data: ', '').trim());
+            if (parsed.type === 'routing') {
+              detectedAgent = parsed.agent;
+              setActiveAgent(parsed.agent);
+              setRoutingReasoning(parsed.reasoning || null);
+            } else if (parsed.type === 'token') {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: msg.content + parsed.token, agent: detectedAgent }
+                    : msg
+                )
+              );
+            } else if (parsed.type === 'error') {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: parsed.error, agent: detectedAgent }
+                    : msg
+                )
+              );
             }
+          } catch {
+            // ignore malformed SSE line
           }
         }
       }
-    } catch (error) {
-      console.error('Streaming error:', error);
+    } catch {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
-            ? { ...msg, content: 'Error connecting to Academic AI backend. Please verify server connection.' }
+            ? { ...msg, content: 'Failed to communicate with intelligence service.' }
             : msg
         )
       );
@@ -200,85 +171,93 @@ export default function ChatPage() {
 
   const isFaculty = user?.role === 'FACULTY';
 
+  const prompts = isFaculty
+    ? ['Which students are at risk in my department?', 'Show division breakdown for my department', 'What is the policy for attendance shortage below 75%?']
+    : ['What is my attendance status in Data Structures?', 'What is the attendance policy for shortage below 75%?', 'How many classes do I need to attend to clear risk?'];
+
   return (
-    <div className="min-h-screen bg-ink flex flex-col font-sans text-paper">
+    <div style={{ minHeight: '100vh', background: '#ECECEE', fontFamily: 'Inter, system-ui, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Panel: Chat Thread (~65% / 8 columns) */}
-        <section className="lg:col-span-8 flex flex-col bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+      <main style={{ flex: 1, maxWidth: '1360px', width: '100%', margin: '0 auto', padding: '28px 24px', display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}
+        className="lg-grid-2col">
+
+        {/* Chat Panel */}
+        <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '600px' }}>
+
           {/* Header */}
-          <div className="p-4 border-b border-border bg-surface flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Sparkles className="h-5 w-5 text-paper" />
-              <div>
-                <h1 className="font-serif text-base font-semibold text-paper">
-                  {isFaculty ? 'Faculty Intelligence Workspace' : 'Academic Assistant Workspace'}
-                </h1>
-                <p className="text-xs text-subtle font-sans">
-                  {isFaculty
-                    ? 'Unified Chat with Autonomous Department Analytics & Policy RAG'
-                    : 'Unified Chat with Autonomous Supervisor Routing'}
-                </p>
-              </div>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '15px', fontWeight: 800, color: '#09090B', marginBottom: '2px' }}>
+                {isFaculty ? 'Faculty Intelligence Workspace' : 'Academic Assistant'}
+              </h1>
+              <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A' }}>
+                {isFaculty ? '// DEPARTMENT ANALYTICS & POLICY RAG' : '// ATTENDANCE TRACKING & POLICY RAG'}
+              </p>
             </div>
             <button
               onClick={() => setMessages([])}
-              className="p-1.5 text-subtle hover:text-paper hover:bg-ink rounded transition-colors text-xs flex items-center gap-1 border border-border"
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '12px', fontWeight: 600, color: '#71717A', cursor: 'pointer', transition: 'all 0.15s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#F4F4F6'; e.currentTarget.style.color = '#09090B'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.color = '#71717A'; }}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Clear Thread</span>
+              <RefreshCw style={{ width: '12px', height: '12px' }} />
+              <span>Clear</span>
             </button>
           </div>
 
-          {/* Messages Container */}
-          <div className="flex-1 p-4 md:p-6 overflow-y-auto space-y-6 max-h-[calc(100vh-320px)] min-h-[350px]">
+          {/* Messages */}
+          <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: 'calc(100vh - 420px)', minHeight: '300px' }}>
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex gap-3 max-w-[85%] ${
-                  msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                }`}
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                  alignItems: 'flex-start',
+                  maxWidth: '85%',
+                  marginLeft: msg.role === 'user' ? 'auto' : '0',
+                  marginRight: msg.role === 'user' ? '0' : 'auto',
+                }}
               >
                 {/* Avatar */}
-                <div
-                  className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 border ${
-                    msg.role === 'user'
-                      ? 'bg-paper text-ink border-paper font-bold'
-                      : 'bg-ink border-border text-paper'
-                  }`}
-                >
-                  {msg.role === 'user' ? (
-                    <UserIcon className="h-4 w-4" />
-                  ) : (
-                    <Bot className="h-4 w-4" />
-                  )}
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  background: msg.role === 'user' ? '#18181B' : '#F4F4F6',
+                  border: msg.role === 'user' ? 'none' : '1px solid #E4E4E7',
+                }}>
+                  {msg.role === 'user'
+                    ? <UserIcon style={{ width: '15px', height: '15px', color: '#FFFFFF' }} />
+                    : <Bot style={{ width: '15px', height: '15px', color: '#09090B' }} />}
                 </div>
 
-                {/* Message Body */}
-                <div className="space-y-1.5">
+                {/* Bubble */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {msg.role === 'assistant' && msg.agent && (
-                    <div className="flex items-center gap-2 text-[10px] font-mono">
-                      <span className="text-subtle">ROUTED TO:</span>
-                      <span className="px-2 py-0.5 rounded font-semibold uppercase tracking-wider bg-paper text-ink border border-paper">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '9.5px', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>ROUTED TO:</span>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 700, color: '#FF5500', background: '#FFF4ED', border: '1px solid #FED7AA', borderRadius: '3px', padding: '1px 7px' }}>
                         {msg.agent === 'attendance'
-                          ? (isFaculty ? 'Department Attendance Agent' : 'Student Attendance Agent')
-                          : (isFaculty ? 'Faculty Policy & Syllabus Agent' : 'Student Support Agent')}
+                          ? (isFaculty ? 'Department Attendance Engine' : 'Student Attendance Engine')
+                          : (isFaculty ? 'Faculty Policy Agent' : 'Student Support Agent')}
                       </span>
                     </div>
                   )}
-
-                  <div
-                    className={`p-4 rounded-lg text-sm leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-paper text-ink font-medium rounded-tr-none shadow-sm'
-                        : 'bg-surface border border-border text-paper rounded-tl-none font-sans whitespace-pre-wrap shadow-sm'
-                    }`}
-                  >
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '6px',
+                    background: msg.role === 'user' ? '#18181B' : '#FAFAFB',
+                    border: msg.role === 'user' ? 'none' : '1px solid #E4E4E7',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '14px',
+                    lineHeight: 1.65,
+                    color: msg.role === 'user' ? '#FFFFFF' : '#09090B',
+                    whiteSpace: 'pre-wrap',
+                    boxShadow: msg.role === 'user' ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
+                  }}>
                     {msg.content || (
-                      <span className="text-subtle font-mono text-xs animate-pulse">
-                        Evaluating request & streaming tokens...
-                      </span>
+                      <span style={{ color: '#71717A', fontStyle: 'italic', fontSize: '13px' }}>Evaluating reasoning trace...</span>
                     )}
                   </div>
                 </div>
@@ -287,153 +266,146 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Part C: Pinned "My Attendance" Compact Snapshot Card for Students ONLY */}
+          {/* Student Attendance Snapshot */}
           {user && user.role === 'STUDENT' && attendanceData && (
-            <div className="mx-4 mb-2 p-3 bg-ink border border-border-strong rounded-lg font-mono text-xs shadow-sm">
-              <div className="flex items-center justify-between border-b border-border pb-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-serif text-xs uppercase tracking-wider font-semibold text-paper">
-                    My Attendance Snapshot
-                  </span>
-                  <span className={`px-2 py-0.5 text-[10px] rounded uppercase font-bold border ${
-                    attendanceData.overall_risk 
-                      ? 'border-border-strong text-paper bg-surface' 
-                      : 'border-border text-subtle bg-surface'
-                  }`}>
-                    {attendanceData.overall_risk ? '[!] AT RISK (<75%)' : '[OK] GOOD STANDING'}
-                  </span>
+            <div style={{ margin: '0 16px 12px', background: '#FAFAFB', border: '1px solid #E4E4E7', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: showSnapshot ? '1px solid #E4E4E7' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 800, color: '#09090B' }}>My Attendance Ledger</span>
+                  {attendanceData.overall_risk ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 600, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '2px 8px' }}>
+                      <AlertTriangle style={{ width: '10px', height: '10px' }} />
+                      At Risk
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 600, color: '#16A34A', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '4px', padding: '2px 8px' }}>
+                      <CheckCircle2 style={{ width: '10px', height: '10px' }} />
+                      Good Standing
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-paper">
-                    OVERALL: {attendanceData.overall_percentage}%
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '15px', fontWeight: 800, color: attendanceData.overall_risk ? '#DC2626' : '#16A34A' }}>
+                    {attendanceData.overall_percentage}%
                   </span>
                   <button
                     onClick={() => setShowSnapshot(!showSnapshot)}
-                    className="p-1 hover:bg-surface rounded text-subtle hover:text-paper"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717A', display: 'flex' }}
                   >
-                    {showSnapshot ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {showSnapshot ? <ChevronUp style={{ width: '14px', height: '14px' }} /> : <ChevronDown style={{ width: '14px', height: '14px' }} />}
                   </button>
                 </div>
               </div>
-
               {showSnapshot && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                  {attendanceData.subjects.map((sub) => (
-                    <div
-                      key={sub.id}
-                      className={`p-2 rounded border flex items-center justify-between ${
-                        sub.is_at_risk
-                          ? 'border-border-strong bg-surface text-paper font-semibold shadow-xs'
-                          : 'border-border bg-surface/50 text-subtle'
-                      }`}
-                    >
-                      <span className="truncate max-w-[160px]">{sub.subject}</span>
-                      <div className="text-right">
-                        <span>{sub.attended_classes}/{sub.total_classes} ({sub.percentage}%)</span>
-                        {sub.is_at_risk && (
-                          <span className="block text-[9px] text-paper font-bold">
-                            Needs +{sub.classes_needed_to_clear_risk} classes
-                          </span>
-                        )}
+                <div style={{ padding: '12px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
+                  {attendanceData.subjects.map((sub) => {
+                    const pct = sub.percentage;
+                    const color = pct >= 75 ? '#16A34A' : '#DC2626';
+                    return (
+                      <div key={sub.id} style={{ background: '#FFFFFF', border: `1px solid ${sub.is_at_risk ? '#FECACA' : '#E4E4E7'}`, borderRadius: '6px', padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, color: '#09090B', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.subject}</span>
+                          <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 800, color }}>{pct}%</span>
+                        </div>
+                        <div style={{ height: '3px', background: '#E4E4E7', borderRadius: '99px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: color, borderRadius: '99px' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', color: '#71717A' }}>{sub.attended_classes}/{sub.total_classes}</span>
+                          {sub.is_at_risk && <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', fontWeight: 700, color: '#DC2626' }}>+{sub.classes_needed_to_clear_risk}</span>}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
-          {/* Quick Test Prompts */}
-          <div className="px-4 py-2 border-t border-border bg-ink flex items-center gap-2 overflow-x-auto text-xs">
-            <span className="text-subtle font-mono shrink-0">TEST PROMPTS:</span>
-            {isFaculty ? (
-              <>
-                <button
-                  onClick={() => handleSend("Which students are at risk in my department?")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Department Risk Summary
-                </button>
-                <button
-                  onClick={() => handleSend("Show division breakdown for my department")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Division Breakdown
-                </button>
-                <button
-                  onClick={() => handleSend("What is the policy for attendance shortage below 75%?")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Attendance Policy Rules
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => handleSend("What is my attendance status in Data Structures?")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Check Attendance Status
-                </button>
-                <button
-                  onClick={() => handleSend("What is the policy for attendance shortage below 75%?")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Attendance Policy Rules
-                </button>
-                <button
-                  onClick={() => handleSend("How many classes do I need to attend to clear risk?")}
-                  className="px-2.5 py-1 rounded bg-surface hover:bg-surface-hover border border-border text-paper whitespace-nowrap transition-colors"
-                >
-                  Required Classes Calculation
-                </button>
-              </>
-            )}
+          {/* Quick Prompts */}
+          <div style={{ padding: '10px 16px', borderTop: '1px solid #E4E4E7', display: 'flex', gap: '8px', overflowX: 'auto', background: '#FAFAFB' }}>
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0, alignSelf: 'center' }}>TRY:</span>
+            {prompts.map((p) => (
+              <button
+                key={p}
+                onClick={() => handleSend(p)}
+                style={{ padding: '5px 12px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#09090B', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s ease' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF5500'; e.currentTarget.style.color = '#FF5500'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#E4E4E7'; e.currentTarget.style.color = '#09090B'; }}
+              >
+                {p}
+              </button>
+            ))}
           </div>
 
-          {/* Input Box */}
-          <div className="p-4 border-t border-border bg-surface">
+          {/* Input */}
+          <div style={{ padding: '14px 16px', borderTop: '1px solid #E4E4E7', background: '#FFFFFF' }}>
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
-              }}
-              className="flex items-center gap-3"
+              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+              style={{ display: 'flex', gap: '10px', alignItems: 'center' }}
             >
               <input
                 type="text"
                 value={inputQuery}
                 onChange={(e) => setInputQuery(e.target.value)}
-                placeholder={
-                  isFaculty
-                    ? "Ask about department analytics, division risk summaries, or policy rules..."
-                    : "Ask about your attendance numbers or academic policies..."
-                }
+                placeholder={isFaculty ? 'Ask about department analytics or policy...' : 'Ask about attendance or academic policies...'}
                 disabled={isStreaming}
-                className="flex-1 bg-ink border border-border focus:border-paper rounded-lg px-4 py-3 text-sm text-paper placeholder-subtle focus:outline-none transition-colors"
+                style={{ flex: 1, background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '10px 16px', fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#09090B', outline: 'none', transition: 'border-color 0.15s' }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#FF5500'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#E4E4E7'; }}
               />
               <button
                 type="submit"
                 disabled={isStreaming || !inputQuery.trim()}
-                className="px-5 py-3 bg-paper text-ink font-semibold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed font-sans text-sm"
+                style={{
+                  padding: '10px 20px',
+                  background: isStreaming || !inputQuery.trim() ? '#E4E4E7' : '#FF5500',
+                  color: isStreaming || !inputQuery.trim() ? '#A1A1AA' : '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontFamily: '"Plus Jakarta Sans", sans-serif',
+                  fontSize: '13.5px',
+                  fontWeight: 700,
+                  cursor: isStreaming || !inputQuery.trim() ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                  boxShadow: isStreaming || !inputQuery.trim() ? 'none' : '0 2px 8px rgba(255,85,0,0.3)',
+                }}
+                onMouseEnter={e => { if (!isStreaming && inputQuery.trim()) { e.currentTarget.style.background = '#E64D00'; } }}
+                onMouseLeave={e => { if (!isStreaming && inputQuery.trim()) { e.currentTarget.style.background = '#FF5500'; } }}
               >
                 <span>Send</span>
-                <Send className="h-4 w-4" />
+                <Send style={{ width: '13px', height: '13px' }} />
               </button>
             </form>
           </div>
-        </section>
+        </div>
 
-        {/* Right Panel: Supervisor Routing Panel (~35% / 4 columns) */}
-        <aside className="lg:col-span-4">
+        {/* Routing Panel */}
+        <div className="routing-panel">
           <LiveRoutingTrace
             activeAgent={activeAgent}
             isStreaming={isStreaming}
             routingReasoning={routingReasoning}
             role={user?.role}
           />
-        </aside>
+        </div>
+
       </main>
+
+      <style jsx global>{`
+        @media (min-width: 1024px) {
+          .lg-grid-2col {
+            grid-template-columns: 1fr 380px !important;
+          }
+        }
+        @media (max-width: 1023px) {
+          .routing-panel { display: none; }
+        }
+      `}</style>
     </div>
   );
 }

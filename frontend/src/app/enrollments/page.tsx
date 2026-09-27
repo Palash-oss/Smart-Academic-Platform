@@ -65,16 +65,16 @@ function FacultyBadge({ name }: { name: string }) {
   const isUnassigned = name === 'To be assigned';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded border ${
         isUnassigned
-          ? 'bg-zinc-800/60 text-zinc-400 border-zinc-700/50'
-          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+          ? 'bg-zinc-100 text-zinc-600 border-zinc-200'
+          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
       }`}
     >
       {isUnassigned ? (
-        <Clock className="w-3 h-3" />
+        <Clock className="w-3 h-3 text-zinc-500" />
       ) : (
-        <CheckCircle2 className="w-3 h-3" />
+        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
       )}
       {name}
     </span>
@@ -82,7 +82,7 @@ function FacultyBadge({ name }: { name: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Student Components
+// Student Components (Architectural Light)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StudentEnrollmentCard({ entry }: { entry: EnrollmentEntry }) {
@@ -92,14 +92,14 @@ function StudentEnrollmentCard({ entry }: { entry: EnrollmentEntry }) {
   const modeLabel = MODE_LABELS[entry.delivery_mode];
 
   return (
-    <div className="relative group bg-zinc-900/60 border border-zinc-800/70 rounded-2xl overflow-hidden hover:border-zinc-600/60 transition-all duration-300 hover:shadow-lg hover:shadow-black/30">
-      <div className="h-[2px] w-full bg-gradient-to-r from-violet-500/40 via-blue-500/40 to-cyan-500/40 opacity-60 group-hover:opacity-100 transition-opacity" />
+    <div className="relative group bg-white border border-[#E4E4E7] rounded-md overflow-hidden hover:border-[#D4D4D8] transition-all duration-200 shadow-sm">
+      <div className="h-[2px] w-full bg-[#FF5500] opacity-80" />
 
       <div className="p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="font-mono text-xs text-zinc-500 bg-zinc-800/70 px-2 py-0.5 rounded border border-zinc-700/50">
+              <span className="font-mono text-xs font-bold text-[#09090B] bg-[#F4F4F6] px-2 py-0.5 rounded border border-[#E4E4E7]">
                 {entry.course_code}
               </span>
               <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${tierColor}`}>
@@ -112,76 +112,76 @@ function StudentEnrollmentCard({ entry }: { entry: EnrollmentEntry }) {
                 {modeLabel}
               </span>
             </div>
-            <h3 className="text-base font-semibold text-white leading-snug">
+            <h3 className="text-base font-bold text-[#09090B] leading-snug">
               {entry.course_name}
             </h3>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className={`rounded-xl p-4 border ${
+          <div className={`rounded-md p-4 border ${
             entry.theory
-              ? 'bg-blue-500/5 border-blue-500/20'
-              : 'bg-zinc-800/30 border-zinc-700/30 opacity-50'
+              ? 'bg-[#F9F9FB] border-[#E4E4E7]'
+              : 'bg-[#F4F4F6] border-[#E4E4E7] opacity-60'
           }`}>
             <div className="flex items-center gap-2 mb-3">
-              <div className={`p-1.5 rounded-lg ${entry.theory ? 'bg-blue-500/15' : 'bg-zinc-700/30'}`}>
-                <BookOpen className={`w-3.5 h-3.5 ${entry.theory ? 'text-blue-400' : 'text-zinc-500'}`} />
+              <div className="p-1.5 rounded bg-white border border-[#E4E4E7]">
+                <BookOpen className="w-3.5 h-3.5 text-[#09090B]" />
               </div>
-              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-[#71717A] uppercase tracking-wider">
                 Theory Lecture
               </span>
             </div>
             {entry.theory ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <BookMarked className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                  <span className="font-mono text-sm font-bold text-blue-300">
+                  <BookMarked className="w-3.5 h-3.5 text-[#FF5500] flex-shrink-0" />
+                  <span className="font-mono text-sm font-bold text-[#09090B]">
                     {entry.theory.section}
                   </span>
                 </div>
-                <div className="pt-1 border-t border-zinc-800/60">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">
+                <div className="pt-2 border-t border-[#E4E4E7]">
+                  <p className="text-[10px] text-[#71717A] uppercase tracking-wider mb-1 font-mono">
                     Faculty In-Charge
                   </p>
                   <FacultyBadge name={entry.theory.faculty} />
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic">No theory component</p>
+              <p className="text-xs text-[#71717A] italic">No theory component</p>
             )}
           </div>
 
-          <div className={`rounded-xl p-4 border ${
+          <div className={`rounded-md p-4 border ${
             entry.practical
-              ? 'bg-violet-500/5 border-violet-500/20'
-              : 'bg-zinc-800/30 border-zinc-700/30 opacity-50'
+              ? 'bg-[#F9F9FB] border-[#E4E4E7]'
+              : 'bg-[#F4F4F6] border-[#E4E4E7] opacity-60'
           }`}>
             <div className="flex items-center gap-2 mb-3">
-              <div className={`p-1.5 rounded-lg ${entry.practical ? 'bg-violet-500/15' : 'bg-zinc-700/30'}`}>
-                <FlaskConical className={`w-3.5 h-3.5 ${entry.practical ? 'text-violet-400' : 'text-zinc-500'}`} />
+              <div className="p-1.5 rounded bg-white border border-[#E4E4E7]">
+                <FlaskConical className="w-3.5 h-3.5 text-[#09090B]" />
               </div>
-              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-[#71717A] uppercase tracking-wider">
                 Practical / Tutorial
               </span>
             </div>
             {entry.practical ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Users className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
-                  <span className="font-mono text-sm font-bold text-violet-300">
+                  <Users className="w-3.5 h-3.5 text-[#FF5500] flex-shrink-0" />
+                  <span className="font-mono text-sm font-bold text-[#09090B]">
                     {entry.practical.batch}
                   </span>
                 </div>
-                <div className="pt-1 border-t border-zinc-800/60">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">
+                <div className="pt-2 border-t border-[#E4E4E7]">
+                  <p className="text-[10px] text-[#71717A] uppercase tracking-wider mb-1 font-mono">
                     Batch Faculty
                   </p>
                   <FacultyBadge name={entry.practical.faculty} />
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic">No practical component</p>
+              <p className="text-xs text-[#71717A] italic">No practical component</p>
             )}
           </div>
         </div>
@@ -191,7 +191,7 @@ function StudentEnrollmentCard({ entry }: { entry: EnrollmentEntry }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Faculty Components
+// Faculty Components (Architectural Light)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
@@ -201,15 +201,15 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
   const modeLabel = MODE_LABELS[course.delivery_mode];
 
   return (
-    <div className="relative group bg-zinc-900/70 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-600/70 transition-all duration-300 hover:shadow-xl hover:shadow-black/40">
-      <div className="h-[2px] w-full bg-gradient-to-r from-emerald-500/50 via-teal-500/50 to-blue-500/50 opacity-70 group-hover:opacity-100 transition-opacity" />
+    <div className="relative group bg-white border border-[#E4E4E7] rounded-md overflow-hidden hover:border-[#D4D4D8] transition-all duration-200 shadow-sm">
+      <div className="h-[2px] w-full bg-[#FF5500]" />
 
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="font-mono text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/25">
+              <span className="font-mono text-xs font-bold text-[#09090B] bg-[#F4F4F6] px-2.5 py-0.5 rounded border border-[#E4E4E7]">
                 {course.course_code}
               </span>
               <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${tierColor}`}>
@@ -224,72 +224,72 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
 
               {/* Teaching Role Indicators */}
               {course.sections.length > 0 && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 inline-flex items-center gap-1">
-                  <BookOpen className="w-2.5 h-2.5" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7] inline-flex items-center gap-1 font-mono">
+                  <BookOpen className="w-2.5 h-2.5 text-[#FF5500]" />
                   Theory Lecture
                 </span>
               )}
               {course.batches.length > 0 && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30 inline-flex items-center gap-1">
-                  <FlaskConical className="w-2.5 h-2.5" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-[#FFF4ED] text-[#FF5500] border border-[#FED7AA] inline-flex items-center gap-1 font-mono">
+                  <FlaskConical className="w-2.5 h-2.5 text-[#FF5500]" />
                   Lab Practical
                 </span>
               )}
             </div>
 
-            <h3 className="text-lg font-bold text-white leading-snug">
+            <h3 className="text-lg font-bold text-[#09090B] leading-snug">
               {course.course_name}
             </h3>
 
             {/* Division & Batch Quick Summary */}
             {course.divisions && course.divisions.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap mt-2.5">
-                <span className="text-[11px] text-zinc-400 font-medium">Assigned Divisions:</span>
+                <span className="text-[11px] text-[#71717A] font-medium">Assigned Divisions:</span>
                 {course.divisions.map((div) => (
                   <span
                     key={div}
-                    className="text-[11px] font-semibold font-mono px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1"
+                    className="text-[11px] font-bold font-mono px-2 py-0.5 rounded bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7] inline-flex items-center gap-1"
                   >
-                    <Building2 className="w-3 h-3 text-emerald-400" />
+                    <Building2 className="w-3 h-3 text-[#71717A]" />
                     {div}
                   </span>
                 ))}
               </div>
             )}
 
-            <p className="text-xs text-zinc-400 mt-2 flex items-center gap-3">
-              <span>Theory: <strong className="text-zinc-200">{course.th_hours} hrs/wk</strong></span>
+            <p className="text-xs text-[#71717A] mt-2 flex items-center gap-3">
+              <span>Theory: <strong className="text-[#09090B]">{course.th_hours} hrs/wk</strong></span>
               <span>•</span>
-              <span>Practical: <strong className="text-zinc-200">{course.pr_hours} hrs/wk</strong></span>
+              <span>Practical: <strong className="text-[#09090B]">{course.pr_hours} hrs/wk</strong></span>
               {course.tu_hours > 0 && (
                 <>
                   <span>•</span>
-                  <span>Tutorial: <strong className="text-zinc-200">{course.tu_hours} hrs/wk</strong></span>
+                  <span>Tutorial: <strong className="text-[#09090B]">{course.tu_hours} hrs/wk</strong></span>
                 </>
               )}
             </p>
           </div>
 
-          <div className="text-right flex-shrink-0 bg-zinc-800/60 border border-zinc-700/50 px-3 py-2 rounded-xl">
-            <p className="text-xs text-zinc-400">Total Students</p>
-            <p className="text-lg font-bold text-white">{course.total_students}</p>
+          <div className="text-right flex-shrink-0 bg-[#F4F4F6] border border-[#E4E4E7] px-3.5 py-2.5 rounded-md">
+            <p className="text-[11px] font-mono text-[#71717A] uppercase">Total Students</p>
+            <p className="text-xl font-bold text-[#09090B]">{course.total_students}</p>
           </div>
         </div>
 
         {/* Breakdown: Theory Sections & Practical Batches */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           {/* Assigned Theory Sections */}
-          <div className="bg-zinc-950/60 border border-zinc-800/70 rounded-xl p-4">
+          <div className="bg-[#FAFAFB] border border-[#E4E4E7] rounded-md p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-blue-500/15">
-                  <BookOpen className="w-4 h-4 text-blue-400" />
+                <div className="p-1.5 rounded bg-white border border-[#E4E4E7]">
+                  <BookOpen className="w-3.5 h-3.5 text-[#09090B]" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold text-zinc-200 uppercase tracking-wider block">
+                  <span className="text-xs font-bold text-[#09090B] uppercase tracking-wider block">
                     Theory Sections ({course.sections.length})
                   </span>
-                  <span className="text-[10px] text-zinc-500">Class Lecture Allocation</span>
+                  <span className="text-[10px] text-[#71717A]">Class Lecture Allocation</span>
                 </div>
               </div>
             </div>
@@ -299,28 +299,28 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
                 {course.sections.map((sec) => (
                   <div
                     key={sec.id}
-                    className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors"
+                    className="p-3 rounded-md bg-white border border-[#E4E4E7] hover:border-[#D4D4D8] transition-colors shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <div>
-                        <p className="font-mono text-xs font-bold text-blue-300">
+                        <p className="font-mono text-xs font-bold text-[#09090B]">
                           {sec.section_name}
                         </p>
                       </div>
-                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-zinc-300 bg-zinc-800/90 px-2 py-0.5 rounded border border-zinc-700/50">
-                        <Users className="w-3 h-3 text-blue-400" />
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-[#09090B] bg-[#F4F4F6] px-2 py-0.5 rounded border border-[#E4E4E7]">
+                        <Users className="w-3 h-3 text-[#71717A]" />
                         {sec.student_count} Students
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-zinc-800/60 text-[10px]">
-                      <span className="px-2 py-0.5 rounded font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                        Division: {sec.division || 'Allotted Class'}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-[#E4E4E7] text-[10px]">
+                      <span className="px-2 py-0.5 rounded font-mono font-medium bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7]">
+                        Div: {sec.division || 'Allotted Class'}
                       </span>
-                      <span className="px-2 py-0.5 rounded font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                        Type: Theory Lecture
+                      <span className="px-2 py-0.5 rounded font-mono font-medium bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7]">
+                        Type: Theory
                       </span>
-                      <span className="text-zinc-500 ml-auto">
+                      <span className="text-[#71717A] ml-auto font-mono">
                         In-Charge
                       </span>
                     </div>
@@ -328,24 +328,24 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic py-4 text-center">
+              <p className="text-xs text-[#71717A] italic py-4 text-center">
                 No theory sections assigned for this course.
               </p>
             )}
           </div>
 
           {/* Assigned Practical / Lab Batches */}
-          <div className="bg-zinc-950/60 border border-zinc-800/70 rounded-xl p-4">
+          <div className="bg-[#FAFAFB] border border-[#E4E4E7] rounded-md p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-violet-500/15">
-                  <FlaskConical className="w-4 h-4 text-violet-400" />
+                <div className="p-1.5 rounded bg-white border border-[#E4E4E7]">
+                  <FlaskConical className="w-3.5 h-3.5 text-[#FF5500]" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold text-zinc-200 uppercase tracking-wider block">
+                  <span className="text-xs font-bold text-[#09090B] uppercase tracking-wider block">
                     Assigned Lab Batches ({course.batches.length})
                   </span>
-                  <span className="text-[10px] text-zinc-500">Practical & Tutorial Batches</span>
+                  <span className="text-[10px] text-[#71717A]">Practical & Tutorial Batches</span>
                 </div>
               </div>
             </div>
@@ -355,39 +355,39 @@ function FacultyCourseCard({ course }: { course: FacultyCourseItem }) {
                 {course.batches.map((batch) => (
                   <div
                     key={batch.id}
-                    className="p-3 rounded-lg bg-violet-500/5 border border-violet-500/20 hover:border-violet-500/40 transition-colors"
+                    className="p-3 rounded-md bg-white border border-[#E4E4E7] hover:border-[#D4D4D8] transition-colors shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <div>
-                        <p className="font-mono text-xs font-bold text-violet-300">
+                        <p className="font-mono text-xs font-bold text-[#09090B]">
                           {batch.batch_name}
                         </p>
                         {batch.section_name && (
-                          <p className="text-[10px] text-zinc-400">Parent: {batch.section_name}</p>
+                          <p className="text-[10px] text-[#71717A]">Parent: {batch.section_name}</p>
                         )}
                       </div>
-                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-zinc-300 bg-zinc-800/90 px-2 py-0.5 rounded border border-zinc-700/50">
-                        <Users className="w-3 h-3 text-violet-400" />
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-[#09090B] bg-[#F4F4F6] px-2 py-0.5 rounded border border-[#E4E4E7]">
+                        <Users className="w-3 h-3 text-[#FF5500]" />
                         {batch.student_count} Students
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-zinc-800/60 text-[10px]">
-                      <span className="px-2 py-0.5 rounded font-medium bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                        Division: {batch.division || 'Allotted Class'}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-[#E4E4E7] text-[10px]">
+                      <span className="px-2 py-0.5 rounded font-mono font-medium bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7]">
+                        Div: {batch.division || 'Allotted Class'}
                       </span>
-                      <span className="px-2 py-0.5 rounded font-medium bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                      <span className="px-2 py-0.5 rounded font-mono font-medium bg-[#FFF4ED] text-[#FF5500] border border-[#FED7AA]">
                         Batch: {batch.batch_label || batch.batch_name}
                       </span>
-                      <span className="px-2 py-0.5 rounded font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                        Type: Practical Lab
+                      <span className="px-2 py-0.5 rounded font-mono font-medium bg-[#F4F4F6] text-[#09090B] border border-[#E4E4E7]">
+                        Type: Lab
                       </span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-zinc-500 italic py-4 text-center">
+              <p className="text-xs text-[#71717A] italic py-4 text-center">
                 No practical batches assigned for this course.
               </p>
             )}
@@ -402,21 +402,19 @@ function StatCard({
   icon: Icon,
   label,
   value,
-  color,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
-  color: string;
 }) {
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800/70 rounded-xl p-4 flex items-center gap-3">
-      <div className={`p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/40 ${color}`}>
+    <div className="bg-white border border-[#E4E4E7] rounded-md p-4 flex items-center gap-3 shadow-sm">
+      <div className="p-2.5 rounded bg-[#F4F4F6] border border-[#E4E4E7] text-[#09090B]">
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-xl font-bold text-white">{value}</p>
-        <p className="text-xs text-zinc-400">{label}</p>
+        <p className="text-2xl font-bold text-[#09090B] leading-none mb-1">{value}</p>
+        <p className="text-xs text-[#71717A] font-medium">{label}</p>
       </div>
     </div>
   );
@@ -448,61 +446,40 @@ export default function MyEnrollmentsPage() {
       router.push('/login');
       return;
     }
-    setUserRole((user.role as any) || 'STUDENT');
-    setUserName(user.full_name || '');
+    setUserRole(user.role as any);
+    setUserName(user.full_name);
+    setUserErpId(user.id);
   }, [router]);
 
   const loadData = useCallback(async () => {
-    const token = getStoredToken();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    const user = getStoredUser();
-    const isFaculty = user?.role === 'FACULTY' || user?.role === 'ADMIN';
-
     setLoading(true);
     setError(null);
-
     try {
-      if (isFaculty) {
-        const res = await fetchWithAuth(
-          `/api/v1/faculty/my-subjects?academic_term=${encodeURIComponent(selectedTerm)}`
-        );
-        if (res.ok) {
-          const data: FacultySubjectsResponse = await res.json();
-          setFacultyData(data);
-        } else {
-          setError('Failed to load faculty subject assignments.');
-        }
-      } else {
-        const res = await fetchWithAuth(
-          `/api/v1/student/my-enrollments?academic_term=${encodeURIComponent(selectedTerm)}`
-        );
-        if (res.ok) {
-          const data: MyEnrollmentsResponse = await res.json();
-          setStudentData(data);
-          setUserErpId(data.student_id);
-        } else {
-          setError('Failed to load student enrollment records.');
-        }
+      const isFac = userRole === 'FACULTY' || userRole === 'ADMIN';
+      const endpoint = isFac
+        ? `/api/v1/faculty/my-subjects?academic_term=${encodeURIComponent(selectedTerm)}`
+        : `/api/v1/student/my-enrollments?academic_term=${encodeURIComponent(selectedTerm)}`;
+
+      const res = await fetchWithAuth(endpoint);
+      if (!res.ok) {
+        throw new Error(`Failed to load data: ${res.statusText}`);
       }
-    } catch {
-      setError('Network connection error. Please verify your backend server.');
+      const data = await res.json();
+      if (isFac) {
+        setFacultyData(data);
+      } else {
+        setStudentData(data);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error loading subject allocations.');
     } finally {
       setLoading(false);
     }
-  }, [selectedTerm, router]);
+  }, [selectedTerm, userRole]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleLogout = () => {
-    clearAuthSession();
-    router.push('/login');
-  };
 
   const isFaculty = userRole === 'FACULTY' || userRole === 'ADMIN';
 
@@ -516,13 +493,7 @@ export default function MyEnrollmentsPage() {
   ) ?? [];
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
-      {/* Background Pattern */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(120,119,198,0.15),transparent)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1f_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1f_1px,transparent_1px)] bg-[size:40px_40px] opacity-40" />
-      </div>
-
+    <div style={{ minHeight: '100vh', background: '#ECECEE', color: '#09090B', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Unified Role-Aware Navbar */}
       <Navbar />
 
@@ -532,18 +503,18 @@ export default function MyEnrollmentsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-mono text-violet-400 uppercase tracking-wider">
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#FF5500', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Revision FRCRCE-3-26 Autonomous Scheme
               </span>
-              <span className="text-zinc-600">•</span>
-              <span className="text-xs text-zinc-400">
+              <span style={{ color: '#D4D4D8' }}>•</span>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', textTransform: 'uppercase' }}>
                 {isFaculty ? 'Faculty Teaching Portfolio' : 'Student Allotment Portal'}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '26px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em' }}>
               {isFaculty ? 'My Assigned Subjects & Batches' : 'My Enrolled Subjects'}
             </h1>
-            <p className="text-xs text-zinc-400 mt-1">
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13.5px', color: '#71717A', marginTop: '4px' }}>
               {isFaculty
                 ? `Official lecture sections and practical batches assigned to Prof. ${userName}`
                 : `Student ERP ID: ${userErpId || '2023CE001'} · View assigned lecture divisions & lab batches`}
@@ -556,7 +527,7 @@ export default function MyEnrollmentsPage() {
               <select
                 value={selectedTerm}
                 onChange={(e) => setSelectedTerm(e.target.value)}
-                className="appearance-none bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-300 font-mono pl-3 pr-8 py-2 rounded-xl focus:outline-none focus:border-violet-500 transition-colors cursor-pointer"
+                className="appearance-none bg-white border border-[#E4E4E7] hover:border-[#D4D4D8] text-xs text-[#09090B] font-mono pl-3 pr-8 py-2 rounded-md focus:outline-none focus:border-[#FF5500] transition-colors cursor-pointer shadow-sm"
               >
                 {ACADEMIC_TERMS.map((t) => (
                   <option key={t} value={t}>
@@ -564,13 +535,13 @@ export default function MyEnrollmentsPage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#71717A] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             <button
               onClick={loadData}
               disabled={loading}
-              className="p-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl transition-all disabled:opacity-50"
+              className="p-2 bg-white border border-[#E4E4E7] hover:bg-[#F4F4F6] text-[#09090B] rounded-md transition-all disabled:opacity-50 shadow-sm"
               title="Refresh Data"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -585,25 +556,21 @@ export default function MyEnrollmentsPage() {
               icon={BookOpen}
               label="Assigned Courses"
               value={facultyData.total_courses}
-              color="text-blue-400"
             />
             <StatCard
               icon={BookMarked}
               label="Theory Sections"
               value={facultyData.total_sections}
-              color="text-violet-400"
             />
             <StatCard
               icon={FlaskConical}
               label="Lab Batches"
               value={facultyData.total_batches}
-              color="text-emerald-400"
             />
             <StatCard
               icon={Users}
               label="Students Supervised"
               value={facultyData.total_students}
-              color="text-amber-400"
             />
           </div>
         )}
@@ -614,54 +581,61 @@ export default function MyEnrollmentsPage() {
               icon={BookOpen}
               label="Total Enrolled"
               value={studentData.enrollments.length}
-              color="text-blue-400"
             />
             <StatCard
               icon={BookMarked}
               label="Theory Lectures"
               value={studentData.enrollments.filter((e) => e.theory !== null).length}
-              color="text-violet-400"
             />
             <StatCard
               icon={FlaskConical}
               label="Lab Batches"
               value={studentData.enrollments.filter((e) => e.practical !== null).length}
-              color="text-emerald-400"
             />
             <StatCard
               icon={Users}
               label="Faculty Assigned"
               value={studentData.enrollments.filter((e) => e.theory?.faculty !== 'To be assigned' && e.practical?.faculty !== 'To be assigned').length}
-              color="text-emerald-400"
             />
           </div>
         )}
 
         {/* Tier Filter Tabs */}
-        <div className="flex items-center gap-2 mb-6 border-b border-zinc-800/60 pb-3 overflow-x-auto">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #E4E4E7', paddingBottom: '12px', overflowX: 'auto' }}>
           {[
             { key: 'ALL', label: 'All Tiers' },
             { key: 'CLASS', label: 'Class Core' },
             { key: 'DEPARTMENT', label: 'Department Elective' },
             { key: 'INSTITUTE', label: 'Institute Open Elective' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilterTier(key)}
-              className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap ${
-                filterTier === key
-                  ? 'bg-zinc-800 text-white border border-zinc-700 shadow-xs'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          ].map(({ key, label }) => {
+            const isActive = filterTier === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setFilterTier(key)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: isActive ? '1px solid #18181B' : '1px solid #E4E4E7',
+                  background: isActive ? '#18181B' : '#FFFFFF',
+                  color: isActive ? '#FFFFFF' : '#71717A',
+                  fontFamily: '"Plus Jakarta Sans", sans-serif',
+                  fontSize: '12.5px',
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-4 text-xs mb-6">
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: '6px', padding: '12px 16px', fontSize: '13px', marginBottom: '24px', fontFamily: 'Inter, sans-serif' }}>
             {error}
           </div>
         )}
@@ -669,8 +643,8 @@ export default function MyEnrollmentsPage() {
         {/* Loading Spinner */}
         {loading && (
           <div className="text-center py-16">
-            <RefreshCw className="w-8 h-8 text-violet-400 animate-spin mx-auto mb-3" />
-            <p className="text-xs text-zinc-400">Loading subject allocations...</p>
+            <RefreshCw className="w-8 h-8 text-[#FF5500] animate-spin mx-auto mb-3" />
+            <p className="text-xs text-[#71717A] font-mono">Loading subject allocations...</p>
           </div>
         )}
 
@@ -684,17 +658,17 @@ export default function MyEnrollmentsPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-16 bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-8">
-                <BookOpen className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-zinc-300 mb-1">
+              <div className="text-center py-16 bg-white border border-[#E4E4E7] rounded-md p-8 shadow-sm">
+                <BookOpen className="w-12 h-12 text-[#A1A1AA] mx-auto mb-3" />
+                <h3 className="text-base font-bold text-[#09090B] mb-1">
                   No Subjects Currently Assigned
                 </h3>
-                <p className="text-xs text-zinc-500 max-w-md mx-auto mb-5">
+                <p className="text-xs text-[#71717A] max-w-md mx-auto mb-5">
                   No theory sections or practical lab batches are currently assigned to your faculty profile for term {selectedTerm}.
                 </p>
                 <Link
                   href="/admin/allotment"
-                  className="inline-flex items-center gap-2 text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white px-4 py-2.5 rounded-xl transition-all shadow-md shadow-violet-600/20"
+                  className="inline-flex items-center gap-2 text-xs font-bold bg-[#FF5500] hover:bg-[#E64D00] text-white px-4 py-2.5 rounded-md transition-all shadow-md shadow-orange-500/20"
                 >
                   <Layers className="w-4 h-4" />
                   <span>Go to Allotment Engine to Assign Sections</span>
@@ -715,12 +689,12 @@ export default function MyEnrollmentsPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-16 bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-8">
-                <BookOpen className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-zinc-300 mb-1">
+              <div className="text-center py-16 bg-white border border-[#E4E4E7] rounded-md p-8 shadow-sm">
+                <BookOpen className="w-12 h-12 text-[#A1A1AA] mx-auto mb-3" />
+                <h3 className="text-base font-bold text-[#09090B] mb-1">
                   No Enrollments Found
                 </h3>
-                <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                <p className="text-xs text-[#71717A] max-w-md mx-auto">
                   No course allocations found for term {selectedTerm}. Please check with your academic department or administrator.
                 </p>
               </div>

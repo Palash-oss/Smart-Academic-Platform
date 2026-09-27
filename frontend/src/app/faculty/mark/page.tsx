@@ -102,9 +102,10 @@ export default function MarkAttendancePage() {
         const data: Department[] = await res.json();
         setDepartments(data);
         if (data.length > 0) {
-          setSelectedDeptCode(data[0].code);
-          if (data[0].divisions.length > 0) {
-            setSelectedDivName(data[0].divisions[0].name);
+          const compDept = data.find((d) => d.code === 'COMP') || data[0];
+          setSelectedDeptCode(compDept.code);
+          if (compDept.divisions.length > 0) {
+            setSelectedDivName(compDept.divisions[0].name);
           }
         }
       }
@@ -118,12 +119,14 @@ export default function MarkAttendancePage() {
   const loadCourses = async (deptCode: string) => {
     setLoadingCourses(true);
     try {
-      const res = await fetchWithAuth(`/api/attendance/faculty/courses?dept_code=${deptCode}`);
+      const res = await fetchWithAuth(`/api/attendance/faculty/courses?department_code=${deptCode}`);
       if (res.ok) {
         const data: Course[] = await res.json();
         setCourses(data);
         if (data.length > 0) {
           setSelectedCourseName(data[0].full_label);
+        } else {
+          setSelectedCourseName('');
         }
       }
     } catch (err) {
@@ -136,65 +139,64 @@ export default function MarkAttendancePage() {
   const loadStudents = async (deptCode: string, divName: string) => {
     setLoadingStudents(true);
     try {
-      const res = await fetchWithAuth(`/api/attendance/faculty/students?dept_code=${deptCode}&div_name=${divName}`);
+      const res = await fetchWithAuth(`/api/attendance/faculty/students?department_code=${deptCode}&division_name=${divName}`);
       if (res.ok) {
         const data: Student[] = await res.json();
         setStudents(data);
         setPresentStudentIds(new Set(data.map((s) => s.student_id)));
       }
     } catch (err) {
-      console.error('Failed to load student roster:', err);
+      console.error('Failed to load students:', err);
     } finally {
       setLoadingStudents(false);
     }
   };
 
-  const loadMarkedSessions = async (subject: string, dateStr: string) => {
+  const loadMarkedSessions = async (subject: string, date: string) => {
     try {
-      const res = await fetchWithAuth(
-        `/api/attendance/faculty/sessions?subject=${encodeURIComponent(subject)}&session_date=${dateStr}`
-      );
+      const res = await fetchWithAuth(`/api/attendance/faculty/sessions?subject=${encodeURIComponent(subject)}&session_date=${date}`);
       if (res.ok) {
-        const data = await res.json();
-        setMarkedSessions(data.sessions || []);
+        const data: MarkedSession[] = await res.json();
+        setMarkedSessions(data);
       }
     } catch (err) {
       console.error('Failed to load marked sessions history:', err);
     }
   };
 
-  const currentDeptObj = departments.find((d) => d.code === selectedDeptCode);
-  const availableDivisions = currentDeptObj ? currentDeptObj.divisions : [];
-  const sessionsTodayCount = markedSessions.length;
-  const isMaxDailyReached = sessionsTodayCount >= 2;
-
-  const handleDeptChange = (newDeptCode: string) => {
-    setSelectedDeptCode(newDeptCode);
-    const newDeptObj = departments.find((d) => d.code === newDeptCode);
-    if (newDeptObj && newDeptObj.divisions.length > 0) {
-      setSelectedDivName(newDeptObj.divisions[0].name);
+  const handleDeptChange = (code: string) => {
+    setSelectedDeptCode(code);
+    const dept = departments.find((d) => d.code === code);
+    if (dept && dept.divisions.length > 0) {
+      setSelectedDivName(dept.divisions[0].name);
     }
   };
 
   const toggleStudentPresent = (id: string) => {
-    if (isMaxDailyReached) return;
-    const nextSet = new Set(presentStudentIds);
-    if (nextSet.has(id)) {
-      nextSet.delete(id);
-    } else {
-      nextSet.add(id);
-    }
-    setPresentStudentIds(nextSet);
+    setPresentStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
-  const toggleAll = (selectPresent: boolean) => {
-    if (isMaxDailyReached) return;
-    if (selectPresent) {
+  const toggleAll = (select: boolean) => {
+    if (select) {
       setPresentStudentIds(new Set(students.map((s) => s.student_id)));
     } else {
       setPresentStudentIds(new Set());
     }
   };
+
+  const currentDept = departments.find((d) => d.code === selectedDeptCode);
+  const availableDivisions = currentDept?.divisions || [];
+
+  const sessionsTodayCount = markedSessions.length;
+  const isMaxDailyReached = sessionsTodayCount >= 2;
 
   const filteredStudents = students.filter((st) =>
     st.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -261,7 +263,6 @@ export default function MarkAttendancePage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
         loadMarkedSessions(selectedCourseName, sessionDate);
         loadStudents(selectedDeptCode, selectedDivName);
       } else {
@@ -277,36 +278,47 @@ export default function MarkAttendancePage() {
   };
 
   return (
-    <div className="min-h-screen bg-ink flex flex-col font-sans text-paper">
+    <div style={{ minHeight: '100vh', background: '#ECECEE', color: '#09090B', fontFamily: 'Inter, system-ui, sans-serif' }}>
       <Navbar />
 
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 space-y-6">
-        {/* Navigation back to Ledger */}
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div className="flex items-center gap-3">
+      <main style={{ maxWidth: '1180px', margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        
+        {/* Navigation & Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E4E4E7', paddingBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Link
               href="/faculty"
-              className="p-2 bg-surface hover:bg-surface-hover border border-border rounded-lg text-paper transition-colors"
+              style={{ padding: '8px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', color: '#09090B', display: 'flex', textDecoration: 'none' }}
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft style={{ width: '16px', height: '16px' }} />
             </Link>
             <div>
-              <h1 className="font-serif text-2xl font-bold tracking-wide text-paper">
-                Live Lecture Attendance Marker
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#FF5500', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                // LIVE ATTENDANCE LEDGER
+              </span>
+              <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '22px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', marginTop: '2px' }}>
+                Lecture Attendance Recording Console
               </h1>
-              <p className="text-xs text-subtle font-sans mt-0.5">
-                Daily Cap Enforced: Max 2 Lecture Sessions Per Subject / Day
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 font-mono text-xs">
-            <span className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 ${
-              isMaxDailyReached
-                ? 'bg-paper text-ink border-paper'
-                : 'bg-surface text-paper border-border'
-            }`}>
-              <Clock className="h-3.5 w-3.5" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span
+              style={{
+                fontFamily: '"JetBrains Mono", monospace',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: isMaxDailyReached ? '#DC2626' : '#09090B',
+                background: isMaxDailyReached ? '#FEF2F2' : '#FFFFFF',
+                border: `1px solid ${isMaxDailyReached ? '#FECACA' : '#E4E4E7'}`,
+                padding: '6px 12px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Clock style={{ width: '13px', height: '13px', color: isMaxDailyReached ? '#DC2626' : '#FF5500' }} />
               <span>SESSIONS TODAY: {sessionsTodayCount} / 2 (MAX 2)</span>
             </span>
           </div>
@@ -314,65 +326,67 @@ export default function MarkAttendancePage() {
 
         {/* Error Alert Banner */}
         {errorMessage && (
-          <div className="p-4 bg-surface border-2 border-paper rounded-lg font-mono text-xs flex items-start gap-2 shadow-sm">
-            <AlertTriangle className="h-4 w-4 text-paper shrink-0 mt-0.5" />
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <AlertTriangle style={{ width: '18px', height: '18px', color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
             <div>
-              <p className="font-bold text-paper">Action Restricted</p>
-              <p className="text-subtle">{errorMessage}</p>
+              <p style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 700, fontSize: '13px', color: '#DC2626' }}>Action Restricted</p>
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#991B1B', marginTop: '2px' }}>{errorMessage}</p>
             </div>
           </div>
         )}
 
         {/* Max Limit Warning Banner */}
         {isMaxDailyReached && (
-          <div className="p-4 bg-surface border border-border-strong rounded-lg font-mono text-xs flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2 text-paper">
-              <AlertTriangle className="h-4 w-4 text-paper shrink-0" />
-              <span>
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle style={{ width: '16px', height: '16px', color: '#D97706', flexShrink: 0 }} />
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#92400E' }}>
                 <strong>Daily Limit Reached (2 / 2 Sessions Marked)</strong>: Additional session submissions for this course on {sessionDate} are restricted.
               </span>
             </div>
-            <span className="text-[11px] text-subtle">Use Session History below to Undo if needed.</span>
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#B45309' }}>Use session history below to undo if needed.</span>
           </div>
         )}
 
         {/* Success Banner */}
         {resultBanner && (
-          <div className="p-4 bg-surface border-2 border-paper rounded-lg font-mono text-xs space-y-1 shadow-sm">
-            <div className="flex items-center gap-2 font-bold text-sm text-paper">
-              <CheckCircle2 className="h-4 w-4 text-paper" />
-              <span>Session #{resultBanner.sessionNumber} Successfully Recorded Live in Postgres!</span>
+          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '6px', padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <CheckCircle2 style={{ width: '18px', height: '18px', color: '#16A34A' }} />
+              <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 700, fontSize: '14px', color: '#166534' }}>
+                Session #{resultBanner.sessionNumber} Successfully Recorded Live in Postgres!
+              </span>
             </div>
-            <p className="text-subtle">
-              Course: <strong>{resultBanner.subject}</strong> | Total Roster: <strong>{resultBanner.total}</strong> | Present: <strong className="text-paper">{resultBanner.present}</strong> | Absent: <strong className="text-paper">{resultBanner.absent}</strong>
+            <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', color: '#15803D' }}>
+              Course: <strong>{resultBanner.subject}</strong> | Total Roster: <strong>{resultBanner.total}</strong> | Present: <strong>{resultBanner.present}</strong> | Absent: <strong>{resultBanner.absent}</strong>
             </p>
           </div>
         )}
 
         {/* Session History & Undo Panel */}
         {markedSessions.length > 0 && (
-          <div className="bg-surface border border-border rounded-lg p-4 font-mono text-xs space-y-3 shadow-xs">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <span className="font-bold text-paper flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-paper" />
+          <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E4E4E7', paddingBottom: '8px', marginBottom: '12px' }}>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#09090B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock style={{ width: '13px', height: '13px', color: '#FF5500' }} />
                 MARKED SESSIONS HISTORY ({sessionDate})
               </span>
-              <span className="text-subtle text-[11px]">Click 'Undo Session' to revert attendance</span>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', color: '#71717A' }}>Click 'Undo Session' to revert attendance</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
               {markedSessions.map((sess) => (
                 <div
                   key={sess.session_id}
-                  className="p-3 bg-ink border border-border rounded-lg flex items-center justify-between"
+                  style={{ padding: '12px', background: '#FAFAFB', border: '1px solid #E4E4E7', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-paper text-xs">Session #{sess.session_number}</span>
-                      <span className="text-[10px] text-subtle">At {sess.created_at || 'Today'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 800, fontSize: '13px', color: '#09090B' }}>Session #{sess.session_number}</span>
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10px', color: '#71717A' }}>At {sess.created_at || 'Today'}</span>
                     </div>
-                    <p className="text-[11px] text-subtle mt-0.5">
-                      Present: <strong className="text-paper">{sess.present_count}</strong> / {sess.total_enrolled} Enrolled
+                    <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', marginTop: '2px' }}>
+                      Present: <strong style={{ color: '#09090B' }}>{sess.present_count}</strong> / {sess.total_enrolled} Enrolled
                     </p>
                   </div>
 
@@ -380,10 +394,26 @@ export default function MarkAttendancePage() {
                     type="button"
                     onClick={() => handleUndoSession(sess.session_id, sess.session_number)}
                     disabled={undoingSessionId === sess.session_id}
-                    className="px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border text-paper rounded text-xs flex items-center gap-1.5 transition-colors font-semibold disabled:opacity-40"
+                    style={{
+                      padding: '6px 12px',
+                      background: '#FFFFFF',
+                      border: '1px solid #FECACA',
+                      color: '#DC2626',
+                      borderRadius: '4px',
+                      fontSize: '11.5px',
+                      fontFamily: '"Plus Jakarta Sans", sans-serif',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; }}
                   >
-                    <RotateCcw className="h-3.5 w-3.5 text-paper" />
-                    <span>{undoingSessionId === sess.session_id ? 'Undoing...' : 'Undo Session'}</span>
+                    <RotateCcw style={{ width: '12px', height: '12px' }} />
+                    <span>{undoingSessionId === sess.session_id ? 'Undoing...' : 'Undo'}</span>
                   </button>
                 </div>
               ))}
@@ -391,20 +421,22 @@ export default function MarkAttendancePage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Controls: Department, Division, Course & Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-surface p-5 border border-border rounded-lg shadow-xs">
-            {/* Department Dropdown */}
+        {/* Attendance Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Controls Bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            
+            {/* Department */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
-                <Building2 className="h-3.5 w-3.5 text-paper" />
-                <span>DEPARTMENT / BRANCH</span>
+              <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Department
               </label>
               <select
                 value={selectedDeptCode}
                 onChange={(e) => handleDeptChange(e.target.value)}
                 disabled={loadingDepartments}
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none"
+                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: '#09090B', outline: 'none' }}
               >
                 {departments.map((d) => (
                   <option key={d.code} value={d.code}>
@@ -414,37 +446,35 @@ export default function MarkAttendancePage() {
               </select>
             </div>
 
-            {/* Division Dropdown */}
+            {/* Division */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
-                <Users className="h-3.5 w-3.5 text-paper" />
-                <span>DIVISION / CLASS</span>
+              <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Division
               </label>
               <select
                 value={selectedDivName}
                 onChange={(e) => setSelectedDivName(e.target.value)}
                 disabled={availableDivisions.length === 0}
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none"
+                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: '#09090B', outline: 'none' }}
               >
                 {availableDivisions.map((div) => (
                   <option key={div.name} value={div.name}>
-                    Division {div.name} ({div.student_count} Capacity)
+                    Division {div.name} ({div.student_count} Students)
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Course Dropdown */}
+            {/* Course */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
-                <BookOpen className="h-3.5 w-3.5 text-paper" />
-                <span>ASSIGNED COURSE</span>
+              <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Assigned Course
               </label>
               <select
                 value={selectedCourseName}
                 onChange={(e) => setSelectedCourseName(e.target.value)}
                 disabled={loadingCourses || courses.length === 0}
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-sans font-semibold text-paper focus:outline-none truncate"
+                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: '#09090B', outline: 'none' }}
               >
                 {courses.map((c) => (
                   <option key={c.id} value={c.full_label}>
@@ -454,51 +484,51 @@ export default function MarkAttendancePage() {
               </select>
             </div>
 
-            {/* Session Date Picker */}
+            {/* Date */}
             <div>
-              <label className="block text-xs font-mono text-subtle uppercase mb-1.5 flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5 text-paper" />
-                <span>SESSION DATE</span>
+              <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Session Date
               </label>
               <input
                 type="date"
                 value={sessionDate}
                 onChange={(e) => setSessionDate(e.target.value)}
-                className="w-full bg-ink border border-border focus:border-paper rounded-lg px-3 py-2 text-xs font-mono text-paper focus:outline-none"
+                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '8px 10px', fontSize: '13px', fontFamily: '"JetBrains Mono", monospace', color: '#09090B', outline: 'none' }}
               />
             </div>
           </div>
 
           {/* Student Roster Checkbox List */}
-          <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+          <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            
             {/* Header & Quick Filter */}
-            <div className="p-4 bg-ink border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 font-serif text-sm font-semibold text-paper">
-                <Users className="h-4 w-4 text-paper" />
-                <span>
+            <div style={{ padding: '14px 18px', background: '#FAFAFB', borderBottom: '1px solid #E4E4E7', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users style={{ width: '16px', height: '16px', color: '#FF5500' }} />
+                <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '14px', fontWeight: 800, color: '#09090B' }}>
                   {selectedDeptCode}-{selectedDivName} Class Roster ({presentStudentIds.size} / {students.length} Present)
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-subtle" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search style={{ width: '13px', height: '13px', position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#71717A' }} />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search student name..."
+                    placeholder="Search student..."
                     disabled={isMaxDailyReached}
-                    className="bg-surface border border-border focus:border-paper rounded-lg pl-8 pr-3 py-1.5 text-xs text-paper placeholder-subtle focus:outline-none w-48"
+                    style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '6px 10px 6px 30px', fontSize: '12px', color: '#09090B', width: '180px', outline: 'none' }}
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5 font-mono text-xs">
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     type="button"
                     onClick={() => toggleAll(true)}
                     disabled={isMaxDailyReached}
-                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper disabled:opacity-30"
+                    style={{ padding: '6px 12px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '11.5px', fontWeight: 700, color: '#09090B', cursor: 'pointer' }}
                   >
                     Mark All Present
                   </button>
@@ -506,7 +536,7 @@ export default function MarkAttendancePage() {
                     type="button"
                     onClick={() => toggleAll(false)}
                     disabled={isMaxDailyReached}
-                    className="px-2.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded text-subtle hover:text-paper disabled:opacity-30"
+                    style={{ padding: '6px 12px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '11.5px', fontWeight: 600, color: '#71717A', cursor: 'pointer' }}
                   >
                     Clear All
                   </button>
@@ -514,14 +544,14 @@ export default function MarkAttendancePage() {
               </div>
             </div>
 
-            {/* Roster Table List */}
-            <div className="divide-y divide-border max-h-[500px] overflow-y-auto font-sans">
+            {/* Students List */}
+            <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
               {loadingStudents ? (
-                <div className="p-8 text-center text-subtle font-mono text-xs">
+                <div style={{ padding: '40px', textAlign: 'center', color: '#71717A', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>
                   Loading class roster for Division {selectedDeptCode}-{selectedDivName}...
                 </div>
               ) : filteredStudents.length === 0 ? (
-                <div className="p-8 text-center text-subtle font-mono text-xs">
+                <div style={{ padding: '40px', textAlign: 'center', color: '#71717A', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>
                   No students found matching your search filter.
                 </div>
               ) : (
@@ -531,36 +561,49 @@ export default function MarkAttendancePage() {
                     <div
                       key={st.student_id}
                       onClick={() => toggleStudentPresent(st.student_id)}
-                      className={`p-3.5 flex items-center justify-between transition-colors ${
-                        isMaxDailyReached ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                      } ${
-                        isPresent ? 'bg-surface hover:bg-surface-hover' : 'bg-ink/60 hover:bg-ink'
-                      }`}
+                      style={{
+                        padding: '12px 18px',
+                        borderBottom: '1px solid #F4F4F6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: isMaxDailyReached ? 'not-allowed' : 'pointer',
+                        opacity: isMaxDailyReached ? 0.6 : 1,
+                        background: isPresent ? '#FFFFFF' : '#FAFAFB',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => { if (!isMaxDailyReached) e.currentTarget.style.background = '#F4F4F6'; }}
+                      onMouseLeave={e => { if (!isMaxDailyReached) e.currentTarget.style.background = isPresent ? '#FFFFFF' : '#FAFAFB'; }}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs text-subtle w-6 shrink-0">{idx + 1}.</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', width: '24px' }}>{idx + 1}.</span>
                         {isPresent ? (
-                          <CheckSquare className="h-5 w-5 text-paper shrink-0" />
+                          <CheckSquare style={{ width: '18px', height: '18px', color: '#FF5500', flexShrink: 0 }} />
                         ) : (
-                          <Square className="h-5 w-5 text-subtle shrink-0" />
+                          <Square style={{ width: '18px', height: '18px', color: '#D4D4D8', flexShrink: 0 }} />
                         )}
                         <div>
-                          <p className={`text-xs font-semibold ${isPresent ? 'text-paper' : 'text-subtle'}`}>
+                          <p style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 700, color: isPresent ? '#09090B' : '#71717A' }}>
                             {st.student_name}
                           </p>
-                          <p className="text-[10px] font-mono text-subtle">{st.student_email}</p>
+                          <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A' }}>{st.student_email}</p>
                         </div>
                       </div>
 
-                      <div className="font-mono text-xs">
-                        <span className={`px-2.5 py-1 rounded border uppercase text-[10px] font-bold ${
-                          isPresent 
-                            ? 'bg-paper text-ink border-paper' 
-                            : 'bg-ink text-subtle border-border'
-                        }`}>
-                          {isPresent ? 'PRESENT' : 'ABSENT'}
-                        </span>
-                      </div>
+                      <span
+                        style={{
+                          fontFamily: '"JetBrains Mono", monospace',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '3px',
+                          background: isPresent ? '#F0FDF4' : '#F4F4F6',
+                          color: isPresent ? '#16A34A' : '#71717A',
+                          border: `1px solid ${isPresent ? '#BBF7D0' : '#E4E4E7'}`,
+                        }}
+                      >
+                        {isPresent ? 'PRESENT' : 'ABSENT'}
+                      </span>
                     </div>
                   );
                 })
@@ -569,13 +612,30 @@ export default function MarkAttendancePage() {
           </div>
 
           {/* Submit Button */}
-          <div className="flex justify-end">
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
               type="submit"
               disabled={submitting || students.length === 0 || isMaxDailyReached}
-              className="px-6 py-3 bg-paper text-ink font-semibold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 text-sm disabled:opacity-40 shadow-xs"
+              style={{
+                padding: '11px 24px',
+                background: isMaxDailyReached ? '#D4D4D8' : '#FF5500',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                border: 'none',
+                fontFamily: '"Plus Jakarta Sans", sans-serif',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: isMaxDailyReached || submitting ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: isMaxDailyReached ? 'none' : '0 2px 10px rgba(255, 85, 0, 0.3)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => { if (!isMaxDailyReached && !submitting) { e.currentTarget.style.background = '#E64D00'; } }}
+              onMouseLeave={e => { if (!isMaxDailyReached && !submitting) { e.currentTarget.style.background = '#FF5500'; } }}
             >
-              <Save className="h-4 w-4" />
+              <Save style={{ width: '15px', height: '15px' }} />
               <span>
                 {isMaxDailyReached
                   ? 'Max Daily Limit Reached (2/2 Marked)'
@@ -586,6 +646,7 @@ export default function MarkAttendancePage() {
             </button>
           </div>
         </form>
+
       </main>
     </div>
   );

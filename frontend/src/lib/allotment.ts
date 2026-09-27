@@ -67,18 +67,18 @@ export interface OfferingInfo {
   batches: BatchInfo[];
 }
 
-// Tier badge colors
+// Tier badge colors - Technical Architectural Palette (Zero purple/blue)
 export const TIER_COLORS: Record<string, string> = {
-  CLASS: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  DEPARTMENT: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-  INSTITUTE: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  CLASS: 'bg-[#F4F4F6] text-[#09090B] border-[#D4D4D8]',
+  DEPARTMENT: 'bg-[#FFF4ED] text-[#FF5500] border-[#FED7AA]',
+  INSTITUTE: 'bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]',
 };
 
 export const MODE_COLORS: Record<string, string> = {
-  INTEGRATED_TH_PR: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  PRACTICAL_ONLY: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  THEORY_TUTORIAL: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  THEORY_ONLY: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  INTEGRATED_TH_PR: 'bg-[#F4F4F6] text-[#09090B] border-[#D4D4D8]',
+  PRACTICAL_ONLY: 'bg-[#F4F4F6] text-[#52525B] border-[#D4D4D8]',
+  THEORY_TUTORIAL: 'bg-[#F4F4F6] text-[#52525B] border-[#D4D4D8]',
+  THEORY_ONLY: 'bg-[#F4F4F6] text-[#52525B] border-[#D4D4D8]',
 };
 
 export const MODE_LABELS: Record<string, string> = {

@@ -21,13 +21,11 @@ import {
   RefreshCw,
   Building2,
   Globe,
-  MessageSquare,
   Plus,
   UserPlus,
   Download,
   Check,
   Search,
-  Filter,
   SlidersHorizontal,
   Sparkles,
   Clock,
@@ -47,7 +45,7 @@ import {
 } from '@/lib/allotment';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Upload Zone
+// Upload Zone (Technical Light Style)
 // ─────────────────────────────────────────────────────────────────────────────
 function UploadZone({
   onFileSelect,
@@ -78,12 +76,12 @@ function UploadZone({
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
       onClick={() => !loading && inputRef.current?.click()}
-      className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-4 transition-all duration-300 group ${
+      className={`relative cursor-pointer rounded-md border-2 border-dashed p-8 flex flex-col items-center justify-center gap-3 transition-all duration-200 group ${
         dragging
-          ? 'border-violet-400/60 bg-violet-500/10'
+          ? 'border-[#FF5500] bg-[#FFF4ED]'
           : file
-          ? 'border-emerald-500/50 bg-emerald-500/5'
-          : 'border-zinc-700/60 hover:border-zinc-500/60 bg-zinc-900/40 hover:bg-zinc-800/30'
+          ? 'border-emerald-500 bg-emerald-50'
+          : 'border-[#D4D4D8] hover:border-[#FF5500] bg-[#FAFAFB] hover:bg-[#FFF4ED]/30'
       }`}
     >
       <input
@@ -95,33 +93,32 @@ function UploadZone({
         id="allotment-file-input"
       />
 
-      <div className={`p-4 rounded-2xl transition-all duration-300 ${
-        file ? 'bg-emerald-500/15' : 'bg-zinc-800/60 group-hover:bg-zinc-700/50'
+      <div className={`p-3 rounded-md transition-all duration-200 ${
+        file ? 'bg-emerald-100' : 'bg-white border border-[#E4E4E7]'
       }`}>
         {file ? (
-          <FileSpreadsheet className="w-10 h-10 text-emerald-400" />
+          <FileSpreadsheet className="w-8 h-8 text-emerald-600" />
         ) : (
-          <Upload className={`w-10 h-10 transition-colors ${
-            dragging ? 'text-violet-400' : 'text-zinc-500 group-hover:text-zinc-300'
+          <Upload className={`w-8 h-8 transition-colors ${
+            dragging ? 'text-[#FF5500]' : 'text-[#71717A] group-hover:text-[#FF5500]'
           }`} />
         )}
       </div>
 
       {file ? (
         <div className="text-center">
-          <p className="text-sm font-semibold text-emerald-300">{file.name}</p>
-          <p className="text-xs text-zinc-400 mt-1">
-            {(file.size / 1024).toFixed(1)} KB · Click to change
+          <p className="text-sm font-bold text-emerald-800">{file.name}</p>
+          <p className="text-xs text-emerald-600 mt-0.5 font-mono">
+            {(file.size / 1024).toFixed(1)} KB · Click to change file
           </p>
         </div>
       ) : (
         <div className="text-center">
-          <p className="text-sm font-semibold text-zinc-300">
-            {dragging ? 'Drop the Excel file here' : 'Drag & drop your allotment file'}
+          <p className="text-sm font-bold text-[#09090B]">
+            {dragging ? 'Drop file to upload' : 'Drag & drop allotment sheet'}
           </p>
-          <p className="text-xs text-zinc-500 mt-1">
-            Supports <span className="text-zinc-300">.xlsx</span> and{' '}
-            <span className="text-zinc-300">.csv</span>
+          <p className="text-xs text-[#71717A] mt-1 font-mono">
+            Supported formats: <strong className="text-[#09090B]">.xlsx</strong>, <strong className="text-[#09090B]">.csv</strong>
           </p>
         </div>
       )}
@@ -137,66 +134,63 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
   const errors = result.errors || [];
 
   return (
-    <div className={`rounded-2xl border p-6 ${
-      success
-        ? 'bg-emerald-500/5 border-emerald-500/25'
-        : 'bg-amber-500/5 border-amber-500/25'
+    <div className={`rounded-md border p-5 bg-white ${
+      success ? 'border-emerald-300' : 'border-amber-300'
     }`}>
-      <div className="flex items-start gap-4 mb-5">
-        <div className={`p-2.5 rounded-xl ${success ? 'bg-emerald-500/15' : 'bg-amber-500/15'}`}>
+      <div className="flex items-start gap-3 mb-4">
+        <div className={`p-2 rounded ${success ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
           {success ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <CheckCircle2 className="w-5 h-5" />
           ) : (
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
+            <AlertTriangle className="w-5 h-5" />
           )}
         </div>
         <div>
-          <p className={`font-semibold ${success ? 'text-emerald-300' : 'text-amber-300'}`}>
-            {success ? 'Allotment Complete' : 'Upload Status — Review Details'}
+          <p className={`font-bold ${success ? 'text-emerald-800' : 'text-amber-800'}`}>
+            {success ? 'Allotment Processing Complete' : 'Upload Status — Review Warnings'}
           </p>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            {result.total_rows_processed ?? 0} rows processed
+          <p className="text-xs text-[#71717A] mt-0.5 font-mono">
+            {result.total_rows_processed ?? 0} rows processed successfully
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
         {[
-          { label: 'Rows Processed', value: result.total_rows_processed ?? 0, icon: FileSpreadsheet, color: 'text-blue-400' },
-          { label: 'Sections Created', value: result.sections_created ?? 0, icon: Layers, color: 'text-violet-400' },
-          { label: 'Batches Created', value: result.batches_created ?? 0, icon: FlaskConical, color: 'text-emerald-400' },
-          { label: 'Faculty Slots', value: result.faculty_slots_generated ?? 0, icon: Users, color: 'text-amber-400' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 text-center">
-            <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
-            <p className="text-xl font-bold text-white">{value}</p>
-            <p className="text-[10px] text-zinc-500">{label}</p>
+          { label: 'Rows Processed', value: result.total_rows_processed ?? 0, icon: FileSpreadsheet },
+          { label: 'Sections Created', value: result.sections_created ?? 0, icon: Layers },
+          { label: 'Batches Created', value: result.batches_created ?? 0, icon: FlaskConical },
+          { label: 'Faculty Slots', value: result.faculty_slots_generated ?? 0, icon: Users },
+        ].map(({ label, value, icon: Icon }) => (
+          <div key={label} className="bg-[#FAFAFB] border border-[#E4E4E7] rounded p-2.5 text-center">
+            <Icon className="w-4 h-4 mx-auto mb-1 text-[#09090B]" />
+            <p className="text-xl font-bold text-[#09090B] leading-none">{value}</p>
+            <p className="text-[10px] text-[#71717A] font-mono mt-1">{label}</p>
           </div>
         ))}
       </div>
 
-      {/* Error list */}
       {errors.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
+          <p className="text-xs font-bold text-amber-800 mb-2 flex items-center gap-1.5 font-mono">
             <AlertTriangle className="w-3.5 h-3.5" />
-            {errors.length} validation message(s):
+            {errors.length} notice(s):
           </p>
           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
             {errors.map((err: AllotmentRowError, i: number) => (
               <div
                 key={i}
-                className="flex items-start gap-2 bg-red-500/8 border border-red-500/20 rounded-lg p-2.5 text-xs"
+                className="flex items-start gap-2 bg-red-50 border border-red-200 rounded p-2 text-xs"
               >
                 {err.row > 0 && (
-                  <span className="font-mono text-red-400 flex-shrink-0">Row {err.row}</span>
+                  <span className="font-mono text-red-700 font-bold flex-shrink-0">Row {err.row}</span>
                 )}
-                <span className="text-zinc-400">
+                <span className="text-red-900">
                   {err.student_id && err.student_id !== '-' && (
-                    <><span className="text-zinc-300">{err.student_id}</span> / </>
+                    <><span className="font-bold">{err.student_id}</span> / </>
                   )}
                   {err.course_code && err.course_code !== '-' && (
-                    <><span className="font-mono">{err.course_code}</span>: </>
+                    <><span className="font-mono font-bold">{err.course_code}</span>: </>
                   )}
                   {err.error}
                 </span>
@@ -227,76 +221,48 @@ function FacultyUploadResultCard({
   const errors = result.errors || [];
 
   return (
-    <div
-      className={`rounded-2xl border p-6 ${
-        success
-          ? 'bg-emerald-500/5 border-emerald-500/25'
-          : 'bg-amber-500/5 border-amber-500/25'
-      }`}
-    >
-      <div className="flex items-start gap-4 mb-5">
-        <div className={`p-2.5 rounded-xl ${success ? 'bg-emerald-500/15' : 'bg-amber-500/15'}`}>
+    <div className={`rounded-md border p-5 bg-white ${
+      success ? 'border-emerald-300' : 'border-amber-300'
+    }`}>
+      <div className="flex items-start gap-3 mb-4">
+        <div className={`p-2 rounded ${success ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
           {success ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <CheckCircle2 className="w-5 h-5" />
           ) : (
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
+            <AlertTriangle className="w-5 h-5" />
           )}
         </div>
         <div>
-          <p className={`font-semibold ${success ? 'text-emerald-300' : 'text-amber-300'}`}>
-            {success ? 'Faculty Teaching Matrix Ingested' : 'Faculty Allocation Complete with Warnings'}
+          <p className={`font-bold ${success ? 'text-emerald-800' : 'text-amber-800'}`}>
+            {success ? 'Faculty Teaching Matrix Ingested' : 'Faculty Allocation Notice'}
           </p>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-xs text-[#71717A] mt-0.5 font-mono">
             {result.total_assignments_processed ?? 0} teaching assignments processed
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-3 gap-2.5 mb-4">
         {[
-          {
-            label: 'Assignments Processed',
-            value: result.total_assignments_processed ?? 0,
-            icon: FileSpreadsheet,
-            color: 'text-blue-400',
-          },
-          {
-            label: 'Theory Sections Allocated',
-            value: result.sections_assigned ?? 0,
-            icon: BookOpen,
-            color: 'text-violet-400',
-          },
-          {
-            label: 'Practical Batches Allocated',
-            value: result.batches_assigned ?? 0,
-            icon: FlaskConical,
-            color: 'text-emerald-400',
-          },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 text-center">
-            <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
-            <p className="text-xl font-bold text-white">{value}</p>
-            <p className="text-[10px] text-zinc-500">{label}</p>
+          { label: 'Assignments', value: result.total_assignments_processed ?? 0, icon: FileSpreadsheet },
+          { label: 'Theory Sections', value: result.sections_assigned ?? 0, icon: BookOpen },
+          { label: 'Practical Batches', value: result.batches_assigned ?? 0, icon: FlaskConical },
+        ].map(({ label, value, icon: Icon }) => (
+          <div key={label} className="bg-[#FAFAFB] border border-[#E4E4E7] rounded p-2.5 text-center">
+            <Icon className="w-4 h-4 mx-auto mb-1 text-[#09090B]" />
+            <p className="text-xl font-bold text-[#09090B] leading-none">{value}</p>
+            <p className="text-[10px] text-[#71717A] font-mono mt-1">{label}</p>
           </div>
         ))}
       </div>
 
       {errors.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            {errors.length} notice(s):
-          </p>
-          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-            {errors.map((err: string, i: number) => (
-              <div
-                key={i}
-                className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-xs text-amber-200"
-              >
-                <span>{err}</span>
-              </div>
-            ))}
-          </div>
+        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+          {errors.map((err: string, i: number) => (
+            <div key={i} className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-900 font-mono">
+              {err}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -310,7 +276,7 @@ interface FacultyOption {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Offerings Panel
+// Offerings Panel (Clean Technical Architectural Theme)
 // ─────────────────────────────────────────────────────────────────────────────
 function OfferingsPanel({
   offerings,
@@ -330,17 +296,15 @@ function OfferingsPanel({
 
   if (offerings.length === 0) {
     return (
-      <div className="text-center py-10 text-zinc-500 text-sm">
-        No offerings found for this term.
+      <div className="text-center py-10 text-[#71717A] text-xs font-mono">
+        No course offerings found for this academic term.
       </div>
     );
   }
 
-  // Count core vs electives
   const coreCount = offerings.filter((o) => o.course_tier === 'CLASS').length;
   const electiveCount = offerings.filter((o) => o.course_tier === 'DEPARTMENT').length;
 
-  // Filter offerings
   const filteredOfferings = offerings.filter((o) => {
     if (activeTab !== 'ALL' && o.course_tier !== activeTab) return false;
     if (searchQuery.trim()) {
@@ -364,18 +328,19 @@ function OfferingsPanel({
 
   return (
     <div className="space-y-3">
-      {/* Clean Header Toolbar: Department Badge + Category Segmented Control + Search */}
-      <div className="space-y-2.5 pb-3 border-b border-zinc-800/80">
+      {/* Header Toolbar: Category Tabs + Search */}
+      <div className="space-y-2.5 pb-3 border-b border-[#E4E4E7]">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          {/* Syllabus Category Segmented Control */}
-          <div className="flex items-center gap-1 p-1 bg-zinc-950/80 rounded-xl border border-zinc-800/80">
+          
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1 p-1 bg-[#F4F4F6] rounded-md border border-[#E4E4E7]">
             <button
               type="button"
               onClick={() => setActiveTab('CLASS')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'CLASS'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                  ? 'bg-[#18181B] text-white shadow-sm'
+                  : 'text-[#71717A] hover:text-[#09090B] hover:bg-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -385,10 +350,10 @@ function OfferingsPanel({
             <button
               type="button"
               onClick={() => setActiveTab('DEPARTMENT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'DEPARTMENT'
-                  ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/20'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                  ? 'bg-[#18181B] text-white shadow-sm'
+                  : 'text-[#71717A] hover:text-[#09090B] hover:bg-white'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -398,10 +363,10 @@ function OfferingsPanel({
             <button
               type="button"
               onClick={() => setActiveTab('ALL')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+              className={`px-2.5 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1 ${
                 activeTab === 'ALL'
-                  ? 'bg-zinc-700 text-white shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-[#18181B] text-white shadow-sm'
+                  : 'text-[#71717A] hover:text-[#09090B] hover:bg-white'
               }`}
             >
               <span>All ({offerings.length})</span>
@@ -410,18 +375,18 @@ function OfferingsPanel({
 
           {/* Search Box */}
           <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#71717A]" />
             <input
               type="text"
               placeholder="Search subject or teacher..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 bg-zinc-950/70 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-500"
+              className="w-full pl-8 pr-7 py-1.5 bg-white border border-[#E4E4E7] rounded-md text-xs text-[#09090B] placeholder-[#71717A] focus:outline-none focus:border-[#FF5500]"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#09090B]"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -429,26 +394,26 @@ function OfferingsPanel({
           </div>
         </div>
 
-        {/* Informative Subline */}
-        <div className="flex items-center justify-between text-[11px] text-zinc-400 px-0.5">
+        {/* Subline */}
+        <div className="flex items-center justify-between text-[11px] text-[#71717A] font-mono px-0.5">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 font-semibold text-zinc-300">
-              <Building2 className="w-3 h-3 text-violet-400" />
+            <span className="inline-flex items-center gap-1 font-bold text-[#09090B]">
+              <Building2 className="w-3 h-3 text-[#FF5500]" />
               Computer Engineering (COMPS)
             </span>
             <span>•</span>
             <span>Official Syllabus Scheme</span>
           </div>
           <span>
-            Showing <strong className="text-zinc-200">{filteredOfferings.length}</strong> {activeTab === 'CLASS' ? 'core courses' : 'courses'}
+            Showing <strong className="text-[#09090B]">{filteredOfferings.length}</strong> courses
           </span>
         </div>
       </div>
 
-      {/* Compact Course List Container */}
+      {/* Course List */}
       <div className="max-h-[480px] overflow-y-auto pr-1 space-y-2">
         {filteredOfferings.length === 0 ? (
-          <div className="text-center py-10 text-zinc-500 text-xs bg-zinc-900/20 rounded-xl border border-dashed border-zinc-800">
+          <div className="text-center py-10 text-[#71717A] text-xs bg-[#FAFAFB] rounded-md border border-dashed border-[#E4E4E7] font-mono">
             No courses match the active search filter.
           </div>
         ) : (
@@ -456,7 +421,6 @@ function OfferingsPanel({
             const isOpen = expanded === o.id;
             const TierIcon = o.course_tier === 'CLASS' ? Layers : o.course_tier === 'DEPARTMENT' ? Building2 : Globe;
 
-            // Allocation status calculation
             const totalSlots = o.sections.length + o.batches.length;
             const assignedSlots =
               o.sections.filter((s) => s.faculty_id).length +
@@ -467,10 +431,10 @@ function OfferingsPanel({
             return (
               <div
                 key={o.id}
-                className={`border rounded-xl transition-all duration-200 overflow-hidden ${
+                className={`border rounded-md transition-all duration-200 overflow-hidden ${
                   isOpen
-                    ? 'bg-zinc-900/90 border-violet-500/50 shadow-lg shadow-black/30'
-                    : 'bg-zinc-900/40 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-800/40'
+                    ? 'bg-white border-[#FF5500] shadow-md'
+                    : 'bg-white border-[#E4E4E7] hover:border-[#D4D4D8]'
                 }`}
               >
                 <button
@@ -479,90 +443,87 @@ function OfferingsPanel({
                   className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors"
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div className="p-1.5 bg-zinc-800 rounded-lg flex-shrink-0 border border-zinc-700/50">
-                      <TierIcon className="w-3.5 h-3.5 text-violet-400" />
+                    <div className="p-1.5 bg-[#F4F4F6] rounded flex-shrink-0 border border-[#E4E4E7]">
+                      <TierIcon className="w-3.5 h-3.5 text-[#09090B]" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-xs text-white font-bold tracking-wide">
+                        <span className="font-mono text-xs text-[#09090B] font-bold tracking-wide">
                           {o.course_code}
                         </span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded border font-medium ${
-                            TIER_COLORS[o.course_tier] ?? ''
-                          }`}
-                        >
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-medium ${
+                          TIER_COLORS[o.course_tier] ?? ''
+                        }`}>
                           {o.course_tier === 'CLASS' ? 'Core' : 'Elective'}
                         </span>
-                        <span className="text-[9px] text-zinc-400 bg-zinc-800/80 px-1.5 py-0.2 rounded border border-zinc-700/40">
+                        <span className="text-[9px] text-[#52525B] bg-[#F4F4F6] px-1.5 py-0.2 rounded border border-[#E4E4E7] font-mono">
                           {MODE_LABELS[o.delivery_mode]}
                         </span>
                       </div>
-                      <p className="text-xs font-semibold text-zinc-200 truncate mt-0.5">
+                      <p className="text-xs font-bold text-[#09090B] truncate mt-0.5">
                         {o.course_name}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2.5 flex-shrink-0">
-                    {/* Allocation Status Indicator */}
                     {isFullyAssigned ? (
-                      <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded font-mono font-medium inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                         Allocated
                       </span>
                     ) : isPartiallyAssigned ? (
-                      <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-amber-400" />
+                      <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded font-mono font-medium inline-flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-600" />
                         {assignedSlots}/{totalSlots} Slots
                       </span>
                     ) : (
-                      <span className="text-[9px] bg-zinc-800 text-zinc-400 border border-zinc-700/60 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-zinc-500" />
+                      <span className="text-[9px] bg-zinc-100 text-zinc-600 border border-zinc-200 px-2 py-0.5 rounded font-mono font-medium inline-flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-zinc-400" />
                         Unassigned
                       </span>
                     )}
 
-                    <span className="hidden sm:inline-block font-mono text-[11px] text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded border border-zinc-700/40">
+                    <span className="hidden sm:inline-block font-mono text-[11px] text-[#71717A] bg-[#F4F4F6] px-2 py-0.5 rounded border border-[#E4E4E7]">
                       {o.sections.length > 0 && `${o.sections.length} sec`}
                       {o.sections.length > 0 && o.batches.length > 0 && ' • '}
                       {o.batches.length > 0 && `${o.batches.length} lab`}
                     </span>
 
                     <ChevronDown
-                      className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180 text-violet-400' : ''
+                      className={`w-3.5 h-3.5 text-[#71717A] transition-transform duration-200 ${
+                        isOpen ? 'rotate-180 text-[#FF5500]' : ''
                       }`}
                     />
                   </div>
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-zinc-800/70 p-3.5 bg-zinc-950/40 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="border-t border-[#E4E4E7] p-3.5 bg-[#FAFAFB] grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {/* Theory Sections */}
                     <div>
-                      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <BookOpen className="w-3 h-3 text-blue-400" /> Theory Sections
+                      <p className="text-[11px] font-bold text-[#09090B] uppercase tracking-wider mb-2 flex items-center gap-1.5 font-mono">
+                        <BookOpen className="w-3 h-3 text-[#FF5500]" /> Theory Sections
                       </p>
                       {o.sections.length === 0 ? (
-                        <p className="text-[11px] text-zinc-600 italic">None (Practical Only)</p>
+                        <p className="text-[11px] text-[#71717A] italic">None (Practical Only)</p>
                       ) : (
                         <div className="space-y-1.5">
                           {o.sections.map((s) => (
                             <div
                               key={s.id}
-                              className="bg-zinc-800/40 rounded-lg p-2 text-xs border border-zinc-700/30"
+                              className="bg-white rounded p-2.5 text-xs border border-[#E4E4E7] shadow-sm"
                             >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-mono text-blue-300 font-semibold">{s.section_name}</span>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-mono text-[#09090B] font-bold">{s.section_name}</span>
                                 {s.faculty_name && (
-                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-mono">
                                     Assigned
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                                <span className="text-[#71717A] text-[11px] font-mono flex-shrink-0">Faculty:</span>
                                 <select
                                   value={s.faculty_id || ''}
                                   disabled={assigningId === s.id}
@@ -572,7 +533,7 @@ function OfferingsPanel({
                                     await onAssignSection(s.id, e.target.value);
                                     setAssigningId(null);
                                   }}
-                                  className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                                  className="bg-white border border-[#E4E4E7] text-xs text-[#09090B] rounded px-2 py-1 flex-1 focus:border-[#FF5500] focus:outline-none"
                                 >
                                   <option value="">-- Assign Faculty --</option>
                                   {facultyList.map((f) => (
@@ -590,28 +551,28 @@ function OfferingsPanel({
 
                     {/* Practical Batches */}
                     <div>
-                      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <FlaskConical className="w-3 h-3 text-purple-400" /> Practical Batches
+                      <p className="text-[11px] font-bold text-[#09090B] uppercase tracking-wider mb-2 flex items-center gap-1.5 font-mono">
+                        <FlaskConical className="w-3 h-3 text-[#FF5500]" /> Practical Batches
                       </p>
                       {o.batches.length === 0 ? (
-                        <p className="text-[11px] text-zinc-600 italic">None</p>
+                        <p className="text-[11px] text-[#71717A] italic">None</p>
                       ) : (
                         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                           {o.batches.map((b) => (
                             <div
                               key={b.id}
-                              className="bg-zinc-800/40 rounded-lg p-2 text-xs border border-zinc-700/30"
+                              className="bg-white rounded p-2.5 text-xs border border-[#E4E4E7] shadow-sm"
                             >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-mono text-violet-300 font-semibold">{b.batch_name}</span>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-mono text-[#09090B] font-bold">{b.batch_name}</span>
                                 {b.faculty_name && (
-                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-mono">
                                     Assigned
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-zinc-500 text-[11px] flex-shrink-0">Faculty:</span>
+                                <span className="text-[#71717A] text-[11px] font-mono flex-shrink-0">Faculty:</span>
                                 <select
                                   value={b.faculty_id || ''}
                                   disabled={assigningId === b.id}
@@ -621,7 +582,7 @@ function OfferingsPanel({
                                     await onAssignBatch(b.id, e.target.value);
                                     setAssigningId(null);
                                   }}
-                                  className="bg-zinc-900 border border-zinc-700/60 text-xs text-zinc-200 rounded px-2 py-1 flex-1 focus:border-violet-500 focus:outline-none"
+                                  className="bg-white border border-[#E4E4E7] text-xs text-[#09090B] rounded px-2 py-1 flex-1 focus:border-[#FF5500] focus:outline-none"
                                 >
                                   <option value="">-- Assign Faculty --</option>
                                   {facultyList.map((f) => (
@@ -958,25 +919,19 @@ export default function AdminAllotmentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
-      {/* Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.12),transparent)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1f_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1f_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
-      </div>
-
+    <div style={{ minHeight: '100vh', background: '#ECECEE', color: '#09090B', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Unified Role-Aware Navbar */}
       <Navbar />
 
       <main className="relative z-10 max-w-7xl mx-auto px-6 py-10">
         <div className="mb-8">
-          <p className="text-xs font-mono text-violet-400 uppercase tracking-widest mb-1">
-            Allotment Engine · Admin Panel
+          <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#FF5500', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
+            Allotment Engine — Admin Panel
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">
+          <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '26px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em' }}>
             Student Allotment & Batch Manager
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#71717A', marginTop: '4px' }}>
             Upload the semester allotment sheet to auto-create theory sections, lab batches, and faculty slots.
           </p>
         </div>
@@ -985,14 +940,14 @@ export default function AdminAllotmentPage() {
           {/* Left: Upload Panel */}
           <div className="lg:col-span-2 space-y-5">
             {/* Segmented Upload Tabs */}
-            <div className="flex items-center gap-1 p-1 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl">
+            <div className="flex items-center gap-1 p-1 bg-white border border-[#E4E4E7] rounded-md shadow-sm">
               <button
                 type="button"
                 onClick={() => setUploadTab('students')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded transition-all ${
                   uploadTab === 'students'
-                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    ? 'bg-[#18181B] text-white shadow-sm'
+                    : 'text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F6]'
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
@@ -1001,10 +956,10 @@ export default function AdminAllotmentPage() {
               <button
                 type="button"
                 onClick={() => setUploadTab('faculty')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded transition-all ${
                   uploadTab === 'faculty'
-                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    ? 'bg-[#18181B] text-white shadow-sm'
+                    : 'text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F6]'
                 }`}
               >
                 <GraduationCap className="w-3.5 h-3.5" />
@@ -1015,49 +970,49 @@ export default function AdminAllotmentPage() {
             {/* TAB 1: Student Allotment */}
             {uploadTab === 'students' && (
               <>
-                <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
-                  <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-2">
-                    <Upload className="w-4 h-4 text-violet-400" />
+                <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
+                  <h2 className="text-sm font-bold text-[#09090B] mb-1 flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-[#FF5500]" />
                     Upload Student Allotment Sheet
                   </h2>
-                  <p className="text-xs text-zinc-500 mb-5">
+                  <p className="text-xs text-[#71717A] mb-4">
                     Required columns: student_id, roll_no, department, class_div, course_code, academic_term
                   </p>
                   <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
 
                   {file && (
-                    <div className="mt-4 flex items-center gap-3">
+                    <div className="mt-4 flex items-center gap-2">
                       <button
                         id="upload-submit-btn"
                         onClick={handleUpload}
                         disabled={uploading}
-                        className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-violet-500/20"
+                        className="flex-1 flex items-center justify-center gap-2 bg-[#FF5500] hover:bg-[#E64D00] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded transition-all shadow-md shadow-orange-500/20"
                       >
                         {uploading ? (
                           <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             Processing…
                           </>
                         ) : (
                           <>
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-3.5 h-3.5" />
                             Run Allotment Engine
                           </>
                         )}
                       </button>
                       <button
                         onClick={() => { setFile(null); setResult(null); }}
-                        className="p-3 bg-zinc-800/60 hover:bg-zinc-700/60 rounded-xl border border-zinc-700/40 transition-all"
+                        className="p-2.5 bg-[#F4F4F6] hover:bg-zinc-200 rounded border border-[#E4E4E7] transition-all text-[#71717A]"
                       >
-                        <X className="w-4 h-4 text-zinc-400" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
                 </div>
 
                 {/* Column Reference */}
-                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-5">
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                <div className="bg-white border border-[#E4E4E7] rounded-md p-5 shadow-sm">
+                  <p className="text-xs font-bold text-[#09090B] uppercase tracking-wider mb-3 font-mono">
                     Excel Column Reference
                   </p>
                   <div className="space-y-2">
@@ -1070,8 +1025,8 @@ export default function AdminAllotmentPage() {
                       ['academic_term', '2026-27-SEM5', 'Matches offerings'],
                     ].map(([col, ex, desc]) => (
                       <div key={col} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono text-violet-300 w-28 flex-shrink-0">{col}</span>
-                        <span className="text-zinc-500 flex-1">{desc}</span>
+                        <span className="font-mono text-[#09090B] font-bold bg-[#F4F4F6] px-1.5 py-0.5 rounded border border-[#E4E4E7] w-28 flex-shrink-0">{col}</span>
+                        <span className="text-[#71717A] flex-1">{desc}</span>
                       </div>
                     ))}
                   </div>
@@ -1082,14 +1037,14 @@ export default function AdminAllotmentPage() {
             {/* TAB 2: Faculty Teaching Matrix */}
             {uploadTab === 'faculty' && (
               <>
-                <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
+                <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-                      <GraduationCap className="w-4 h-4 text-emerald-400" />
+                    <h2 className="text-sm font-bold text-[#09090B] flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-[#FF5500]" />
                       Upload Faculty Teaching Matrix
                     </h2>
                   </div>
-                  <p className="text-xs text-zinc-500 mb-4">
+                  <p className="text-xs text-[#71717A] mb-4">
                     Auto-allocate teachers to proper classes & batches based on teaching specifications.
                   </p>
 
@@ -1097,9 +1052,9 @@ export default function AdminAllotmentPage() {
                     <button
                       type="button"
                       onClick={downloadSampleFacultyMatrix}
-                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/60 rounded-xl text-xs text-zinc-200 font-medium transition-all"
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-[#F4F4F6] hover:bg-zinc-200 border border-[#E4E4E7] rounded text-xs text-[#09090B] font-bold transition-all"
                     >
-                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <Download className="w-3.5 h-3.5 text-[#FF5500]" />
                       Download Sample Faculty Matrix CSV
                     </button>
                   </div>
@@ -1107,50 +1062,50 @@ export default function AdminAllotmentPage() {
                   <UploadZone onFileSelect={setFacultyFile} file={facultyFile} loading={uploadingFaculty} />
 
                   {facultyFile && (
-                    <div className="mt-4 flex items-center gap-3">
+                    <div className="mt-4 flex items-center gap-2">
                       <button
                         onClick={handleUploadFacultyMatrix}
                         disabled={uploadingFaculty}
-                        className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+                        className="flex-1 flex items-center justify-center gap-2 bg-[#FF5500] hover:bg-[#E64D00] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded transition-all shadow-md shadow-orange-500/20"
                       >
                         {uploadingFaculty ? (
                           <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             Allocating Faculty…
                           </>
                         ) : (
                           <>
-                            <Check className="w-4 h-4" />
+                            <Check className="w-3.5 h-3.5" />
                             Run Faculty Allocation
                           </>
                         )}
                       </button>
                       <button
                         onClick={() => { setFacultyFile(null); setFacultyUploadResult(null); }}
-                        className="p-3 bg-zinc-800/60 hover:bg-zinc-700/60 rounded-xl border border-zinc-700/40 transition-all"
+                        className="p-2.5 bg-[#F4F4F6] hover:bg-zinc-200 rounded border border-[#E4E4E7] transition-all text-[#71717A]"
                       >
-                        <X className="w-4 h-4 text-zinc-400" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
                 </div>
 
                 {/* Faculty Column Reference */}
-                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-5">
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+                <div className="bg-white border border-[#E4E4E7] rounded-md p-5 shadow-sm">
+                  <p className="text-xs font-bold text-[#09090B] uppercase tracking-wider mb-3 font-mono">
                     Faculty Matrix Column Reference
                   </p>
                   <div className="space-y-2">
                     {[
-                      ['faculty_email', 'anita.kulkarni@academic.edu', 'Teacher identifier / email / name'],
-                      ['course_code', '25PCC13CE14', 'Course / subject code in curriculum'],
+                      ['faculty_email', 'anita.kulkarni@academic.edu', 'Teacher identifier / email'],
+                      ['course_code', '25PCC13CE14', 'Course code in curriculum'],
                       ['class_div', 'COMP-A', 'Class division to teach'],
-                      ['batch_name', 'ALL / COMP-A-B1', 'ALL for theory section; B1/B2 for specific lab'],
-                      ['academic_term', '2026-27-SEM5', 'Semester term (optional, defaults to selected)'],
+                      ['batch_name', 'ALL / COMP-A-B1', 'ALL for theory; B1/B2 for practical lab'],
+                      ['academic_term', '2026-27-SEM5', 'Semester term'],
                     ].map(([col, ex, desc]) => (
                       <div key={col} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono text-emerald-300 w-28 flex-shrink-0">{col}</span>
-                        <span className="text-zinc-500 flex-1">{desc}</span>
+                        <span className="font-mono text-[#09090B] font-bold bg-[#F4F4F6] px-1.5 py-0.5 rounded border border-[#E4E4E7] w-28 flex-shrink-0">{col}</span>
+                        <span className="text-[#71717A] flex-1">{desc}</span>
                       </div>
                     ))}
                   </div>
@@ -1165,16 +1120,16 @@ export default function AdminAllotmentPage() {
             {facultyUploadResult && <FacultyUploadResultCard result={facultyUploadResult} />}
 
             {/* Offerings Panel */}
-            <div className="bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-violet-400" />
+            <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                <h2 className="text-sm font-bold text-[#09090B] flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-[#FF5500]" />
                   Course Offerings
                 </h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setShowAddFacultyModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-medium transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18181B] hover:bg-[#27272A] text-white rounded text-xs font-bold transition-all shadow-sm"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     + Add Faculty
@@ -1182,46 +1137,46 @@ export default function AdminAllotmentPage() {
                   <button
                     onClick={handleAutoEnrollCore}
                     disabled={autoEnrollingCore}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F4F4F6] hover:bg-zinc-200 text-[#09090B] border border-[#E4E4E7] rounded text-xs font-bold transition-all disabled:opacity-50"
                   >
                     <BookOpen className={`w-3 h-3 ${autoEnrollingCore ? 'animate-spin' : ''}`} />
-                    {autoEnrollingCore ? 'Enrolling…' : '🎯 Auto-Enroll Core'}
+                    {autoEnrollingCore ? 'Enrolling…' : 'Auto-Enroll Core'}
                   </button>
                   <button
                     onClick={handleAutoAssign}
                     disabled={autoAssigning || offerings.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/40 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500] hover:bg-[#E64D00] text-white rounded text-xs font-bold transition-all shadow-sm disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3 h-3 ${autoAssigning ? 'animate-spin' : ''}`} />
-                    {autoAssigning ? 'Assigning…' : '⚡ Auto-Assign Faculty'}
+                    {autoAssigning ? 'Assigning…' : 'Auto-Assign Faculty'}
                   </button>
                   <div className="relative">
                     <select
                       id="admin-term-select"
                       value={selectedTerm}
                       onChange={(e) => setSelectedTerm(e.target.value)}
-                      className="appearance-none bg-zinc-800/70 border border-zinc-700/50 text-xs text-zinc-300 pl-2.5 pr-7 py-1.5 rounded-lg"
+                      className="appearance-none bg-white border border-[#E4E4E7] text-xs text-[#09090B] font-mono pl-2.5 pr-7 py-1.5 rounded focus:outline-none focus:border-[#FF5500]"
                     >
                       {['2026-27-SEM5', '2026-27-SEM6', '2025-26-SEM5'].map((t) => (
                         <option key={t} value={t}>{t}</option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#71717A] pointer-events-none" />
                   </div>
                   <button
                     id="refresh-offerings-btn"
                     onClick={loadOfferings}
                     disabled={loadingOfferings}
-                    className="p-1.5 bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/40 rounded-lg transition-all"
+                    className="p-1.5 bg-white hover:bg-[#F4F4F6] border border-[#E4E4E7] rounded transition-all text-[#71717A]"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${loadingOfferings ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingOfferings ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               </div>
 
               {loadingOfferings ? (
                 <div className="flex justify-center py-8">
-                  <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-[#FF5500] border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : (
                 <OfferingsPanel
@@ -1238,71 +1193,71 @@ export default function AdminAllotmentPage() {
 
       {/* Manual Add Faculty Modal */}
       {showAddFacultyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-700/80 rounded-2xl p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-white border border-[#E4E4E7] rounded-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-500/15 rounded-xl text-emerald-400 border border-emerald-500/20">
+                <div className="p-2 bg-[#F4F4F6] rounded text-[#09090B] border border-[#E4E4E7]">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Add New Faculty</h3>
-                  <p className="text-xs text-zinc-400">Register instructor for class and batch allocation</p>
+                  <h3 className="text-base font-bold text-[#09090B]">Add New Faculty</h3>
+                  <p className="text-xs text-[#71717A]">Register instructor for class and batch allocation</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowAddFacultyModal(false)}
-                className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                className="p-1.5 text-[#71717A] hover:text-[#09090B] rounded hover:bg-[#F4F4F6] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {addFacultySuccess && (
-              <div className="mb-4 p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
                 {addFacultySuccess}
               </div>
             )}
 
             {addFacultyError && (
-              <div className="mb-4 p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-600" />
                 {addFacultyError}
               </div>
             )}
 
             <form onSubmit={handleCreateFaculty} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Full Name</label>
+                <label className="block text-xs font-bold text-[#09090B] mb-1">Full Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Prof. Anita Kulkarni"
                   value={newFacultyName}
                   onChange={(e) => setNewFacultyName(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-white border border-[#E4E4E7] rounded px-3 py-2 text-sm text-[#09090B] placeholder-[#71717A] focus:outline-none focus:border-[#FF5500]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Email Address</label>
+                <label className="block text-xs font-bold text-[#09090B] mb-1">Email Address</label>
                 <input
                   type="email"
                   required
                   placeholder="e.g. anita.kulkarni@academic.edu"
                   value={newFacultyEmail}
                   onChange={(e) => setNewFacultyEmail(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-white border border-[#E4E4E7] rounded px-3 py-2 text-sm text-[#09090B] placeholder-[#71717A] focus:outline-none focus:border-[#FF5500]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Department</label>
+                <label className="block text-xs font-bold text-[#09090B] mb-1">Department</label>
                 <select
                   value={newFacultyDept}
                   onChange={(e) => setNewFacultyDept(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-white border border-[#E4E4E7] rounded px-3 py-2 text-sm text-[#09090B] focus:outline-none focus:border-[#FF5500]"
                 >
                   <option value="COMP">Computer Engineering (COMP)</option>
                   <option value="AIDS">Artificial Intelligence & Data Science (AIDS)</option>
@@ -1312,28 +1267,28 @@ export default function AdminAllotmentPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Initial Password</label>
+                <label className="block text-xs font-bold text-[#09090B] mb-1">Initial Password</label>
                 <input
                   type="text"
                   value={newFacultyPassword}
                   onChange={(e) => setNewFacultyPassword(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 font-mono text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-white border border-[#E4E4E7] rounded px-3 py-2 font-mono text-xs text-[#09090B] focus:outline-none focus:border-[#FF5500]"
                 />
-                <p className="text-[11px] text-zinc-500 mt-1">Faculty can change this after logging in.</p>
+                <p className="text-[11px] text-[#71717A] mt-1 font-mono">Faculty can change this after logging in.</p>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowAddFacultyModal(false)}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors"
+                  className="px-4 py-2 bg-[#F4F4F6] hover:bg-zinc-200 text-[#09090B] text-xs font-bold rounded transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addingFaculty}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#FF5500] hover:bg-[#E64D00] text-white text-xs font-bold rounded shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all"
                 >
                   {addingFaculty ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   {addingFaculty ? 'Creating...' : 'Create Faculty'}
