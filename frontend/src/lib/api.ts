@@ -3,6 +3,8 @@ export interface User {
   email: string;
   full_name: string;
   role: 'STUDENT' | 'FACULTY' | 'ADMIN';
+  student_erp_id?: string;
+  roll_no?: string;
 }
 
 export interface TokenResponse {
@@ -12,6 +14,8 @@ export interface TokenResponse {
   email: string;
   full_name: string;
   role: 'STUDENT' | 'FACULTY' | 'ADMIN';
+  student_erp_id?: string;
+  roll_no?: string;
 }
 
 export const getStoredToken = (): string | null => {

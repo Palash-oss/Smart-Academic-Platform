@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Search,
   BookOpen,
+  FlaskConical,
   Plus,
   ChevronDown,
   ChevronRight,
@@ -92,6 +93,7 @@ const S = {
 };
 
 export default function FacultyDashboardPage() {
+  const [selectedTerm, setSelectedTerm] = useState('2026-27-SEM5');
   const [students, setStudents] = useState<StudentOverview[]>([]);
   const [teachingLoad, setTeachingLoad] = useState<FacultyTeachingLoad | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,15 +103,15 @@ export default function FacultyDashboardPage() {
   const [expandedStudentIds, setExpandedStudentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadFacultyData();
+    loadFacultyData(selectedTerm);
   }, []);
 
-  const loadFacultyData = async () => {
+  const loadFacultyData = async (term = selectedTerm) => {
     setLoading(true);
     try {
       const [overviewRes, loadRes] = await Promise.all([
         fetchWithAuth('/api/attendance/faculty/overview'),
-        fetchWithAuth('/api/v1/faculty/my-subjects?academic_term=2026-27-SEM5'),
+        fetchWithAuth(`/api/v1/faculty/my-subjects?academic_term=${encodeURIComponent(term)}`),
       ]);
 
       if (overviewRes.ok) {
@@ -194,29 +196,56 @@ export default function FacultyDashboardPage() {
             </h1>
           </div>
 
-          <Link
-            href="/faculty/mark"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
-              background: '#FF5500',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '13.5px',
-              fontWeight: 700,
-              boxShadow: '0 2px 10px rgba(255, 85, 0, 0.3)',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#E64D00'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#FF5500'; e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            <Plus style={{ width: '15px', height: '15px' }} />
-            <span>Mark Attendance</span>
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '7px 12px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+              <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', fontWeight: 700 }}>TERM:</span>
+              <select
+                value={selectedTerm}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  setSelectedTerm(t);
+                  loadFacultyData(t);
+                }}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#09090B',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="2026-27-SEM5">2026-27-SEM5 (Jul–Dec 2026) • Sem 5 Ongoing</option>
+                <option value="2026-27-SEM6">2026-27-SEM6 (Jan–Jun 2027) • Sem 6 Next</option>
+              </select>
+            </div>
+
+            <Link
+              href="/faculty/mark"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 20px',
+                background: '#FF5500',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontFamily: '"Plus Jakarta Sans", sans-serif',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                boxShadow: '0 2px 10px rgba(255, 85, 0, 0.3)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#E64D00'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#FF5500'; e.currentTarget.style.transform = 'translateY(0)'; }}
+            >
+              <Plus style={{ width: '15px', height: '15px' }} />
+              <span>Mark Attendance</span>
+            </Link>
+          </div>
         </div>
 
         {/* Stats Row */}
@@ -226,6 +255,7 @@ export default function FacultyDashboardPage() {
             { label: 'Good Standing', value: goodCount, icon: <CheckCircle2 style={{ width: '18px', height: '18px', color: '#16A34A' }} />, iconBg: '#F0FDF4', color: '#16A34A' },
             { label: 'At Risk (<75%)', value: atRiskCount, icon: <AlertTriangle style={{ width: '18px', height: '18px', color: '#DC2626' }} />, iconBg: '#FEF2F2', color: '#DC2626' },
             { label: 'Courses Teaching', value: teachingLoad?.total_courses ?? 0, icon: <BookOpen style={{ width: '18px', height: '18px', color: '#FF5500' }} />, iconBg: '#FFF4ED', color: '#FF5500' },
+            { label: 'Lab Batches', value: teachingLoad?.total_batches ?? 0, icon: <FlaskConical style={{ width: '18px', height: '18px', color: '#FF5500' }} />, iconBg: '#FFF4ED', color: '#FF5500' },
           ].map((stat) => (
             <div key={stat.label} style={{ ...S.card, padding: '18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

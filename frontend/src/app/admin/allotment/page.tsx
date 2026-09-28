@@ -1157,8 +1157,11 @@ export default function AdminAllotmentPage() {
                       onChange={(e) => setSelectedTerm(e.target.value)}
                       className="appearance-none bg-white border border-[#E4E4E7] text-xs text-[#09090B] font-mono pl-2.5 pr-7 py-1.5 rounded focus:outline-none focus:border-[#FF5500]"
                     >
-                      {['2026-27-SEM5', '2026-27-SEM6', '2025-26-SEM5'].map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                      {[
+                        { value: '2026-27-SEM5', label: '2026-27-SEM5 (Jul–Dec 2026) • Ongoing' },
+                        { value: '2026-27-SEM6', label: '2026-27-SEM6 (Jan–Jun 2027) • Next Sem' },
+                      ].map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#71717A] pointer-events-none" />

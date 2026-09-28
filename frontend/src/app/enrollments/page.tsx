@@ -23,6 +23,7 @@ import {
   ArrowRight,
   ShieldCheck,
   UserCheck,
+  AlertCircle,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -43,10 +44,8 @@ import {
 } from '@/lib/allotment';
 
 const ACADEMIC_TERMS = [
-  '2026-27-SEM5',
-  '2026-27-SEM6',
-  '2025-26-SEM5',
-  '2025-26-SEM6',
+  { value: '2026-27-SEM5', label: '2026-27-SEM5 (Jul–Dec 2026) • Sem 5 Ongoing' },
+  { value: '2026-27-SEM6', label: '2026-27-SEM6 (Jan–Jun 2027) • Sem 6 Next' },
 ];
 
 const TIER_ICONS = {
@@ -426,7 +425,7 @@ function StatCard({
 
 export default function MyEnrollmentsPage() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<'STUDENT' | 'FACULTY' | 'ADMIN'>('STUDENT');
+  const [userRole, setUserRole] = useState<'STUDENT' | 'FACULTY' | 'ADMIN' | null>(null);
   const [userName, setUserName] = useState('');
   const [userErpId, setUserErpId] = useState('');
   
@@ -437,7 +436,7 @@ export default function MyEnrollmentsPage() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTerm, setSelectedTerm] = useState(ACADEMIC_TERMS[0]);
+  const [selectedTerm, setSelectedTerm] = useState(ACADEMIC_TERMS[0].value);
   const [filterTier, setFilterTier] = useState<string>('ALL');
 
   useEffect(() => {
@@ -448,10 +447,11 @@ export default function MyEnrollmentsPage() {
     }
     setUserRole(user.role as any);
     setUserName(user.full_name);
-    setUserErpId(user.id);
+    setUserErpId(user.student_erp_id || user.id);
   }, [router]);
 
   const loadData = useCallback(async () => {
+    if (!userRole) return;
     setLoading(true);
     setError(null);
     try {
@@ -462,6 +462,9 @@ export default function MyEnrollmentsPage() {
 
       const res = await fetchWithAuth(endpoint);
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('Your session credentials have expired or are unauthorized for this view. Please sign in again.');
+        }
         throw new Error(`Failed to load data: ${res.statusText}`);
       }
       const data = await res.json();
@@ -469,6 +472,7 @@ export default function MyEnrollmentsPage() {
         setFacultyData(data);
       } else {
         setStudentData(data);
+        if (data.student_id) setUserErpId(data.student_id);
       }
     } catch (err: any) {
       setError(err.message || 'Error loading subject allocations.');
@@ -516,8 +520,8 @@ export default function MyEnrollmentsPage() {
             </h1>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13.5px', color: '#71717A', marginTop: '4px' }}>
               {isFaculty
-                ? `Official lecture sections and practical batches assigned to Prof. ${userName}`
-                : `Student ERP ID: ${userErpId || '2023CE001'} · View assigned lecture divisions & lab batches`}
+                ? `Official lecture sections and practical batches assigned to ${userName.startsWith('Prof.') ? userName : `Prof. ${userName}`}`
+                : `Student ERP ID: ${studentData?.student_id || userErpId || 'COMP2024A001'}${studentData?.roll_no ? ` · Roll: ${studentData.roll_no}` : ''} · View assigned lecture divisions & lab batches`}
             </p>
           </div>
 
@@ -530,8 +534,8 @@ export default function MyEnrollmentsPage() {
                 className="appearance-none bg-white border border-[#E4E4E7] hover:border-[#D4D4D8] text-xs text-[#09090B] font-mono pl-3 pr-8 py-2 rounded-md focus:outline-none focus:border-[#FF5500] transition-colors cursor-pointer shadow-sm"
               >
                 {ACADEMIC_TERMS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                  <option key={t.value} value={t.value}>
+                    {t.label}
                   </option>
                 ))}
               </select>
@@ -583,19 +587,19 @@ export default function MyEnrollmentsPage() {
               value={studentData.enrollments.length}
             />
             <StatCard
-              icon={BookMarked}
-              label="Theory Lectures"
-              value={studentData.enrollments.filter((e) => e.theory !== null).length}
+              icon={Layers}
+              label="Class Core (PCC)"
+              value={studentData.enrollments.filter((e) => e.tier === 'CLASS').length}
             />
             <StatCard
-              icon={FlaskConical}
-              label="Lab Batches"
-              value={studentData.enrollments.filter((e) => e.practical !== null).length}
+              icon={Building2}
+              label="Department Electives"
+              value={studentData.enrollments.filter((e) => e.tier === 'DEPARTMENT').length}
             />
             <StatCard
-              icon={Users}
-              label="Faculty Assigned"
-              value={studentData.enrollments.filter((e) => e.theory?.faculty !== 'To be assigned' && e.practical?.faculty !== 'To be assigned').length}
+              icon={Globe}
+              label="Institute Open Elective"
+              value={studentData.enrollments.filter((e) => e.tier === 'INSTITUTE').length}
             />
           </div>
         )}
@@ -640,6 +644,27 @@ export default function MyEnrollmentsPage() {
           </div>
         )}
 
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded bg-white text-red-600 border border-red-200 flex-shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-red-900">Session / Authorization Alert</p>
+                <p className="text-xs text-red-700">{error}</p>
+              </div>
+            </div>
+            <Link
+              href="/login"
+              className="text-xs font-bold px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white transition-colors whitespace-nowrap"
+            >
+              Sign In Again
+            </Link>
+          </div>
+        )}
+
         {/* Loading Spinner */}
         {loading && (
           <div className="text-center py-16">
@@ -666,14 +691,20 @@ export default function MyEnrollmentsPage() {
                 <p className="text-xs text-[#71717A] max-w-md mx-auto mb-5">
                   No theory sections or practical lab batches are currently assigned to your faculty profile for term {selectedTerm}.
                 </p>
-                <Link
-                  href="/admin/allotment"
-                  className="inline-flex items-center gap-2 text-xs font-bold bg-[#FF5500] hover:bg-[#E64D00] text-white px-4 py-2.5 rounded-md transition-all shadow-md shadow-orange-500/20"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Go to Allotment Engine to Assign Sections</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                {userRole === 'ADMIN' ? (
+                  <Link
+                    href="/admin/allotment"
+                    className="inline-flex items-center gap-2 text-xs font-bold bg-[#FF5500] hover:bg-[#E64D00] text-white px-4 py-2.5 rounded-md transition-all shadow-md shadow-orange-500/20"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span>Go to Allotment Engine to Assign Sections</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                ) : (
+                  <p className="text-xs text-[#71717A] italic">
+                    Faculty class and laboratory allotments are managed centrally by the Academic Dean.
+                  </p>
+                )}
               </div>
             )}
           </div>

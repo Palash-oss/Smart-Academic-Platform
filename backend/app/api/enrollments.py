@@ -695,6 +695,8 @@ async def my_enrollments(
 
     return MyEnrollmentsResponse(
         student_id=current_user.student_erp_id or str(current_user.id),
+        student_name=current_user.full_name,
+        roll_no=current_user.roll_no,
         academic_term=academic_term,
         enrollments=entries,
     )

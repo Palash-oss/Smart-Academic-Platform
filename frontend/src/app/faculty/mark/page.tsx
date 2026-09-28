@@ -42,6 +42,7 @@ export default function MarkAttendancePage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDeptCode, setSelectedDeptCode] = useState('COMP');
   const [selectedDivName, setSelectedDivName] = useState('A');
+  const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
   
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseName, setSelectedCourseName] = useState('');
@@ -80,12 +81,12 @@ export default function MarkAttendancePage() {
     }
   }, [selectedDeptCode]);
 
-  // 3. Fetch Students when Department or Division changes
+  // 3. Fetch Students when Department, Division, or Batch changes
   useEffect(() => {
     if (selectedDeptCode && selectedDivName) {
-      loadStudents(selectedDeptCode, selectedDivName);
+      loadStudents(selectedDeptCode, selectedDivName, selectedBatch);
     }
-  }, [selectedDeptCode, selectedDivName]);
+  }, [selectedDeptCode, selectedDivName, selectedBatch]);
 
   // 4. Fetch Marked Sessions history for selected course and date
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function MarkAttendancePage() {
   const loadCourses = async (deptCode: string) => {
     setLoadingCourses(true);
     try {
-      const res = await fetchWithAuth(`/api/attendance/faculty/courses?department_code=${deptCode}`);
+      const res = await fetchWithAuth(`/api/attendance/faculty/courses?dept_code=${deptCode}&department_code=${deptCode}`);
       if (res.ok) {
         const data: Course[] = await res.json();
         setCourses(data);
@@ -136,10 +137,11 @@ export default function MarkAttendancePage() {
     }
   };
 
-  const loadStudents = async (deptCode: string, divName: string) => {
+  const loadStudents = async (deptCode: string, divName: string, batchName = selectedBatch) => {
     setLoadingStudents(true);
     try {
-      const res = await fetchWithAuth(`/api/attendance/faculty/students?department_code=${deptCode}&division_name=${divName}`);
+      const batchParam = batchName && batchName !== 'ALL' ? `&batch_name=${batchName}` : '';
+      const res = await fetchWithAuth(`/api/attendance/faculty/students?dept_code=${deptCode}&div_name=${divName}${batchParam}`);
       if (res.ok) {
         const data: Student[] = await res.json();
         setStudents(data);
@@ -462,6 +464,24 @@ export default function MarkAttendancePage() {
                     Division {div.name} ({div.student_count} Students)
                   </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Practical Batch Scope */}
+            <div>
+              <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Batch / Lab Scope
+              </label>
+              <select
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+                style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: '#09090B', outline: 'none' }}
+              >
+                <option value="ALL">Entire Division (70 Students • Theory)</option>
+                <option value="B1">Batch B1 (Roll 1–18 • 18 Students)</option>
+                <option value="B2">Batch B2 (Roll 19–36 • 18 Students)</option>
+                <option value="B3">Batch B3 (Roll 37–53 • 17 Students)</option>
+                <option value="B4">Batch B4 (Roll 54–70 • 17 Students)</option>
               </select>
             </div>
 

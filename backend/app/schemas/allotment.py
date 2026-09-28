@@ -98,6 +98,8 @@ class EnrollmentEntry(BaseModel):
 
 class MyEnrollmentsResponse(BaseModel):
     student_id: str
+    student_name: Optional[str] = None
+    roll_no: Optional[str] = None
     academic_term: str
     enrollments: List[EnrollmentEntry]
 

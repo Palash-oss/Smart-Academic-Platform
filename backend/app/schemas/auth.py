@@ -25,6 +25,8 @@ class TokenResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    student_erp_id: Optional[str] = None
+    roll_no: Optional[str] = None
 
 
 class UserResponse(BaseModel):

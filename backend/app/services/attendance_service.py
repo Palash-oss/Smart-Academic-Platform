@@ -4,7 +4,19 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from app.db.models import AttendanceLog, User, Department, Division, Course, FacultyCourseDivision, LectureSession, StudentEnrollment, CourseOffering
+from app.db.models import (
+    AttendanceLog,
+    User,
+    Department,
+    Division,
+    Course,
+    FacultyCourseDivision,
+    LectureSession,
+    StudentEnrollment,
+    CourseOffering,
+    PracticalBatch,
+    ClassSection,
+)
 
 
 def calculate_attendance_percentage(attended: int, total: int) -> float:
@@ -285,9 +297,44 @@ async def fetch_faculty_departments_and_divisions(
     return result
 
 
-async def fetch_courses_by_department(db: AsyncSession, dept_code: str) -> List[Dict[str, Any]]:
-    """Returns list of courses belonging to a specific department code."""
+async def fetch_courses_by_department(
+    db: AsyncSession,
+    dept_code: str,
+    semester: Optional[int] = 5,
+    faculty_id: Optional[uuid.UUID] = None
+) -> List[Dict[str, Any]]:
+    """Returns list of courses belonging to a specific department code for ongoing semester."""
+    if faculty_id:
+        # Check courses assigned to this faculty in the ongoing semester
+        from app.db.models import ClassSection, PracticalBatch
+        assigned_stmt = (
+            select(Course)
+            .join(CourseOffering, CourseOffering.course_id == Course.id)
+            .join(Department, Course.department_id == Department.id)
+            .outerjoin(ClassSection, ClassSection.offering_id == CourseOffering.id)
+            .outerjoin(PracticalBatch, PracticalBatch.offering_id == CourseOffering.id)
+            .where(
+                Department.code == dept_code,
+                Course.semester == (semester or 5),
+                CourseOffering.academic_term == "2026-27-SEM5",
+                (ClassSection.faculty_id == faculty_id) | (PracticalBatch.faculty_id == faculty_id)
+            )
+            .distinct()
+        )
+        res = await db.execute(assigned_stmt)
+        assigned_courses = res.scalars().all()
+        if assigned_courses:
+            return [{
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name,
+                "full_label": f"{c.name} ({c.code})",
+                "semester": c.semester
+            } for c in assigned_courses]
+
     stmt = select(Course).join(Department).where(Department.code == dept_code)
+    if semester:
+        stmt = stmt.where(Course.semester == semester)
     res = await db.execute(stmt)
     courses = res.scalars().all()
 
@@ -303,23 +350,36 @@ async def fetch_courses_by_department(db: AsyncSession, dept_code: str) -> List[
 async def fetch_students_by_division(
     db: AsyncSession,
     dept_code: str,
-    div_name: str
+    div_name: str,
+    batch_name: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """Fetches exact student roster for a selected Department + Division."""
+    """Fetches exact student roster for a selected Department + Division, optionally filtered by batch."""
     stmt = (
         select(User)
         .join(Department, User.department_id == Department.id)
         .join(Division, User.division_id == Division.id)
         .where(User.role == "STUDENT", Department.code == dept_code, Division.name == div_name)
-        .order_by(User.full_name)
     )
+
+    if batch_name and batch_name != "ALL":
+        target_b = batch_name.split("-")[-1]
+        exact_batch = f"{dept_code}-{div_name}-{target_b}"
+        stmt = (
+            stmt.join(StudentEnrollment, StudentEnrollment.student_id == User.id)
+            .join(PracticalBatch, StudentEnrollment.batch_id == PracticalBatch.id)
+            .where(PracticalBatch.batch_name == exact_batch)
+            .distinct()
+        )
+
+    stmt = stmt.order_by(User.roll_no, User.full_name)
     res = await db.execute(stmt)
     students = res.scalars().all()
 
     return [{
         "student_id": str(st.id),
         "student_name": st.full_name,
-        "student_email": st.email
+        "student_email": st.email,
+        "roll_no": st.roll_no or ""
     } for st in students]
 
 

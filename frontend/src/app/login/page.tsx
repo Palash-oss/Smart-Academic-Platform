@@ -66,6 +66,8 @@ export default function LoginPage() {
         email: data.email,
         full_name: data.full_name,
         role: data.role,
+        student_erp_id: data.student_erp_id,
+        roll_no: data.roll_no,
       });
 
       if (data.role === 'FACULTY') {
@@ -113,6 +115,8 @@ export default function LoginPage() {
         email: data.email,
         full_name: data.full_name,
         role: data.role,
+        student_erp_id: data.student_erp_id,
+        roll_no: data.roll_no,
       });
 
       if (data.role === 'FACULTY') {

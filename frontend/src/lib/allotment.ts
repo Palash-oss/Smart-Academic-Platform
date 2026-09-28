@@ -21,6 +21,8 @@ export interface EnrollmentEntry {
 
 export interface MyEnrollmentsResponse {
   student_id: string;
+  student_name?: string;
+  roll_no?: string;
   academic_term: string;
   enrollments: EnrollmentEntry[];
 }

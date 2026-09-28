@@ -80,23 +80,31 @@ async def get_faculty_departments(
 
 @router.get("/faculty/courses")
 async def get_faculty_courses(
-    dept_code: str = Query(...),
+    dept_code: Optional[str] = Query(None),
+    department_code: Optional[str] = Query(None),
+    semester: Optional[int] = Query(5),
     current_user: User = Depends(require_role(["FACULTY"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns department-scoped courses for lecture session selection."""
-    return await fetch_courses_by_department(db, dept_code)
+    """Returns courses for lecture session selection, scoped to the faculty member in the ongoing semester."""
+    code = department_code or dept_code or "COMP"
+    return await fetch_courses_by_department(db, code, semester=semester, faculty_id=current_user.id)
 
 
 @router.get("/faculty/students")
 async def get_faculty_division_students(
-    dept_code: str = Query(...),
-    div_name: str = Query(...),
+    dept_code: Optional[str] = Query(None),
+    department_code: Optional[str] = Query(None),
+    div_name: Optional[str] = Query(None),
+    division_name: Optional[str] = Query(None),
+    batch_name: Optional[str] = Query(None),
     current_user: User = Depends(require_role(["FACULTY"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns student roster for a specific Department + Division (e.g. COMP-A, COMP-B)."""
-    return await fetch_students_by_division(db, dept_code, div_name)
+    """Returns student roster for a specific Department + Division (e.g. COMP-A, COMP-B) and optional batch."""
+    code = department_code or dept_code or "COMP"
+    dname = division_name or div_name or "A"
+    return await fetch_students_by_division(db, code, dname, batch_name=batch_name)
 
 
 @router.get("/faculty/sessions")

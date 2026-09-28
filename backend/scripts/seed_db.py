@@ -24,7 +24,32 @@ from app.db.models import (
 )
 from app.core.security import hash_password
 
-ACADEMIC_TERM = "2026-27-SEM5"
+TERM_SEM5 = "2026-27-SEM5"  # July - December 2026 (Ongoing)
+TERM_SEM6 = "2026-27-SEM6"  # January - June 2027 (Upcoming)
+
+# ---------------------------------------------------------------------------
+# EXACTLY 18 FACULTY PROFILES (Computer Engineering Department)
+# ---------------------------------------------------------------------------
+FACULTY_PROFILES = [
+    {"name": "Prof. David Vance", "email": "faculty@academic.edu"},
+    {"name": "Prof. Anita Kulkarni", "email": "anita.kulkarni@academic.edu"},
+    {"name": "Prof. Rajesh Iyer", "email": "rajesh.iyer@academic.edu"},
+    {"name": "Prof. Sneha Deshmukh", "email": "sneha.deshmukh@academic.edu"},
+    {"name": "Prof. Vikram Malhotra", "email": "vikram.malhotra@academic.edu"},
+    {"name": "Prof. Priya Sharma", "email": "priya.sharma@academic.edu"},
+    {"name": "Prof. Arjun Nair", "email": "arjun.nair@academic.edu"},
+    {"name": "Prof. Sunita Deshpande", "email": "sunita.deshpande@academic.edu"},
+    {"name": "Prof. Manoj Patil", "email": "manoj.patil@academic.edu"},
+    {"name": "Prof. Deepa Joshi", "email": "deepa.joshi@academic.edu"},
+    {"name": "Prof. Sachin Kulkarni", "email": "sachin.kulkarni@academic.edu"},
+    {"name": "Prof. Neha Gupta", "email": "neha.gupta@academic.edu"},
+    {"name": "Prof. Sanjay Mehta", "email": "sanjay.mehta@academic.edu"},
+    {"name": "Prof. Pooja Rane", "email": "pooja.rane@academic.edu"},
+    {"name": "Prof. Amit Verma", "email": "amit.verma@academic.edu"},
+    {"name": "Prof. Kavita Rao", "email": "kavita.rao@academic.edu"},
+    {"name": "Prof. Rahul Shah", "email": "rahul.shah@academic.edu"},
+    {"name": "Prof. Swati Shinde", "email": "swati.shinde@academic.edu"},
+]
 
 # Realistic names for 70 students in COMP-A
 FIRST_NAMES_A = [
@@ -68,23 +93,56 @@ LAST_NAMES_B = [
     "Vance", "Sterling", "Holloway", "Blackwood", "Sinclair", "Vanderbilt", "Hastings", "Montgomery", "Kensington", "Lancaster"
 ]
 
-FACULTY_PROFILES = [
-    {"name": "Prof. Anita Kulkarni", "email": "anita.kulkarni@academic.edu"},
-    {"name": "Prof. Rajesh Iyer", "email": "rajesh.iyer@academic.edu"},
-    {"name": "Prof. Sneha Deshmukh", "email": "sneha.deshmukh@academic.edu"},
-    {"name": "Prof. Vikram Malhotra", "email": "vikram.malhotra@academic.edu"},
-    {"name": "Prof. Priya Sharma", "email": "priya.sharma@academic.edu"},
-    {"name": "Prof. Arjun Nair", "email": "arjun.nair@academic.edu"},
-    {"name": "Prof. David Vance", "email": "faculty@academic.edu"},
-]
-
-# The 5 Core Semester 5 Courses for Computer Engineering (Strictly COMPS)
-CORE_COURSES = [
+# ---------------------------------------------------------------------------
+# SEMESTER V COURSES (FRCRCE-3-26 Scheme w.e.f. A.Y. 2026-27)
+# ---------------------------------------------------------------------------
+CORE_COURSES_SEM5 = [
+    {
+        "code": "25PCC13CE19",
+        "name": "Cryptography and System Security",
+        "tier": "CLASS",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "rajesh.iyer@academic.edu",
+        "theory_fac_b": "rajesh.iyer@academic.edu",
+        "lab_fac_a": ["rajesh.iyer@academic.edu"] * 4,
+        "lab_fac_b": ["rajesh.iyer@academic.edu"] * 4,
+    },
+    {
+        "code": "25PCC13CE21",
+        "name": "Theory of Computer Science",
+        "tier": "CLASS",
+        "delivery_mode": "THEORY_TUTORIAL",
+        "th_hours": 2,
+        "pr_hours": 0,
+        "tu_hours": 1,
+        "theory_fac_a": "vikram.malhotra@academic.edu",
+        "theory_fac_b": "sneha.deshmukh@academic.edu",
+        "lab_fac_a": ["vikram.malhotra@academic.edu"] * 4,
+        "lab_fac_b": ["sneha.deshmukh@academic.edu"] * 4,
+    },
+    {
+        "code": "25PCC13CE22",
+        "name": "Computer Networks",
+        "tier": "CLASS",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        # Prof. David Vance teaches COMP-A Theory (70) and all 4 Lab batches (B1, B2, B3, B4)
+        "theory_fac_a": "faculty@academic.edu",
+        "theory_fac_b": "priya.sharma@academic.edu",
+        "lab_fac_a": ["faculty@academic.edu"] * 4,
+        "lab_fac_b": ["priya.sharma@academic.edu"] * 4,
+    },
     {
         "code": "25PCC13CE14",
         "name": "Data Warehousing and Mining",
+        "tier": "CLASS",
         "delivery_mode": "INTEGRATED_TH_PR",
-        "th_hours": 3,
+        "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
         "theory_fac_a": "anita.kulkarni@academic.edu",
@@ -93,79 +151,484 @@ CORE_COURSES = [
         "lab_fac_b": ["anita.kulkarni@academic.edu", "anita.kulkarni@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
     },
     {
-        "code": "25PCC13CE19",
-        "name": "Cryptography and System Security",
+        "code": "25VSE13CE04",
+        "name": "Cloud Computing Laboratory",
+        "tier": "CLASS",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 4,
+        "tu_hours": 0,
+        "theory_fac_a": None,
+        "theory_fac_b": None,
+        "lab_fac_a": ["arjun.nair@academic.edu"] * 4,
+        "lab_fac_b": ["deepa.joshi@academic.edu"] * 4,
+    },
+]
+
+ELECTIVE_COURSES_SEM5 = [
+    # Department Electives - Theory (PEC)
+    {
+        "code": "25PEC13CE11",
+        "name": "Blockchain Technology",
         "delivery_mode": "INTEGRATED_TH_PR",
-        "th_hours": 3,
+        "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
-        "theory_fac_a": "rajesh.iyer@academic.edu",
-        "theory_fac_b": "rajesh.iyer@academic.edu",
-        "lab_fac_a": ["rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu"],
-        "lab_fac_b": ["rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu", "rajesh.iyer@academic.edu"],
+        "tier": "DEPARTMENT",
+        "faculty": "sunita.deshpande@academic.edu"
     },
     {
-        "code": "25PCC13CE21",
-        "name": "Theory of Computer Science",
-        "delivery_mode": "THEORY_TUTORIAL",
-        "th_hours": 3,
-        "pr_hours": 0,
-        "tu_hours": 1,
-        "theory_fac_a": "vikram.malhotra@academic.edu",
-        "theory_fac_b": "sneha.deshmukh@academic.edu",
-        "lab_fac_a": ["vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
-        "lab_fac_b": ["sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
-    },
-    {
-        "code": "25PCC13CE22",
-        "name": "Computer Networks",
+        "code": "25PEC13CE12",
+        "name": "Deep Learning and Reinforcement Learning",
         "delivery_mode": "INTEGRATED_TH_PR",
-        "th_hours": 3,
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "manoj.patil@academic.edu"
+    },
+    {
+        "code": "25PEC13CE13",
+        "name": "Cyber Security",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "sachin.kulkarni@academic.edu"
+    },
+    {
+        "code": "25PEC13CE14",
+        "name": "Big Data Analytics",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "neha.gupta@academic.edu"
+    },
+    # Department Electives - Laboratory (PECL)
+    {
+        "code": "25PECL13CE11",
+        "name": "Image Processing Laboratory",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "sanjay.mehta@academic.edu"
+    },
+    {
+        "code": "25PECL13CE12",
+        "name": "Natural Language Processing Laboratory",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "pooja.rane@academic.edu"
+    },
+    {
+        "code": "25PECL13CE15",
+        "name": "Ethical Hacking Laboratory",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "amit.verma@academic.edu"
+    },
+    {
+        "code": "25PECL13CE13",
+        "name": "Industrial IoT Laboratory",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "tier": "DEPARTMENT",
+        "faculty": "kavita.rao@academic.edu"
+    },
+    # Institute Open Electives (OE)
+    {
+        "code": "25OE13CE31",
+        "name": "Health, Wellness and Psychology",
+        "delivery_mode": "THEORY_ONLY",
+        "th_hours": 2,
+        "pr_hours": 0,
+        "tu_hours": 0,
+        "tier": "INSTITUTE",
+        "faculty": "rahul.shah@academic.edu"
+    },
+    {
+        "code": "25OE13CE32",
+        "name": "Emotional and Spiritual Intelligence",
+        "delivery_mode": "THEORY_ONLY",
+        "th_hours": 2,
+        "pr_hours": 0,
+        "tu_hours": 0,
+        "tier": "INSTITUTE",
+        "faculty": "swati.shinde@academic.edu"
+    },
+]
+
+# ---------------------------------------------------------------------------
+# SEMESTER VI COURSES (FRCRCE-3-26 Scheme w.e.f. A.Y. 2026-27)
+# ---------------------------------------------------------------------------
+CORE_COURSES_SEM6 = [
+    {
+        "code": "25PCC13CE15",
+        "name": "Distributed Computing",
+        "tier": "CLASS",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "anita.kulkarni@academic.edu",
+        "theory_fac_b": "anita.kulkarni@academic.edu",
+        "lab_fac_a": ["anita.kulkarni@academic.edu", "manoj.patil@academic.edu", "sachin.kulkarni@academic.edu", "sachin.kulkarni@academic.edu"],
+        "lab_fac_b": ["anita.kulkarni@academic.edu", "manoj.patil@academic.edu", "sachin.kulkarni@academic.edu", "sachin.kulkarni@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE16",
+        "name": "Software Engineering",
+        "tier": "CLASS",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
         "theory_fac_a": "faculty@academic.edu",
         "theory_fac_b": "priya.sharma@academic.edu",
-        "lab_fac_a": ["faculty@academic.edu", "faculty@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
-        "lab_fac_b": ["priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu"],
+        "lab_fac_a": ["faculty@academic.edu"] * 4,
+        "lab_fac_b": ["priya.sharma@academic.edu"] * 4,
     },
     {
-        "code": "25VSE13CE04",
-        "name": "Cloud Computing Laboratory",
+        "code": "25PCC13CE25",
+        "name": "Advanced Microprocessors",
+        "tier": "CLASS",
+        "delivery_mode": "INTEGRATED_TH_PR",
+        "th_hours": 2,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": "rajesh.iyer@academic.edu",
+        "theory_fac_b": "rajesh.iyer@academic.edu",
+        "lab_fac_a": ["rajesh.iyer@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
+        "lab_fac_b": ["rajesh.iyer@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu", "vikram.malhotra@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE17",
+        "name": "Artificial Intelligence Laboratory",
+        "tier": "CLASS",
         "delivery_mode": "PRACTICAL_ONLY",
         "th_hours": 0,
         "pr_hours": 2,
         "tu_hours": 0,
         "theory_fac_a": None,
         "theory_fac_b": None,
-        "lab_fac_a": ["arjun.nair@academic.edu", "arjun.nair@academic.edu", "arjun.nair@academic.edu", "arjun.nair@academic.edu"],
-        "lab_fac_b": ["priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu", "priya.sharma@academic.edu"],
+        "lab_fac_a": ["sunita.deshpande@academic.edu"] * 4,
+        "lab_fac_b": ["neha.gupta@academic.edu"] * 4,
+    },
+    {
+        "code": "25PCC13CE23",
+        "name": "Mobile App Development",
+        "tier": "CLASS",
+        "delivery_mode": "PRACTICAL_ONLY",
+        "th_hours": 0,
+        "pr_hours": 2,
+        "tu_hours": 0,
+        "theory_fac_a": None,
+        "theory_fac_b": None,
+        "lab_fac_a": ["priya.sharma@academic.edu"] * 4,
+        "lab_fac_b": ["arjun.nair@academic.edu"] * 4,
     },
 ]
 
-ELECTIVE_COURSES = [
-    {"code": "25PEC13CE11", "name": "Blockchain Technology", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PEC13CE12", "name": "Deep Learning and Reinforcement Learning", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PEC13CE13", "name": "Cyber Security", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PEC13CE14", "name": "Big Data Analytics", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 3, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PECL13CE11", "name": "Image Processing Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PECL13CE12", "name": "Natural Language Processing Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PECL13CE13", "name": "Industrial IoT Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
-    {"code": "25PECL13CE15", "name": "Ethical Hacking Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT"},
+ELECTIVE_COURSES_SEM6 = [
+    # Department Electives (PEC / PECL)
+    {"code": "25PEC13CE21", "name": "Decentralized Finance", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 2, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT", "faculty": "sunita.deshpande@academic.edu"},
+    {"code": "25PEC13CE22", "name": "Generative AI", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 2, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT", "faculty": "manoj.patil@academic.edu"},
+    {"code": "25PEC13CE23", "name": "Digital Forensics", "delivery_mode": "INTEGRATED_TH_PR", "th_hours": 2, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT", "faculty": "sachin.kulkarni@academic.edu"},
+    {"code": "25PECL13CE21", "name": "Social Media Analytics Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT", "faculty": "pooja.rane@academic.edu"},
+    {"code": "25PECL13CE25", "name": "Explainable AI Laboratory", "delivery_mode": "PRACTICAL_ONLY", "th_hours": 0, "pr_hours": 2, "tu_hours": 0, "tier": "DEPARTMENT", "faculty": "amit.verma@academic.edu"},
+    # Institute Open Electives (OE)
+    {"code": "25OE13CE41", "name": "Public Relations and Corporate Communication", "delivery_mode": "THEORY_ONLY", "th_hours": 2, "pr_hours": 0, "tu_hours": 0, "tier": "INSTITUTE", "faculty": "rahul.shah@academic.edu"},
 ]
+
+
+async def seed_term(
+    db: AsyncSession,
+    academic_term: str,
+    semester_num: int,
+    core_courses_meta: list,
+    elective_courses_meta: list,
+    dept_comp: Department,
+    div_a: Division,
+    div_b: Division,
+    faculty_map: dict,
+    students_a: list,
+    students_b: list,
+):
+    print(f"\n[*] --- Seeding {academic_term} (Semester {semester_num}) ---")
+    core_offering_map = {}
+    batch_objects_a = {}
+    batch_objects_b = {}
+    section_objects_a = {}
+    section_objects_b = {}
+
+    for c_data in core_courses_meta:
+        res = await db.execute(select(Course).where(Course.code == c_data["code"]))
+        course = res.scalar_one_or_none()
+        if not course:
+            course = Course(
+                id=uuid.uuid4(),
+                code=c_data["code"],
+                name=c_data["name"],
+                department_id=dept_comp.id,
+                semester=semester_num,
+                course_tier=c_data["tier"],
+                delivery_mode=c_data["delivery_mode"],
+                th_hours=c_data["th_hours"],
+                pr_hours=c_data["pr_hours"],
+                tu_hours=c_data["tu_hours"],
+            )
+            db.add(course)
+            await db.flush()
+        else:
+            course.department_id = dept_comp.id
+            course.delivery_mode = c_data["delivery_mode"]
+            course.course_tier = c_data["tier"]
+            course.semester = semester_num
+
+        off = CourseOffering(
+            id=uuid.uuid4(),
+            course_id=course.id,
+            academic_term=academic_term,
+        )
+        db.add(off)
+        await db.flush()
+        core_offering_map[c_data["code"]] = off
+        batch_objects_a[c_data["code"]] = {}
+        batch_objects_b[c_data["code"]] = {}
+
+        sec_a = None
+        sec_b = None
+        if c_data["delivery_mode"] != "PRACTICAL_ONLY":
+            fac_a = faculty_map.get(c_data["theory_fac_a"])
+            fac_b = faculty_map.get(c_data["theory_fac_b"])
+            sec_a = ClassSection(
+                id=uuid.uuid4(),
+                offering_id=off.id,
+                section_name="COMP-A-Theory",
+                faculty_id=fac_a.id if fac_a else None,
+            )
+            sec_b = ClassSection(
+                id=uuid.uuid4(),
+                offering_id=off.id,
+                section_name="COMP-B-Theory",
+                faculty_id=fac_b.id if fac_b else None,
+            )
+            db.add_all([sec_a, sec_b])
+            await db.flush()
+            section_objects_a[c_data["code"]] = sec_a
+            section_objects_b[c_data["code"]] = sec_b
+
+        # Exactly 4 Practical Batches for COMP-A (B1: 18, B2: 18, B3: 17, B4: 17)
+        for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
+            fac_email = c_data["lab_fac_a"][idx] if idx < len(c_data["lab_fac_a"]) else None
+            fac_obj = faculty_map.get(fac_email) if fac_email else None
+            b_obj = PracticalBatch(
+                id=uuid.uuid4(),
+                offering_id=off.id,
+                section_id=sec_a.id if sec_a else None,
+                batch_name=f"COMP-A-{b_name}",
+                faculty_id=fac_obj.id if fac_obj else None,
+            )
+            db.add(b_obj)
+            batch_objects_a[c_data["code"]][b_name] = b_obj
+
+        # Exactly 4 Practical Batches for COMP-B (B1: 18, B2: 18, B3: 17, B4: 17)
+        for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
+            fac_email = c_data["lab_fac_b"][idx] if idx < len(c_data["lab_fac_b"]) else None
+            fac_obj = faculty_map.get(fac_email) if fac_email else None
+            b_obj = PracticalBatch(
+                id=uuid.uuid4(),
+                offering_id=off.id,
+                section_id=sec_b.id if sec_b else None,
+                batch_name=f"COMP-B-{b_name}",
+                faculty_id=fac_obj.id if fac_obj else None,
+            )
+            db.add(b_obj)
+            batch_objects_b[c_data["code"]][b_name] = b_obj
+
+        await db.flush()
+
+    # Create Elective Offerings with assigned faculty, sections, and batches
+    elective_offerings = {}
+    for el in elective_courses_meta:
+        res = await db.execute(select(Course).where(Course.code == el["code"]))
+        c_el = res.scalar_one_or_none()
+        if not c_el:
+            c_el = Course(
+                id=uuid.uuid4(),
+                code=el["code"],
+                name=el["name"],
+                department_id=dept_comp.id,
+                semester=semester_num,
+                course_tier=el["tier"],
+                delivery_mode=el["delivery_mode"],
+                th_hours=el["th_hours"],
+                pr_hours=el["pr_hours"],
+                tu_hours=el["tu_hours"],
+            )
+            db.add(c_el)
+            await db.flush()
+        else:
+            c_el.department_id = dept_comp.id
+            c_el.course_tier = el["tier"]
+            c_el.delivery_mode = el["delivery_mode"]
+            c_el.semester = semester_num
+
+        off_el = CourseOffering(
+            id=uuid.uuid4(),
+            course_id=c_el.id,
+            academic_term=academic_term,
+        )
+        db.add(off_el)
+        await db.flush()
+
+        fac_user = faculty_map.get(el.get("faculty"))
+        sec_el = None
+        if el["delivery_mode"] != "PRACTICAL_ONLY":
+            sec_el = ClassSection(
+                id=uuid.uuid4(),
+                offering_id=off_el.id,
+                section_name=f"{el['code']}-Sec1",
+                faculty_id=fac_user.id if fac_user else None,
+            )
+            db.add(sec_el)
+            await db.flush()
+
+        batch_el = None
+        if el["delivery_mode"] in ("INTEGRATED_TH_PR", "PRACTICAL_ONLY"):
+            batch_el = PracticalBatch(
+                id=uuid.uuid4(),
+                offering_id=off_el.id,
+                section_id=sec_el.id if sec_el else None,
+                batch_name=f"{el['code']}-Lab1",
+                faculty_id=fac_user.id if fac_user else None,
+            )
+            db.add(batch_el)
+            await db.flush()
+
+        elective_offerings[el["code"]] = (off_el, c_el, sec_el, batch_el)
+
+    # Enroll Students into Core Courses
+    all_students = students_a + students_b
+    enr_count = 0
+    for student_user, batch_key, roll in all_students:
+        is_div_a = student_user.division_id == div_a.id
+        target_batches = batch_objects_a if is_div_a else batch_objects_b
+        target_sections = section_objects_a if is_div_a else section_objects_b
+
+        for c_data in core_courses_meta:
+            code = c_data["code"]
+            off = core_offering_map[code]
+            sec = target_sections.get(code)
+            batch = target_batches[code][batch_key]
+
+            enr = StudentEnrollment(
+                id=uuid.uuid4(),
+                student_id=student_user.id,
+                offering_id=off.id,
+                section_id=sec.id if sec else None,
+                batch_id=batch.id if batch else None,
+            )
+            db.add(enr)
+            enr_count += 1
+
+            # Attendance Logs ONLY for Ongoing Semester 5
+            if academic_term == TERM_SEM5:
+                total_classes = 28
+                if student_user.email == "student@academic.edu":
+                    attended = 26  # Good standing (~92.8%)
+                elif student_user.email == "atrisk.student@academic.edu":
+                    attended = 19  # At risk (<75% - 67.8%)
+                else:
+                    attended = random.randint(22, 27)
+
+                log = AttendanceLog(
+                    id=uuid.uuid4(),
+                    student_id=student_user.id,
+                    course_id=off.course_id,
+                    subject=f"{c_data['name']} ({code})",
+                    total_classes=total_classes,
+                    attended_classes=attended,
+                )
+                db.add(log)
+
+    # Enroll Students into Allocated Electives (PEC + PECL + OE)
+    pec_codes = [c["code"] for c in elective_courses_meta if c["tier"] == "DEPARTMENT" and c["delivery_mode"] != "PRACTICAL_ONLY"]
+    pecl_codes = [c["code"] for c in elective_courses_meta if c["tier"] == "DEPARTMENT" and c["delivery_mode"] == "PRACTICAL_ONLY"]
+    oe_codes = [c["code"] for c in elective_courses_meta if c["tier"] == "INSTITUTE"]
+
+    for idx, (student_user, batch_key, roll) in enumerate(all_students):
+        # Demo student Alex Mercer (idx == 0): Blockchain + Image Processing Lab + Health Wellness
+        if student_user.email == "student@academic.edu":
+            chosen_pec = "25PEC13CE11"
+            chosen_pecl = "25PECL13CE11"
+            chosen_oe = "25OE13CE31"
+        else:
+            chosen_pec = pec_codes[idx % len(pec_codes)] if pec_codes else None
+            chosen_pecl = pecl_codes[idx % len(pecl_codes)] if pecl_codes else None
+            chosen_oe = oe_codes[idx % len(oe_codes)] if oe_codes else None
+
+        for el_code in [chosen_pec, chosen_pecl, chosen_oe]:
+            if el_code and el_code in elective_offerings:
+                off_el, c_el, sec_el, batch_el = elective_offerings[el_code]
+                enr_el = StudentEnrollment(
+                    id=uuid.uuid4(),
+                    student_id=student_user.id,
+                    offering_id=off_el.id,
+                    section_id=sec_el.id if sec_el else None,
+                    batch_id=batch_el.id if batch_el else None,
+                )
+                db.add(enr_el)
+                enr_count += 1
+
+                # Attendance Logs ONLY for Ongoing Semester 5
+                if academic_term == TERM_SEM5:
+                    total_classes = 26
+                    if student_user.email == "student@academic.edu":
+                        attended = 24  # Good standing (~92.3%)
+                    elif student_user.email == "atrisk.student@academic.edu":
+                        attended = 17  # At risk (<75% - 65.4%)
+                    else:
+                        attended = random.randint(21, 25)
+
+                    log_el = AttendanceLog(
+                        id=uuid.uuid4(),
+                        student_id=student_user.id,
+                        course_id=off_el.course_id,
+                        subject=f"{c_el.name} ({el_code})",
+                        total_classes=total_classes,
+                        attended_classes=attended,
+                    )
+                    db.add(log_el)
+
+    await db.flush()
+    print(f"[*] {academic_term}: Enrolled 140 students across 5 Core + Allocated Electives ({enr_count} total enrollments)")
 
 
 async def seed_database():
     """
     Primary Database Seeder for Smart Academic Platform.
-    Seeds exclusively Computer Engineering (COMPS) department:
-      - Division COMP-A: Exactly 70 students (Roll 1-70, Batches B1-B4)
-      - Division COMP-B: Exactly 70 students (Roll 1-70, Batches B1-B4)
-      - Total 140 students
-      - 5 Core Courses auto-enrolled with realistic attendance (85-96%)
-      - 8 Electives offered (4 PEC + 4 PECL)
-      - Demo Student Alex Mercer (student@academic.edu) has chosen PEC (7 subjects)
-      - All other 139 students have exactly 5 core subjects
-      - Faculty assignments for all theory sections and practical batches
+    Seeds exclusively:
+      - 18 Computer Engineering Faculty Members
+      - 70 Students in COMP-A (4 Batches: B1: 18, B2: 18, B3: 17, B4: 17)
+      - 70 Students in COMP-B (4 Batches: B1: 18, B2: 18, B3: 17, B4: 17)
+      - Total 140 Students
+      - Semesters:
+          * SEMESTER 5: July – December 2026 (2026-27-SEM5) [Ongoing]
+          * SEMESTER 6: January – June 2027 (2026-27-SEM6) [Upcoming]
     """
     print("[*] Ensuring database tables exist...")
     Base.metadata.create_all(bind=sync_engine)
@@ -175,11 +638,8 @@ async def seed_database():
     pw_hash_admin = hash_password("admin123")
 
     async with AsyncSessionLocal() as db:
-        print("[*] Starting COMPS department seeding...")
+        print("[*] Resetting COMPS Department, Faculty, and Students...")
 
-        # -------------------------------------------------------------
-        # 1. Clean out non-COMP departments & unwanted courses
-        # -------------------------------------------------------------
         await db.execute(delete(Department).where(Department.code != "COMP"))
 
         res = await db.execute(select(Department).where(Department.code == "COMP"))
@@ -189,24 +649,20 @@ async def seed_database():
             db.add(dept_comp)
             await db.flush()
 
-        # Delete all existing student accounts and old allotments
+        # Delete all student accounts, old enrollments, logs, sections, batches, offerings, and old courses
         await db.execute(delete(User).where(User.role == "STUDENT"))
+        allowed_emails = {f["email"] for f in FACULTY_PROFILES} | {"admin@academic.edu"}
+        await db.execute(delete(User).where(~User.email.in_(allowed_emails)))
         await db.execute(delete(StudentEnrollment))
         await db.execute(delete(AttendanceLog))
         await db.execute(delete(ClassSection))
         await db.execute(delete(PracticalBatch))
         await db.execute(delete(CourseOffering))
         await db.execute(delete(FacultyCourseDivision))
+        await db.execute(delete(Course))
         await db.flush()
 
-        # Clean any unwanted courses not in COMPS core or electives
-        all_allowed_codes = {c["code"] for c in CORE_COURSES} | {el["code"] for el in ELECTIVE_COURSES}
-        await db.execute(delete(Course).where(~Course.code.in_(all_allowed_codes)))
-        await db.flush()
-
-        # -------------------------------------------------------------
-        # 2. Setup Divisions: COMP-A (70) and COMP-B (70)
-        # -------------------------------------------------------------
+        # Divisions: COMP-A (70) and COMP-B (70)
         await db.execute(delete(Division).where(Division.department_id == dept_comp.id))
         await db.flush()
 
@@ -226,11 +682,8 @@ async def seed_database():
         )
         db.add_all([div_a, div_b])
         await db.flush()
-        print(f"[*] Created Divisions: COMP-A ({div_a.id}) & COMP-B ({div_b.id})")
 
-        # -------------------------------------------------------------
-        # 3. Setup Faculty Members & Admin
-        # -------------------------------------------------------------
+        # Setup EXACTLY 18 Faculty Profiles
         faculty_map = {}
         for f_data in FACULTY_PROFILES:
             res = await db.execute(select(User).where(User.email == f_data["email"]))
@@ -248,8 +701,12 @@ async def seed_database():
                 await db.flush()
             else:
                 fac_user.department_id = dept_comp.id
+                fac_user.full_name = f_data["name"]
             faculty_map[f_data["email"]] = fac_user
 
+        print(f"[*] Configured {len(faculty_map)} Faculty Profiles in Computer Engineering.")
+
+        # Admin user
         res = await db.execute(select(User).where(User.email == "admin@academic.edu"))
         admin_user = res.scalar_one_or_none()
         if not admin_user:
@@ -265,7 +722,10 @@ async def seed_database():
             await db.flush()
 
         # -------------------------------------------------------------
-        # 4. Create EXACTLY 70 Students in COMP-A and 70 in COMP-B
+        # Exactly 70 Students in COMP-A and 70 in COMP-B
+        # Divided into EXACTLY 4 BATCHES:
+        # B1 (1-18: 18 students), B2 (19-36: 18 students), B3 (37-53: 17 students), B4 (54-70: 17 students)
+        # Total: 18 + 18 + 17 + 17 = 70 Students
         # -------------------------------------------------------------
         students_a = []
         students_b = []
@@ -275,16 +735,19 @@ async def seed_database():
             if i == 1:
                 name = "Alex Mercer"
                 email = "student@academic.edu"
+            elif i == 2:
+                name = "Jayden Lee"
+                email = "atrisk.student@academic.edu"
             else:
                 first = FIRST_NAMES_A[(i - 1) % len(FIRST_NAMES_A)]
                 last = LAST_NAMES_A[(i - 1) % len(LAST_NAMES_A)]
                 name = f"{first} {last}"
                 email = f"student.a.{i:02d}@comp.academic.edu"
 
-            # Batch distribution: B1 (1-18), B2 (19-35), B3 (36-53), B4 (54-70)
+            # 4 Batches: B1 (1-18), B2 (19-36), B3 (37-53), B4 (54-70)
             if i <= 18:
                 batch_key = "B1"
-            elif i <= 35:
+            elif i <= 36:
                 batch_key = "B2"
             elif i <= 53:
                 batch_key = "B3"
@@ -314,7 +777,7 @@ async def seed_database():
 
             if i <= 18:
                 batch_key = "B1"
-            elif i <= 35:
+            elif i <= 36:
                 batch_key = "B2"
             elif i <= 53:
                 batch_key = "B3"
@@ -336,229 +799,49 @@ async def seed_database():
             students_b.append((u, batch_key, i))
 
         await db.flush()
-        print(f"[*] Seeded {len(students_a)} students in COMP-A and {len(students_b)} students in COMP-B (Total: 140)")
+        print(f"[*] Created 70 students in COMP-A (4 Batches: B1: 18, B2: 18, B3: 17, B4: 17)")
+        print(f"[*] Created 70 students in COMP-B (4 Batches: B1: 18, B2: 18, B3: 17, B4: 17)")
 
-        # -------------------------------------------------------------
-        # 5. Create Core Course Offerings, Sections, and Batches
-        # -------------------------------------------------------------
-        core_offering_map = {}
-        batch_objects_a = {}
-        batch_objects_b = {}
-        section_objects_a = {}
-        section_objects_b = {}
+        # Seed Semester 5 (July – Dec 2026) [Ongoing]
+        await seed_term(
+            db=db,
+            academic_term=TERM_SEM5,
+            semester_num=5,
+            core_courses_meta=CORE_COURSES_SEM5,
+            elective_courses_meta=ELECTIVE_COURSES_SEM5,
+            dept_comp=dept_comp,
+            div_a=div_a,
+            div_b=div_b,
+            faculty_map=faculty_map,
+            students_a=students_a,
+            students_b=students_b,
+        )
 
-        for c_data in CORE_COURSES:
-            res = await db.execute(select(Course).where(Course.code == c_data["code"]))
-            course = res.scalar_one_or_none()
-            if not course:
-                course = Course(
-                    id=uuid.uuid4(),
-                    code=c_data["code"],
-                    name=c_data["name"],
-                    department_id=dept_comp.id,
-                    semester=5,
-                    course_tier="CLASS",
-                    delivery_mode=c_data["delivery_mode"],
-                    th_hours=c_data["th_hours"],
-                    pr_hours=c_data["pr_hours"],
-                    tu_hours=c_data["tu_hours"],
-                )
-                db.add(course)
-                await db.flush()
-            else:
-                course.department_id = dept_comp.id
-                course.delivery_mode = c_data["delivery_mode"]
-                course.course_tier = "CLASS"
-
-            off = CourseOffering(
-                id=uuid.uuid4(),
-                course_id=course.id,
-                academic_term=ACADEMIC_TERM
-            )
-            db.add(off)
-            await db.flush()
-            core_offering_map[c_data["code"]] = off
-            batch_objects_a[c_data["code"]] = {}
-            batch_objects_b[c_data["code"]] = {}
-
-            # Sections for COMP-A and COMP-B (if theory component exists)
-            sec_a = None
-            sec_b = None
-            if c_data["delivery_mode"] != "PRACTICAL_ONLY":
-                fac_a = faculty_map.get(c_data["theory_fac_a"])
-                fac_b = faculty_map.get(c_data["theory_fac_b"])
-                sec_a = ClassSection(
-                    id=uuid.uuid4(),
-                    offering_id=off.id,
-                    section_name="COMP-A-Theory",
-                    faculty_id=fac_a.id if fac_a else None,
-                )
-                sec_b = ClassSection(
-                    id=uuid.uuid4(),
-                    offering_id=off.id,
-                    section_name="COMP-B-Theory",
-                    faculty_id=fac_b.id if fac_b else None,
-                )
-                db.add_all([sec_a, sec_b])
-                await db.flush()
-                section_objects_a[c_data["code"]] = sec_a
-                section_objects_b[c_data["code"]] = sec_b
-
-            # 4 Practical Batches for COMP-A (B1, B2, B3, B4)
-            for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
-                fac_email = c_data["lab_fac_a"][idx] if idx < len(c_data["lab_fac_a"]) else None
-                fac_obj = faculty_map.get(fac_email) if fac_email else None
-                b_obj = PracticalBatch(
-                    id=uuid.uuid4(),
-                    offering_id=off.id,
-                    section_id=sec_a.id if sec_a else None,
-                    batch_name=f"COMP-A-{b_name}",
-                    faculty_id=fac_obj.id if fac_obj else None,
-                )
-                db.add(b_obj)
-                batch_objects_a[c_data["code"]][b_name] = b_obj
-
-            # 4 Practical Batches for COMP-B (B1, B2, B3, B4)
-            for idx, b_name in enumerate(["B1", "B2", "B3", "B4"]):
-                fac_email = c_data["lab_fac_b"][idx] if idx < len(c_data["lab_fac_b"]) else None
-                fac_obj = faculty_map.get(fac_email) if fac_email else None
-                b_obj = PracticalBatch(
-                    id=uuid.uuid4(),
-                    offering_id=off.id,
-                    section_id=sec_b.id if sec_b else None,
-                    batch_name=f"COMP-B-{b_name}",
-                    faculty_id=fac_obj.id if fac_obj else None,
-                )
-                db.add(b_obj)
-                batch_objects_b[c_data["code"]][b_name] = b_obj
-
-            await db.flush()
-
-        print("[*] Created 5 Core Course Offerings with theory sections and 4 lab batches each for COMP-A & COMP-B.")
-
-        # -------------------------------------------------------------
-        # 6. Create Elective Offerings
-        # -------------------------------------------------------------
-        elective_offerings = {}
-        for el in ELECTIVE_COURSES:
-            res = await db.execute(select(Course).where(Course.code == el["code"]))
-            c_el = res.scalar_one_or_none()
-            if not c_el:
-                c_el = Course(
-                    id=uuid.uuid4(),
-                    code=el["code"],
-                    name=el["name"],
-                    department_id=dept_comp.id,
-                    semester=5,
-                    course_tier=el["tier"],
-                    delivery_mode=el["delivery_mode"],
-                    th_hours=el["th_hours"],
-                    pr_hours=el["pr_hours"],
-                    tu_hours=el["tu_hours"],
-                )
-                db.add(c_el)
-                await db.flush()
-            else:
-                c_el.department_id = dept_comp.id
-                c_el.course_tier = el["tier"]
-                c_el.delivery_mode = el["delivery_mode"]
-
-            off_el = CourseOffering(
-                id=uuid.uuid4(),
-                course_id=c_el.id,
-                academic_term=ACADEMIC_TERM
-            )
-            db.add(off_el)
-            await db.flush()
-            elective_offerings[el["code"]] = (off_el, c_el)
-
-        print(f"[*] Created {len(elective_offerings)} Elective Course Offerings.")
-
-        # -------------------------------------------------------------
-        # 7. Auto-Enroll all 140 Students into the 5 Core Subjects
-        # -------------------------------------------------------------
-        all_students = students_a + students_b
-        enrollment_count = 0
-        log_count = 0
-
-        for student_user, batch_key, roll in all_students:
-            is_div_a = student_user.division_id == div_a.id
-            target_batches = batch_objects_a if is_div_a else batch_objects_b
-            target_sections = section_objects_a if is_div_a else section_objects_b
-
-            for c_data in CORE_COURSES:
-                code = c_data["code"]
-                off = core_offering_map[code]
-                sec = target_sections.get(code)
-                batch = target_batches[code][batch_key]
-
-                enr = StudentEnrollment(
-                    id=uuid.uuid4(),
-                    student_id=student_user.id,
-                    offering_id=off.id,
-                    section_id=sec.id if sec else None,
-                    batch_id=batch.id if batch else None,
-                )
-                db.add(enr)
-                enrollment_count += 1
-
-                total_classes = 28
-                if student_user.email == "student@academic.edu":
-                    attended = 26
-                else:
-                    attended = random.randint(23, 27)
-
-                log = AttendanceLog(
-                    id=uuid.uuid4(),
-                    student_id=student_user.id,
-                    course_id=off.course_id,
-                    subject=f"{c_data['name']} ({code})",
-                    total_classes=total_classes,
-                    attended_classes=attended,
-                )
-                db.add(log)
-                log_count += 1
-
-        # -------------------------------------------------------------
-        # 8. For Alex Mercer (student@academic.edu), add the chosen PEC
-        # -------------------------------------------------------------
-        alex_user = students_a[0][0]
-        # Alex has elected 25PEC13CE11 (Blockchain Technology) & 25PECL13CE15 (Ethical Hacking Lab)
-        for pec_code in ["25PEC13CE11", "25PECL13CE15"]:
-            off_pec, c_pec = elective_offerings[pec_code]
-            enr_pec = StudentEnrollment(
-                id=uuid.uuid4(),
-                student_id=alex_user.id,
-                offering_id=off_pec.id,
-                section_id=None,
-                batch_id=None,
-            )
-            db.add(enr_pec)
-            enrollment_count += 1
-
-            log_pec = AttendanceLog(
-                id=uuid.uuid4(),
-                student_id=alex_user.id,
-                course_id=off_pec.course_id,
-                subject=f"{c_pec.name} ({pec_code})",
-                total_classes=27,
-                attended_classes=25,
-            )
-            db.add(log_pec)
-            log_count += 1
+        # Seed Semester 6 (Jan – June 2027) [Upcoming]
+        await seed_term(
+            db=db,
+            academic_term=TERM_SEM6,
+            semester_num=6,
+            core_courses_meta=CORE_COURSES_SEM6,
+            elective_courses_meta=ELECTIVE_COURSES_SEM6,
+            dept_comp=dept_comp,
+            div_a=div_a,
+            div_b=div_b,
+            faculty_map=faculty_map,
+            students_a=students_a,
+            students_b=students_b,
+        )
 
         await db.commit()
         print("\n" + "=" * 70)
-        print("[SUCCESS] COMPS ECOSYSTEM SEEDED SUCCESSFULLY:")
-        print(f"  - Division COMP-A: Exactly 70 students (Roll 1-70, Batches B1-B4)")
-        print(f"  - Division COMP-B: Exactly 70 students (Roll 1-70, Batches B1-B4)")
-        print(f"  - Total Students: 140")
-        print(f"  - Core Offerings: 5 (Enrolled by all 140 students)")
-        print(f"  - Elective Offerings: 8 (4 PEC + 4 PECL)")
-        print(f"  - Total Student Enrollments: {enrollment_count}")
-        print(f"  - Total Attendance Logs: {log_count}")
-        print(f"  - Alex Mercer (student@academic.edu): 7 subjects (5 Core + 2 PEC/PECL)")
-        print(f"  - All other 139 students: Exactly 5 subjects (until electives chosen)")
+        print("[SUCCESS] ENVIRONMENT FULLY CONFIGURED & SEEDED:")
+        print("  - Total Faculty: Exactly 18 (All assigned teaching roles in Sem 5)")
+        print("  - Total Students: Exactly 140 (COMP-A: 70, COMP-B: 70)")
+        print("  - Division Batches: Exactly 4 (B1: 18, B2: 18, B3: 17, B4: 17)")
+        print("  - SEM 5 (July – Dec 2026): 5 Core + Allocated Electives (Ongoing)")
+        print("    * Prof. David Vance: Computer Networks (COMP-A-Theory + 4 Lab Batches B1, B2, B3, B4)")
+        print("    * Alex Mercer: 5 Core + Blockchain + Image Proc Lab + Health Wellness")
+        print("  - SEM 6 (Jan – June 2027): 5 Core + Electives (Upcoming)")
         print("=" * 70 + "\n")
 
 

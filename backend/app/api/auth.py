@@ -141,12 +141,12 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     # If STUDENT: Auto-enroll in the 5 Core Courses for Semester 5
     if user_in.role == "STUDENT" and dept_comp and division_id:
         try:
-            # Extract numeric roll index for batch assignment (B1: 1-18, B2: 19-35, B3: 36-53, B4: 54-70)
+            # Extract numeric roll index for 4-batch assignment (B1: 1-18, B2: 19-36, B3: 37-53, B4: 54-70)
             roll_digits = "".join(filter(str.isdigit, roll_no or ""))
             roll_num = int(roll_digits) if roll_digits else 1
             if roll_num <= 18:
                 batch_key = "B1"
-            elif roll_num <= 35:
+            elif roll_num <= 36:
                 batch_key = "B2"
             elif roll_num <= 53:
                 batch_key = "B3"
@@ -232,7 +232,9 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         user_id=user.id,
         email=user.email,
         full_name=user.full_name,
-        role=user.role
+        role=user.role,
+        student_erp_id=user.student_erp_id,
+        roll_no=user.roll_no,
     )
 
 
