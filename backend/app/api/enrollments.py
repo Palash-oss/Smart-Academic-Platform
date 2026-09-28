@@ -43,6 +43,7 @@ from app.schemas.allotment import (
     FacultyCourseItem,
     FacultySectionItem,
     FacultyBatchItem,
+    FacultyStudentRosterItem,
     CreateFacultyRequest,
     FacultyAllocationUploadResponse,
 )
@@ -759,11 +760,13 @@ async def faculty_my_subjects(
         .options(
             selectinload(CourseOffering.course),
             selectinload(CourseOffering.sections).selectinload(ClassSection.faculty),
-            selectinload(CourseOffering.sections).selectinload(ClassSection.enrollments),
+            selectinload(CourseOffering.sections).selectinload(ClassSection.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
             selectinload(CourseOffering.batches).selectinload(PracticalBatch.faculty),
-            selectinload(CourseOffering.batches).selectinload(PracticalBatch.enrollments),
+            selectinload(CourseOffering.batches).selectinload(PracticalBatch.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
             selectinload(CourseOffering.batches).selectinload(PracticalBatch.section),
-            selectinload(CourseOffering.enrollments),
+            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
+            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.section),
+            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.batch),
         )
     )
     result = await db.execute(stmt)
@@ -791,9 +794,24 @@ async def faculty_my_subjects(
         sec_items: list[FacultySectionItem] = []
         for s in my_sections:
             count = len(s.enrollments)
+            sec_students: list[FacultyStudentRosterItem] = []
             for enr in s.enrollments:
                 course_student_ids.add(enr.student_id)
                 total_distinct_students.add(enr.student_id)
+                std = enr.student
+                if std:
+                    div_label = std.division.name if std.division else (std.roll_no.split("-")[1] if std.roll_no and "-" in std.roll_no else "-")
+                    sec_students.append(FacultyStudentRosterItem(
+                        id=std.id,
+                        student_erp_id=std.student_erp_id,
+                        roll_no=std.roll_no or "-",
+                        name=std.full_name,
+                        email=std.email,
+                        division=div_label,
+                        section_name=s.section_name,
+                        batch_name=None,
+                    ))
+            sec_students.sort(key=lambda x: (x.roll_no or "", x.name))
             div_label, _ = _parse_division_and_batch(s.section_name)
             sec_items.append(
                 FacultySectionItem(
@@ -802,15 +820,31 @@ async def faculty_my_subjects(
                     student_count=count,
                     division=div_label,
                     component_type="THEORY",
+                    students=sec_students,
                 )
             )
 
         batch_items: list[FacultyBatchItem] = []
         for b in my_batches:
             count = len(b.enrollments)
+            batch_students: list[FacultyStudentRosterItem] = []
             for enr in b.enrollments:
                 course_student_ids.add(enr.student_id)
                 total_distinct_students.add(enr.student_id)
+                std = enr.student
+                if std:
+                    div_label = std.division.name if std.division else (std.roll_no.split("-")[1] if std.roll_no and "-" in std.roll_no else "-")
+                    batch_students.append(FacultyStudentRosterItem(
+                        id=std.id,
+                        student_erp_id=std.student_erp_id,
+                        roll_no=std.roll_no or "-",
+                        name=std.full_name,
+                        email=std.email,
+                        division=div_label,
+                        section_name=b.section.section_name if b.section else None,
+                        batch_name=b.batch_name,
+                    ))
+            batch_students.sort(key=lambda x: (x.roll_no or "", x.name))
             sec_name = b.section.section_name if b.section else None
             div_label, batch_lbl = _parse_division_and_batch(b.batch_name)
             if not div_label and sec_name:
@@ -824,6 +858,7 @@ async def faculty_my_subjects(
                     division=div_label,
                     batch_label=batch_lbl,
                     component_type="PRACTICAL",
+                    students=batch_students,
                 )
             )
 
@@ -836,6 +871,20 @@ async def faculty_my_subjects(
             assigned_types.append("THEORY")
         if batch_items:
             assigned_types.append("PRACTICAL")
+
+        # Distinct course-level student roster
+        course_roster_dict: Dict[uuid.UUID, FacultyStudentRosterItem] = {}
+        for s_item in sec_items:
+            for std in s_item.students:
+                course_roster_dict[std.id] = std
+        for b_item in batch_items:
+            for std in b_item.students:
+                if std.id in course_roster_dict:
+                    course_roster_dict[std.id].batch_name = std.batch_name
+                else:
+                    course_roster_dict[std.id] = std
+
+        all_course_students = sorted(list(course_roster_dict.values()), key=lambda x: (x.roll_no or "", x.name))
 
         assigned_courses.append(
             FacultyCourseItem(
@@ -852,6 +901,7 @@ async def faculty_my_subjects(
                 total_students=len(course_student_ids),
                 divisions=course_divisions,
                 assigned_types=assigned_types,
+                students=all_course_students,
             )
         )
 

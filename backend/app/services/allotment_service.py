@@ -41,6 +41,7 @@ from sqlalchemy.orm import selectinload
 # Minimum students per batch / section constraint
 MIN_STUDENTS_PER_BATCH = 12      # Minimum batch threshold
 MIN_STUDENTS_PER_SECTION = 12    # Minimum section threshold
+MIN_STUDENTS_PER_ELECTIVE = 20   # Mandatory minimum students required to float an elective (PEC / PECL / OE)
 
 # Batch size targets per tier
 CLASS_BATCH_MAX = 25        # Tier 1: class-level lab batches
@@ -51,6 +52,20 @@ INST_TUTORIAL_MAX = 30      # Tier 3: DM tutorial batch target
 
 # Delivery modes that cascade theory faculty to all batches
 CASCADE_MODES = {"INTEGRATED_TH_PR", "THEORY_TUTORIAL"}
+
+# Default elective faculty mapping for Semester 5 (auto-assigned during allotment)
+DEFAULT_ELECTIVE_FACULTY_EMAILS = {
+    "25PEC13CE11": "faculty@academic.edu",          # Prof. David Vance (Primary Demo Faculty)
+    "25PEC13CE12": "manoj.patil@academic.edu",       # Prof. Manoj Patil
+    "25PEC13CE13": "sachin.kulkarni@academic.edu",   # Prof. Sachin Kulkarni
+    "25PEC13CE14": "swati.shinde@academic.edu",      # Prof. Swati Shinde
+    "25PECL13CE11": "sanjay.mehta@academic.edu",     # Prof. Sanjay Mehta
+    "25PECL13CE12": "pooja.rane@academic.edu",       # Prof. Pooja Rane
+    "25PECL13CE13": "amit.verma@academic.edu",       # Prof. Amit Verma
+    "25PECL13CE15": "neha.gupta@academic.edu",       # Prof. Neha Gupta
+    "25OE13CE31": "rahul.shah@academic.edu",         # Prof. Rahul Shah
+    "25OE13CE32": "sneha.deshmukh@academic.edu",     # Prof. Sneha Deshmukh
+}
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +110,17 @@ def balanced_chunks(items: list, max_size: int, min_size: int = MIN_STUDENTS_PER
 # Row Validation Helpers
 # ---------------------------------------------------------------------------
 
-REQUIRED_COLUMNS = {"student_id", "roll_no", "department", "class_div", "course_code", "academic_term"}
+REQUIRED_BASE_COLUMNS = {"student_id", "roll_no", "department", "class_div", "academic_term"}
 
 
 def validate_dataframe(df: pd.DataFrame) -> List[str]:
-    """Return a list of missing column names."""
-    missing = REQUIRED_COLUMNS - set(c.strip().lower() for c in df.columns)
+    """Return a list of missing column names. Supports direct course_code or preference_1 columns."""
+    cols = set(c.strip().lower() for c in df.columns)
+    missing = REQUIRED_BASE_COLUMNS - cols
+    has_course = any(c in cols for c in ["course_code", "course", "subject_code", "code"])
+    has_pref = any(c.startswith("pref") or "choice" in c or c.startswith("pec") for c in cols)
+    if not has_course and not has_pref:
+        missing.add("course_code (or preference_1)")
     return list(missing)
 
 
@@ -117,6 +137,7 @@ class AllotmentEngine:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.errors: List[AllotmentRowError] = []
+        self.notices: List[str] = []
         self.sections_created = 0
         self.batches_created = 0
         self.faculty_slots_generated = 0
@@ -128,6 +149,9 @@ class AllotmentEngine:
     async def process_file(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
         """
         Parse the Excel/CSV file, run the allotment pipeline, and commit.
+        Supports:
+          1. Direct course_code rows (with Min 20 Students threshold validation)
+          2. Multi-preference FCFS rows (ordered by timestamp, enforcing Min 20 students rule)
         Returns a summary dict. Raises on unrecoverable errors.
         """
         df = self._parse_file(file_bytes, filename)
@@ -137,29 +161,48 @@ class AllotmentEngine:
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
 
-        # Normalize and sort deterministically
+        # Normalize and strip strings
         map_fn = getattr(df, "map", getattr(df, "applymap", None))
         df = map_fn(lambda x: x.strip() if isinstance(x, str) else x)
-        df = df.sort_values(["course_code", "academic_term", "roll_no"]).reset_index(drop=True)
+
+        # Standardize aliases
+        for cand in ["course", "subject_code", "code"]:
+            if cand in df.columns and "course_code" not in df.columns:
+                df["course_code"] = df[cand]
+                break
 
         total_rows = len(df)
 
         # ── Phase 1: Validate all student_ids against the DB
         student_map = await self._resolve_students(df)
 
-        # ── Phase 2: Validate all course_codes against the DB
+        # ── Phase 2: Validate all candidate course codes & preferences against the DB
         course_map = await self._resolve_courses(df)
 
         # Stop here if validation errors found
         if self.errors:
             return self._summary(total_rows)
 
+        # ── Phase 2.5: FCFS Preference Allotment with Min 20 Students Constraint
+        pref_cols = [c for c in ["preference_1", "preference_2", "preference_3", "pref_1", "pref_2", "pref_3"] if c in df.columns]
+        if pref_cols:
+            df = self._apply_fcfs_allotment(df, course_map, pref_cols)
+        elif "course_code" in df.columns:
+            self._check_direct_elective_minimums(df, course_map)
+
+        if "course_code" in df.columns:
+            df = df.sort_values(["course_code", "academic_term", "roll_no"]).reset_index(drop=True)
+
         # ── Phase 3: Group rows by (course_code, academic_term) → run allotment
         groups: Dict[Tuple[str, str], List[pd.Series]] = defaultdict(list)
         for _, row in df.iterrows():
-            groups[(row["course_code"], row["academic_term"])].append(row)
+            c_val = row.get("course_code")
+            if pd.notna(c_val) and str(c_val).strip():
+                groups[(str(c_val).strip(), row["academic_term"])].append(row)
 
         for (course_code, term), rows in groups.items():
+            if course_code not in course_map:
+                continue
             course = course_map[course_code]
             offering = await self._get_or_create_offering(course, term)
             # Clear previous allocations for this offering to allow clean recalculation
@@ -339,24 +382,167 @@ class AllotmentEngine:
         course_db_map = {c.code.strip().upper(): c for c in all_courses}
         course_name_map = {c.name.strip().lower(): c for c in all_courses}
 
+        candidate_keys = set()
+        for col in ["course_code", "course", "subject_code", "code", "preference_1", "preference_2", "preference_3", "pref_1", "pref_2", "pref_3"]:
+            if col in df.columns:
+                for val in df[col].dropna():
+                    s_val = str(val).strip()
+                    if s_val:
+                        candidate_keys.add(s_val)
+
         course_map = {}
-        for i, row in df.iterrows():
-            code = str(row["course_code"]).strip()
+        for code in candidate_keys:
             code_upper = code.upper()
             code_lower = code.lower()
 
             if code_upper in course_db_map:
-                course_map[code] = course_db_map[code_upper]
+                c_obj = course_db_map[code_upper]
+                course_map[code] = c_obj
+                course_map[code_upper] = c_obj
             elif code_lower in course_name_map:
-                course_map[code] = course_name_map[code_lower]
+                c_obj = course_name_map[code_lower]
+                course_map[code] = c_obj
+                course_map[code_lower] = c_obj
             else:
                 self.errors.append(AllotmentRowError(
-                    row=i + 2,
-                    student_id=str(row.get("student_id", "")).strip(),
+                    row=0,
+                    student_id="-",
                     course_code=code,
-                    error=f"course_code '{code}' not found in the courses table (available: {', '.join(sorted(course_db_map.keys()))})"
+                    error=f"Course '{code}' not found in the courses table (available: {', '.join(sorted(course_db_map.keys()))})"
                 ))
         return course_map
+
+    def _apply_fcfs_allotment(
+        self, df: pd.DataFrame, course_map: Dict[str, Course], pref_cols: List[str]
+    ) -> pd.DataFrame:
+        """
+        Enforce First-Come-First-Served (FCFS) and Minimum 20 Students Constraint:
+        1. Students are ordered chronologically by 'timestamp' (or CSV row order if timestamp is missing).
+        2. Assign students to highest active preference that has capacity within their elective category.
+        3. If any elective course receives < 20 students, that course cannot float.
+           Its students are automatically reallocated to their next eligible preference with capacity in that category.
+        4. Guarantees 100% of students are allocated and all running electives have >= 20 students.
+        """
+        if "timestamp" in df.columns:
+            df = df.sort_values("timestamp", ascending=True).reset_index(drop=True)
+        else:
+            df = df.reset_index(drop=True)
+
+        def get_category(row: pd.Series) -> str:
+            if "category" in row and pd.notna(row["category"]) and str(row["category"]).strip():
+                return str(row["category"]).strip().upper()
+            for col in pref_cols + ["course_code"]:
+                if col in row and pd.notna(row[col]):
+                    val = str(row[col]).strip().upper()
+                    if "PECL" in val:
+                        return "PECL"
+                    elif "PEC" in val:
+                        return "PEC"
+                    elif "OE" in val:
+                        return "OE"
+                    elif "VSE" in val:
+                        return "VSE"
+                    elif "PCC" in val:
+                        return "PCC"
+            return "GENERAL"
+
+        df["_category"] = [get_category(row) for _, row in df.iterrows()]
+        student_course_map: Dict[int, str] = {}
+
+        for cat, group in df.groupby("_category"):
+            students_data = []
+            for idx, row in group.iterrows():
+                p_list = []
+                for col in pref_cols:
+                    val = str(row.get(col, "")).strip()
+                    if val:
+                        c_obj = course_map.get(val) or course_map.get(val.upper())
+                        if c_obj:
+                            p_list.append(c_obj.code)
+                students_data.append({
+                    "row_index": idx,
+                    "student_id": str(row["student_id"]).strip(),
+                    "roll_no": str(row["roll_no"]).strip(),
+                    "preferences": p_list,
+                })
+
+            candidate_courses = set()
+            for s in students_data:
+                for p in s["preferences"]:
+                    candidate_courses.add(p)
+
+            active_courses = set(candidate_courses)
+            num_courses = max(1, len(active_courses))
+            max_cap = max(DEPT_THEORY_MAX, math.ceil(len(students_data) / num_courses) + 10)
+
+            # Iteratively eliminate courses that do not reach MIN_STUDENTS_PER_ELECTIVE (20)
+            while True:
+                allocations: Dict[str, List[dict]] = defaultdict(list)
+                unallocated = []
+
+                for s in students_data:
+                    allocated = False
+                    for p in s["preferences"]:
+                        if p in active_courses and len(allocations[p]) < max_cap:
+                            allocations[p].append(s)
+                            allocated = True
+                            break
+                    if not allocated:
+                        unallocated.append(s)
+
+                # Reallocate overflow/unallocated to active courses with space
+                for s in unallocated:
+                    available = [c for c in active_courses if len(allocations[c]) < max_cap]
+                    if available:
+                        best_c = min(available, key=lambda c: len(allocations[c]))
+                        allocations[best_c].append(s)
+                    elif active_courses:
+                        best_c = min(active_courses, key=lambda c: len(allocations[c]))
+                        allocations[best_c].append(s)
+
+                # Check minimum 20 threshold
+                under_min = [c for c in active_courses if 0 < len(allocations[c]) < MIN_STUDENTS_PER_ELECTIVE]
+                if not under_min or len(active_courses) <= 1:
+                    break
+
+                dropped = min(under_min, key=lambda c: len(allocations[c]))
+                dropped_count = len(allocations[dropped])
+                self.notices.append(
+                    f"Course {dropped} received only {dropped_count} student choices (< {MIN_STUDENTS_PER_ELECTIVE} required minimum). Course dropped from offering; {dropped_count} students re-allocated based on FCFS next preferences."
+                )
+                active_courses.remove(dropped)
+                num_courses = max(1, len(active_courses))
+                max_cap = max(DEPT_THEORY_MAX, math.ceil(len(students_data) / num_courses) + 10)
+
+            for c_code, s_list in allocations.items():
+                for s in s_list:
+                    student_course_map[s["row_index"]] = c_code
+
+        df["course_code"] = [student_course_map.get(idx, row.get("course_code", "")) for idx, row in df.iterrows()]
+        df = df.drop(columns=["_category"])
+        return df
+
+    def _check_direct_elective_minimums(
+        self, df: pd.DataFrame, course_map: Dict[str, Course]
+    ) -> None:
+        """Verify that all elective courses in direct assignment meet the 20-student threshold."""
+        counts = df["course_code"].value_counts().to_dict()
+        for c_code, count in counts.items():
+            c_obj = course_map.get(c_code) or course_map.get(str(c_code).upper())
+            if c_obj and c_obj.course_tier in ("DEPARTMENT", "INSTITUTE"):
+                if count < MIN_STUDENTS_PER_ELECTIVE:
+                    self.notices.append(
+                        f"Notice: Elective course {c_code} has only {count} students allotted, which is below the mandatory minimum of {MIN_STUDENTS_PER_ELECTIVE} students."
+                    )
+
+    async def _resolve_faculty_for_course(self, course_code: str) -> Optional[User]:
+        clean_code = course_code.strip().upper()
+        email = DEFAULT_ELECTIVE_FACULTY_EMAILS.get(clean_code)
+        if not email:
+            return None
+        stmt = select(User).where(User.email == email, User.role == "FACULTY")
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def _get_or_create_offering(self, course: Course, term: str) -> CourseOffering:
         """Fetch or create a CourseOffering for this (course, term) pair."""
@@ -487,13 +673,15 @@ class AllotmentEngine:
         theory_chunks = balanced_chunks(students, DEPT_THEORY_MAX)
 
         base_name = course.code.replace("25PEC", "PEC").replace("25PECL", "PECL")
+        fac_user = await self._resolve_faculty_for_course(course.code)
+        fac_id = fac_user.id if fac_user else None
 
         for sec_idx, sec_students in enumerate(theory_chunks, start=1):
             section_name = f"{base_name}-Sec{sec_idx}" if len(theory_chunks) > 1 else f"{base_name}-Sec1"
             section: Optional[ClassSection] = None
 
             if mode != "PRACTICAL_ONLY":
-                section = await self._get_or_create_section(offering, section_name)
+                section = await self._get_or_create_section(offering, section_name, faculty_id=fac_id)
                 self.faculty_slots_generated += 1
 
             # Lab batches per section (PECL or INTEGRATED_TH_PR)
@@ -501,7 +689,7 @@ class AllotmentEngine:
                 batch_chunks = balanced_chunks(sec_students, DEPT_BATCH_MAX)
                 for b_idx, chunk in enumerate(batch_chunks, start=1):
                     batch_name = f"{section_name}-Lab{b_idx}"
-                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section)
+                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=fac_id)
                     if mode == "PRACTICAL_ONLY":
                         self.faculty_slots_generated += 1
                     for student in chunk:
@@ -512,7 +700,7 @@ class AllotmentEngine:
                     batch_chunks = balanced_chunks(sec_students, DEPT_BATCH_MAX)
                     for b_idx, chunk in enumerate(batch_chunks, start=1):
                         batch_name = f"{section_name}-Tut{b_idx}"
-                        batch = await self._get_or_create_batch(offering, batch_name, parent_section=section)
+                        batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=fac_id)
                         for student in chunk:
                             await self._upsert_enrollment(student, offering, section=section, batch=batch)
                 else:
@@ -544,13 +732,15 @@ class AllotmentEngine:
 
         theory_chunks = balanced_chunks(students, INST_THEORY_MAX)
         base_name = course.code
+        fac_user = await self._resolve_faculty_for_course(course.code)
+        fac_id = fac_user.id if fac_user else None
 
         for sec_idx, sec_students in enumerate(theory_chunks, start=1):
             section_name = f"{base_name}-Sec{sec_idx}"
             section: Optional[ClassSection] = None
 
             if mode != "PRACTICAL_ONLY":
-                section = await self._get_or_create_section(offering, section_name)
+                section = await self._get_or_create_section(offering, section_name, faculty_id=fac_id)
                 self.faculty_slots_generated += 1
 
             if mode == "THEORY_ONLY":
@@ -563,14 +753,14 @@ class AllotmentEngine:
                 tut_chunks = balanced_chunks(sec_students, INST_TUTORIAL_MAX)
                 for t_idx, chunk in enumerate(tut_chunks, start=1):
                     batch_name = f"{section_name}-Tut{t_idx}"
-                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section)
+                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=fac_id)
                     for student in chunk:
                         await self._upsert_enrollment(student, offering, section=section, batch=batch)
             elif mode in ("INTEGRATED_TH_PR", "PRACTICAL_ONLY"):
                 batch_chunks = balanced_chunks(sec_students, DEPT_BATCH_MAX)
                 for b_idx, chunk in enumerate(batch_chunks, start=1):
                     batch_name = f"{section_name}-Lab{b_idx}"
-                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section)
+                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=fac_id)
                     if mode == "PRACTICAL_ONLY":
                         self.faculty_slots_generated += 1
                     for student in chunk:
@@ -584,7 +774,7 @@ class AllotmentEngine:
     # ------------------------------------------------------------------
 
     async def _get_or_create_section(
-        self, offering: CourseOffering, section_name: str
+        self, offering: CourseOffering, section_name: str, faculty_id: Optional[uuid.UUID] = None
     ) -> ClassSection:
         stmt = select(ClassSection).where(
             ClassSection.offering_id == offering.id,
@@ -593,10 +783,12 @@ class AllotmentEngine:
         result = await self.db.execute(stmt)
         section = result.scalar_one_or_none()
         if section is None:
-            section = ClassSection(offering_id=offering.id, section_name=section_name)
+            section = ClassSection(offering_id=offering.id, section_name=section_name, faculty_id=faculty_id)
             self.db.add(section)
             await self.db.flush()
             self.sections_created += 1
+        elif faculty_id and not section.faculty_id:
+            section.faculty_id = faculty_id
         return section
 
     async def _get_or_create_batch(
@@ -604,6 +796,7 @@ class AllotmentEngine:
         offering: CourseOffering,
         batch_name: str,
         parent_section: Optional[ClassSection] = None,
+        faculty_id: Optional[uuid.UUID] = None,
     ) -> PracticalBatch:
         stmt = select(PracticalBatch).where(
             PracticalBatch.offering_id == offering.id,
@@ -616,10 +809,13 @@ class AllotmentEngine:
                 offering_id=offering.id,
                 section_id=parent_section.id if parent_section else None,
                 batch_name=batch_name,
+                faculty_id=faculty_id,
             )
             self.db.add(batch)
             await self.db.flush()
             self.batches_created += 1
+        elif faculty_id and not batch.faculty_id:
+            batch.faculty_id = faculty_id
         return batch
 
     async def _upsert_enrollment(
@@ -645,7 +841,6 @@ class AllotmentEngine:
             )
             self.db.add(enrollment)
         else:
-            # Update if re-running allotment
             if section:
                 enrollment.section_id = section.id
             if batch:
@@ -663,6 +858,7 @@ class AllotmentEngine:
             "sections_created": self.sections_created,
             "batches_created": self.batches_created,
             "faculty_slots_generated": self.faculty_slots_generated,
+            "notices": getattr(self, "notices", []),
             "errors": [e.model_dump() for e in self.errors],
         }
 

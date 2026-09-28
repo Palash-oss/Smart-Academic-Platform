@@ -170,6 +170,26 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
         ))}
       </div>
 
+      {result.notices && result.notices.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-sky-800 mb-2 flex items-center gap-1.5 font-mono">
+            <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+            FCFS Allotment & Min 20 Students Optimization ({result.notices.length}):
+          </p>
+          <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+            {result.notices.map((notice: string, i: number) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 bg-sky-50 border border-sky-200 rounded p-2 text-xs text-sky-900"
+              >
+                <Check className="w-3.5 h-3.5 text-sky-600 flex-shrink-0 mt-0.5" />
+                <span>{notice}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {errors.length > 0 && (
         <div>
           <p className="text-xs font-bold text-amber-800 mb-2 flex items-center gap-1.5 font-mono">
@@ -899,6 +919,7 @@ export default function AdminAllotmentPage() {
           sections_created: data.sections_created ?? 0,
           batches_created: data.batches_created ?? 0,
           faculty_slots_generated: data.faculty_slots_generated ?? 0,
+          notices: data.notices || [],
           errors: data.errors || [],
         });
         await loadOfferings();
@@ -976,8 +997,20 @@ export default function AdminAllotmentPage() {
                     Upload Student Allotment Sheet
                   </h2>
                   <p className="text-xs text-[#71717A] mb-4">
-                    Required columns: student_id, roll_no, department, class_div, course_code, academic_term
+                    Required columns: student_id, roll_no, department, class_div, academic_term, preference_1, preference_2, preference_3
                   </p>
+
+                  <div className="mb-4">
+                    <a
+                      href="/allotment_sem5_student_choices.csv"
+                      download="allotment_sem5_student_choices.csv"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-[#FFF4ED] hover:bg-[#FFE8D9] border border-[#FED7AA] rounded text-xs text-[#C2410C] font-bold transition-all shadow-sm group"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#FF5500] group-hover:scale-110 transition-transform" />
+                      <span>Download Test Allotment CSV (140 Students • FCFS & Min-20 Rule)</span>
+                    </a>
+                  </div>
+
                   <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
 
                   {file && (

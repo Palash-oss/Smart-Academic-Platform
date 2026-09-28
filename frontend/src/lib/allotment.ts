@@ -40,6 +40,7 @@ export interface AllotmentUploadResponse {
   sections_created: number;
   batches_created: number;
   faculty_slots_generated: number;
+  notices?: string[];
   errors: AllotmentRowError[];
 }
 
@@ -90,6 +91,17 @@ export const MODE_LABELS: Record<string, string> = {
   THEORY_ONLY: 'Theory Only',
 };
 
+export interface FacultyStudentRosterItem {
+  id: string;
+  student_erp_id?: string | null;
+  roll_no?: string | null;
+  name: string;
+  email: string;
+  division?: string | null;
+  section_name?: string | null;
+  batch_name?: string | null;
+}
+
 // Faculty Portal Types
 export interface FacultyBatchItem {
   id: string;
@@ -99,6 +111,7 @@ export interface FacultyBatchItem {
   division?: string | null;
   batch_label?: string | null;
   component_type?: string;
+  students?: FacultyStudentRosterItem[];
 }
 
 export interface FacultySectionItem {
@@ -107,6 +120,7 @@ export interface FacultySectionItem {
   student_count: number;
   division?: string | null;
   component_type?: string;
+  students?: FacultyStudentRosterItem[];
 }
 
 export interface FacultyCourseItem {
@@ -123,6 +137,7 @@ export interface FacultyCourseItem {
   total_students: number;
   divisions?: string[];
   assigned_types?: string[];
+  students?: FacultyStudentRosterItem[];
 }
 
 export interface FacultySubjectsResponse {

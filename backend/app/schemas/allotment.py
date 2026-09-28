@@ -33,6 +33,7 @@ class AllotmentUploadResponse(BaseModel):
     sections_created: int
     batches_created: int
     faculty_slots_generated: int
+    notices: List[str] = []
     errors: List[AllotmentRowError] = []
 
 
@@ -124,6 +125,17 @@ class CourseOfferingRead(BaseModel):
 # Faculty Portal: My Assigned Subjects & Batches
 # ---------------------------------------------------------------------------
 
+class FacultyStudentRosterItem(BaseModel):
+    id: uuid.UUID
+    student_erp_id: Optional[str] = None
+    roll_no: Optional[str] = None
+    name: str
+    email: str
+    division: Optional[str] = None
+    section_name: Optional[str] = None
+    batch_name: Optional[str] = None
+
+
 class FacultyBatchItem(BaseModel):
     id: uuid.UUID
     batch_name: str
@@ -132,6 +144,7 @@ class FacultyBatchItem(BaseModel):
     division: Optional[str] = None
     batch_label: Optional[str] = None
     component_type: str = "PRACTICAL"
+    students: List[FacultyStudentRosterItem] = []
 
 
 class FacultySectionItem(BaseModel):
@@ -140,6 +153,7 @@ class FacultySectionItem(BaseModel):
     student_count: int = 0
     division: Optional[str] = None
     component_type: str = "THEORY"
+    students: List[FacultyStudentRosterItem] = []
 
 
 class FacultyCourseItem(BaseModel):
@@ -156,6 +170,7 @@ class FacultyCourseItem(BaseModel):
     total_students: int = 0
     divisions: List[str] = []
     assigned_types: List[str] = []
+    students: List[FacultyStudentRosterItem] = []
 
 
 class FacultySubjectsResponse(BaseModel):
