@@ -204,13 +204,43 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     return user
 
 
+LOGIN_EMAIL_ALIASES = {
+    # Students (Manav, Shonit, Palash, Saad)
+    "palash": "crce.10265.ceb@gmail.com",
+    "palash@academic.edu": "crce.10265.ceb@gmail.com",
+    "palash@student.academic.edu": "crce.10265.ceb@gmail.com",
+    "shonit": "crce.10277.ceb@gmail.com",
+    "shonit@academic.edu": "crce.10277.ceb@gmail.com",
+    "shonit@student.academic.edu": "crce.10277.ceb@gmail.com",
+    "manav": "crce.10279.ceb@gmail.com",
+    "manav@academic.edu": "crce.10279.ceb@gmail.com",
+    "manav@student.academic.edu": "crce.10279.ceb@gmail.com",
+    "saad": "crce.10468.ceb@gmail.com",
+    "saad@academic.edu": "crce.10468.ceb@gmail.com",
+    "saad@student.academic.edu": "crce.10468.ceb@gmail.com",
+    "student@academic.edu": "crce.10265.ceb@gmail.com",
+    # Faculty (Sujata, Kalpana, Vijay, Smita)
+    "faculty@academic.edu": "sujata.deshmukh@academic.edu",
+    "sujata": "sujata.deshmukh@academic.edu",
+    "sujata@academic.edu": "sujata.deshmukh@academic.edu",
+    "kalpana": "kalpana.deorukhkar@academic.edu",
+    "kalpana@academic.edu": "kalpana.deorukhkar@academic.edu",
+    "vijay": "vijay.shelake@academic.edu",
+    "vijay@academic.edu": "vijay.shelake@academic.edu",
+    "smita": "smita.ambarkar@academic.edu",
+    "smita@academic.edu": "smita.ambarkar@academic.edu",
+}
+
 @router.post("/login", response_model=TokenResponse)
 async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT access token."""
     clean_email = credentials.email.strip().lower()
     clean_password = credentials.password.strip()
 
-    stmt = select(User).where(func.lower(User.email) == clean_email)
+    # Map aliases if provided
+    resolved_email = LOGIN_EMAIL_ALIASES.get(clean_email, clean_email)
+
+    stmt = select(User).where(func.lower(User.email) == resolved_email)
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
 

@@ -53,18 +53,30 @@ INST_TUTORIAL_MAX = 30      # Tier 3: DM tutorial batch target
 # Delivery modes that cascade theory faculty to all batches
 CASCADE_MODES = {"INTEGRATED_TH_PR", "THEORY_TUTORIAL"}
 
-# Default elective faculty mapping for Semester 5 (auto-assigned during allotment)
+# Default elective faculty mapping for Semester 5 (from college faculty sheet)
 DEFAULT_ELECTIVE_FACULTY_EMAILS = {
-    "25PEC13CE11": "faculty@academic.edu",          # Prof. David Vance (Primary Demo Faculty)
-    "25PEC13CE12": "manoj.patil@academic.edu",       # Prof. Manoj Patil
-    "25PEC13CE13": "sachin.kulkarni@academic.edu",   # Prof. Sachin Kulkarni
-    "25PEC13CE14": "swati.shinde@academic.edu",      # Prof. Swati Shinde
-    "25PECL13CE11": "sanjay.mehta@academic.edu",     # Prof. Sanjay Mehta
-    "25PECL13CE12": "pooja.rane@academic.edu",       # Prof. Pooja Rane
-    "25PECL13CE13": "amit.verma@academic.edu",       # Prof. Amit Verma
-    "25PECL13CE15": "neha.gupta@academic.edu",       # Prof. Neha Gupta
-    "25OE13CE31": "rahul.shah@academic.edu",         # Prof. Rahul Shah
-    "25OE13CE32": "sneha.deshmukh@academic.edu",     # Prof. Sneha Deshmukh
+    "25PEC13CE11": "ashok.kanthe@academic.edu",         # Dr. Ashok Kanthe (Blockchain / HMI)
+    "25PEC13CE12": "kalpana.deorukhkar@academic.edu",    # Dr. Kalpana Deorukhkar (Deep Learning)
+    "25PEC13CE13": "smita.ambarkar@academic.edu",        # Dr. Smita Ambarkar (Cyber Security)
+    "25PEC13CE14": "ankita.amburle@academic.edu",        # Prof. Ankita Amburle (Big Data Analytics)
+    "25PECL13CE11": "nirajsingh.yeotikar@academic.edu",  # Prof. Nirajsingh R Yeotikar (IPD Lab)
+    "25PECL13CE12": "varsha.phulpagar@academic.edu",     # Prof. Varsha Phulpagar (NLP Lab)
+    "25PECL13CE13": "roshni.padate@academic.edu",         # Dr. Roshni Padate (HMI / IoT Lab)
+    "25PECL13CE15": "unik.lokhande@academic.edu",         # Prof. Lokhande Unik (Ethical Hacking Lab)
+    "25OE13CE31": "roshni.padate@academic.edu",           # Dr. Roshni Padate (Health & Wellness)
+    "25OE13CE32": "garima.singh@academic.edu",            # Prof. Garima Singh (Emotional Intelligence)
+}
+
+# Per-batch faculty distribution for multi-batch electives (round-robin among qualified teachers)
+DEFAULT_ELECTIVE_BATCH_FACULTY_EMAILS = {
+    "25PEC13CE11": ["khushboo.singh@academic.edu", "garima.singh@academic.edu", "ashok.kanthe@academic.edu"],
+    "25PEC13CE12": ["ashwini.pansare@academic.edu", "sangeeta.parshionikar@academic.edu", "kalpana.deorukhkar@academic.edu"],
+    "25PEC13CE13": ["akshata.patil@academic.edu", "smita.ambarkar@academic.edu"],
+    "25PEC13CE14": ["ankita.amburle@academic.edu"],
+    "25PECL13CE12": ["varsha.phulpagar@academic.edu", "kranti.wagle@academic.edu", "prity.bansode@academic.edu", "akshata.patil@academic.edu"],
+    "25PECL13CE15": ["unik.lokhande@academic.edu"],
+    "25PECL13CE11": ["nirajsingh.yeotikar@academic.edu"],
+    "25PECL13CE13": ["roshni.padate@academic.edu"],
 }
 
 
@@ -540,7 +552,20 @@ class AllotmentEngine:
         email = DEFAULT_ELECTIVE_FACULTY_EMAILS.get(clean_code)
         if not email:
             return None
-        stmt = select(User).where(User.email == email, User.role == "FACULTY")
+        stmt = select(User).where(User.email == email, User.role.in_(["FACULTY", "ADMIN"]))
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def _resolve_faculty_for_batch(self, course_code: str, batch_idx: int) -> Optional[User]:
+        clean_code = course_code.strip().upper()
+        batch_emails = DEFAULT_ELECTIVE_BATCH_FACULTY_EMAILS.get(clean_code)
+        if batch_emails:
+            email = batch_emails[(batch_idx - 1) % len(batch_emails)]
+        else:
+            email = DEFAULT_ELECTIVE_FACULTY_EMAILS.get(clean_code)
+        if not email:
+            return None
+        stmt = select(User).where(User.email == email, User.role.in_(["FACULTY", "ADMIN"]))
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -689,7 +714,9 @@ class AllotmentEngine:
                 batch_chunks = balanced_chunks(sec_students, DEPT_BATCH_MAX)
                 for b_idx, chunk in enumerate(batch_chunks, start=1):
                     batch_name = f"{section_name}-Lab{b_idx}"
-                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=fac_id)
+                    batch_fac = await self._resolve_faculty_for_batch(course.code, b_idx)
+                    b_fac_id = batch_fac.id if batch_fac else fac_id
+                    batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=b_fac_id)
                     if mode == "PRACTICAL_ONLY":
                         self.faculty_slots_generated += 1
                     for student in chunk:

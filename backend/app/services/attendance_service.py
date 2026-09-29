@@ -179,11 +179,16 @@ async def fetch_student_attendance_records(
 
 async def fetch_all_students_faculty_overview(
     db: AsyncSession,
+    faculty_user: User | None = None,
     faculty_dept_id: uuid.UUID | None = None,
     dept_code: str | None = None,
     div_name: str | None = None
 ) -> List[Dict[str, Any]]:
-    """Fetches attendance summary for students (Faculty Dashboard)."""
+    """
+    Fetches attendance summary for students.
+    - If user is FACULTY: strictly scopes to the subjects & students they are allocated to teach.
+    - If user is ADMIN: returns full attendance of students across all curriculum subjects.
+    """
     stmt = select(User).where(User.role == "STUDENT")
 
     if faculty_dept_id:
@@ -202,6 +207,50 @@ async def fetch_all_students_faculty_overview(
 
     if not students:
         return []
+
+    # If faculty_user is FACULTY: filter students & courses to ONLY those taught by this faculty member
+    faculty_course_ids: set[uuid.UUID] = set()
+    faculty_student_ids: set[uuid.UUID] = set()
+
+    if faculty_user and faculty_user.role == "FACULTY":
+        from app.db.models import ClassSection, PracticalBatch
+        # Find sections and batches assigned to this teacher
+        sec_res = await db.execute(
+            select(ClassSection.offering_id, ClassSection.id).where(ClassSection.faculty_id == faculty_user.id)
+        )
+        sec_rows = sec_res.all()
+        sec_ids = [r[1] for r in sec_rows]
+        off_ids = set([r[0] for r in sec_rows])
+
+        batch_res = await db.execute(
+            select(PracticalBatch.offering_id, PracticalBatch.id).where(PracticalBatch.faculty_id == faculty_user.id)
+        )
+        batch_rows = batch_res.all()
+        batch_ids = [r[1] for r in batch_rows]
+        off_ids.update([r[0] for r in batch_rows])
+
+        if off_ids:
+            off_courses_res = await db.execute(
+                select(CourseOffering.course_id).where(CourseOffering.id.in_(off_ids))
+            )
+            faculty_course_ids = set(off_courses_res.scalars().all())
+
+        if sec_ids or batch_ids:
+            st_enr_res = await db.execute(
+                select(StudentEnrollment.student_id).where(
+                    (StudentEnrollment.section_id.in_(sec_ids)) |
+                    (StudentEnrollment.batch_id.in_(batch_ids))
+                )
+            )
+            faculty_student_ids = set(st_enr_res.scalars().all())
+
+        if not faculty_student_ids or not faculty_course_ids:
+            return []
+
+        # Filter students to only those taught by this faculty member
+        students = [s for s in students if s.id in faculty_student_ids]
+        if not students:
+            return []
 
     student_ids = [s.id for s in students]
 
@@ -234,6 +283,9 @@ async def fetch_all_students_faculty_overview(
     enrollments_by_student: Dict[uuid.UUID, List[Course]] = {}
     for e in all_enrollments:
         if e.offering and e.offering.course and e.offering.course.semester == 5:
+            # If FACULTY user: only include courses this teacher teaches!
+            if faculty_user and faculty_user.role == "FACULTY" and e.offering.course_id not in faculty_course_ids:
+                continue
             enrollments_by_student.setdefault(e.student_id, []).append(e.offering.course)
 
     overview = []

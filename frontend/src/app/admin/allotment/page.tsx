@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Clock,
+  Trash2,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -223,71 +224,7 @@ function UploadResultCard({ result }: { result: AllotmentUploadResponse }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Faculty Upload Result Card
-// ─────────────────────────────────────────────────────────────────────────────
-function FacultyUploadResultCard({
-  result,
-}: {
-  result: {
-    status: string;
-    total_assignments_processed: number;
-    sections_assigned: number;
-    batches_assigned: number;
-    errors: string[];
-  };
-}) {
-  const success = result.status === 'success';
-  const errors = result.errors || [];
 
-  return (
-    <div className={`rounded-md border p-5 bg-white ${
-      success ? 'border-emerald-300' : 'border-amber-300'
-    }`}>
-      <div className="flex items-start gap-3 mb-4">
-        <div className={`p-2 rounded ${success ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-          {success ? (
-            <CheckCircle2 className="w-5 h-5" />
-          ) : (
-            <AlertTriangle className="w-5 h-5" />
-          )}
-        </div>
-        <div>
-          <p className={`font-bold ${success ? 'text-emerald-800' : 'text-amber-800'}`}>
-            {success ? 'Faculty Teaching Matrix Ingested' : 'Faculty Allocation Notice'}
-          </p>
-          <p className="text-xs text-[#71717A] mt-0.5 font-mono">
-            {result.total_assignments_processed ?? 0} teaching assignments processed
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
-        {[
-          { label: 'Assignments', value: result.total_assignments_processed ?? 0, icon: FileSpreadsheet },
-          { label: 'Theory Sections', value: result.sections_assigned ?? 0, icon: BookOpen },
-          { label: 'Practical Batches', value: result.batches_assigned ?? 0, icon: FlaskConical },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="bg-[#FAFAFB] border border-[#E4E4E7] rounded p-2.5 text-center">
-            <Icon className="w-4 h-4 mx-auto mb-1 text-[#09090B]" />
-            <p className="text-xl font-bold text-[#09090B] leading-none">{value}</p>
-            <p className="text-[10px] text-[#71717A] font-mono mt-1">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {errors.length > 0 && (
-        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-          {errors.map((err: string, i: number) => (
-            <div key={i} className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-900 font-mono">
-              {err}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface FacultyOption {
   id: string;
@@ -644,18 +581,6 @@ export default function AdminAllotmentPage() {
   const [autoEnrollingCore, setAutoEnrollingCore] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ full_name?: string; role?: string } | null>(null);
 
-  // Tabs: students vs faculty
-  const [uploadTab, setUploadTab] = useState<'students' | 'faculty'>('students');
-  const [facultyFile, setFacultyFile] = useState<File | null>(null);
-  const [uploadingFaculty, setUploadingFaculty] = useState(false);
-  const [facultyUploadResult, setFacultyUploadResult] = useState<{
-    status: string;
-    total_assignments_processed: number;
-    sections_assigned: number;
-    batches_assigned: number;
-    errors: string[];
-  } | null>(null);
-
   // Manual Add Faculty Modal State
   const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
   const [newFacultyName, setNewFacultyName] = useState('');
@@ -665,6 +590,12 @@ export default function AdminAllotmentPage() {
   const [addingFaculty, setAddingFaculty] = useState(false);
   const [addFacultySuccess, setAddFacultySuccess] = useState<string | null>(null);
   const [addFacultyError, setAddFacultyError] = useState<string | null>(null);
+
+  // Allotment Dissolve State
+  const [showDissolveModal, setShowDissolveModal] = useState(false);
+  const [dissolvingAllotment, setDissolvingAllotment] = useState(false);
+  const [dissolveSuccessMsg, setDissolveSuccessMsg] = useState<string | null>(null);
+  const [dissolveErrorMsg, setDissolveErrorMsg] = useState<string | null>(null);
 
   const loadFaculty = useCallback(async () => {
     try {
@@ -774,6 +705,33 @@ export default function AdminAllotmentPage() {
     }
   };
 
+  const handleDissolveAllotment = async () => {
+    setDissolvingAllotment(true);
+    setDissolveSuccessMsg(null);
+    setDissolveErrorMsg(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/admin/dissolve-allotment?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setDissolveErrorMsg(data?.detail || 'Failed to dissolve elective allotments.');
+      } else {
+        setDissolveSuccessMsg(data?.message || 'Elective allotments dissolved successfully.');
+        setResult(null);
+        await loadOfferings();
+        setTimeout(() => {
+          setShowDissolveModal(false);
+        }, 1200);
+      }
+    } catch {
+      setDissolveErrorMsg('Network error while dissolving elective allotments.');
+    } finally {
+      setDissolvingAllotment(false);
+    }
+  };
+
   const handleCreateFaculty = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddingFaculty(true);
@@ -808,75 +766,6 @@ export default function AdminAllotmentPage() {
     } finally {
       setAddingFaculty(false);
     }
-  };
-
-  const handleUploadFacultyMatrix = async () => {
-    if (!facultyFile) return;
-    setUploadingFaculty(true);
-    setFacultyUploadResult(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', facultyFile);
-      const token = getStoredToken();
-      const res = await fetch(
-        `/api/v1/admin/upload-faculty-allocation?academic_term=${encodeURIComponent(selectedTerm)}`,
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: formData,
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setFacultyUploadResult({
-          status: 'partial',
-          total_assignments_processed: data?.total_assignments_processed ?? 0,
-          sections_assigned: 0,
-          batches_assigned: 0,
-          errors: Array.isArray(data?.detail) ? data.detail : [data?.detail || 'Upload failed'],
-        });
-      } else {
-        setFacultyUploadResult(data);
-        await loadOfferings();
-        await loadFaculty();
-        setFacultyFile(null);
-      }
-    } catch {
-      setFacultyUploadResult({
-        status: 'error',
-        total_assignments_processed: 0,
-        sections_assigned: 0,
-        batches_assigned: 0,
-        errors: ['Network error while uploading faculty matrix'],
-      });
-    } finally {
-      setUploadingFaculty(false);
-    }
-  };
-
-  const downloadSampleFacultyMatrix = () => {
-    const csvContent =
-      'faculty_email,faculty_name,course_code,class_div,batch_name,academic_term\n' +
-      'anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PCC13CE14,COMP-A,ALL,2026-27-SEM5\n' +
-      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PCC13CE19,COMP-A,ALL,2026-27-SEM5\n' +
-      'sneha.deshmukh@academic.edu,Prof. Sneha Deshmukh,25PCC13CE21,COMP-A,ALL,2026-27-SEM5\n' +
-      'vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PCC13CE22,COMP-A,ALL,2026-27-SEM5\n' +
-      'arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B1,2026-27-SEM5\n' +
-      'arjun.nair@academic.edu,Prof. Arjun Nair,25VSE13CE04,COMP-A,COMP-A-B2,2026-27-SEM5\n' +
-      'priya.sharma@academic.edu,Prof. Priya Sharma,25VSE13CE04,COMP-A,COMP-A-B3,2026-27-SEM5\n' +
-      'vikram.malhotra@academic.edu,Prof. Vikram Malhotra,25PEC13CE11,COMP-A,ALL,2026-27-SEM5\n' +
-      'priya.sharma@academic.edu,Prof. Priya Sharma,25PEC13CE12,COMP-A,ALL,2026-27-SEM5\n' +
-      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PEC13CE13,COMP-A,ALL,2026-27-SEM5\n' +
-      'anita.kulkarni@academic.edu,Prof. Anita Kulkarni,25PEC13CE14,COMP-A,ALL,2026-27-SEM5\n' +
-      'rajesh.iyer@academic.edu,Prof. Rajesh Iyer,25PECL13CE15,COMP-A,COMP-A-B1,2026-27-SEM5\n';
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'sample_faculty_allocation_matrix.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleUpload = async () => {
@@ -960,197 +849,132 @@ export default function AdminAllotmentPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Left: Upload Panel */}
           <div className="lg:col-span-2 space-y-5">
-            {/* Segmented Upload Tabs */}
-            <div className="flex items-center gap-1 p-1 bg-white border border-[#E4E4E7] rounded-md shadow-sm">
-              <button
-                type="button"
-                onClick={() => setUploadTab('students')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded transition-all ${
-                  uploadTab === 'students'
-                    ? 'bg-[#18181B] text-white shadow-sm'
-                    : 'text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F6]'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                Student Allotment
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadTab('faculty')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded transition-all ${
-                  uploadTab === 'faculty'
-                    ? 'bg-[#18181B] text-white shadow-sm'
-                    : 'text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F6]'
-                }`}
-              >
-                <GraduationCap className="w-3.5 h-3.5" />
-                Faculty Matrix
-              </button>
+            {/* Student Allotment Panel */}
+            <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-[#09090B] mb-1 flex items-center gap-2">
+                <Upload className="w-4 h-4 text-[#FF5500]" />
+                Upload Student Allotment Sheet
+              </h2>
+              <p className="text-xs text-[#71717A] mb-4">
+                Required columns: student_id, roll_no, department, class_div, academic_term, preference_1, preference_2, preference_3
+              </p>
+
+              <div className="mb-4">
+                <a
+                  href="/allotment_sem5_student_choices.csv"
+                  download="allotment_sem5_student_choices.csv"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-[#FFF4ED] hover:bg-[#FFE8D9] border border-[#FED7AA] rounded text-xs text-[#C2410C] font-bold transition-all shadow-sm group"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#FF5500] group-hover:scale-110 transition-transform" />
+                  <span>Download Test Allotment CSV (140 Students • FCFS & Min-20 Rule)</span>
+                </a>
+              </div>
+
+              {/* Dissolve Helper Card */}
+              <div className="mb-4 flex items-center justify-between p-3 bg-rose-50/70 border border-rose-200/80 rounded-md">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-rose-100 text-rose-600 rounded">
+                    <Trash2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-rose-950 leading-tight">Need to Re-Run Allotment?</p>
+                    <p className="text-[11px] text-rose-700 mt-0.5">Dissolve current PEC & OE student electives before uploading a new CSV.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  id="dissolve-helper-btn"
+                  onClick={() => {
+                    setDissolveSuccessMsg(null);
+                    setDissolveErrorMsg(null);
+                    setShowDissolveModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Dissolve</span>
+                </button>
+              </div>
+
+              <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
+
+              {file && (
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    id="upload-submit-btn"
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#FF5500] hover:bg-[#E64D00] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded transition-all shadow-md shadow-orange-500/20"
+                  >
+                    {uploading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Processing…
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        Run Allotment Engine
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setFile(null); setResult(null); }}
+                    className="p-2.5 bg-[#F4F4F6] hover:bg-zinc-200 rounded border border-[#E4E4E7] transition-all text-[#71717A]"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* TAB 1: Student Allotment */}
-            {uploadTab === 'students' && (
-              <>
-                <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
-                  <h2 className="text-sm font-bold text-[#09090B] mb-1 flex items-center gap-2">
-                    <Upload className="w-4 h-4 text-[#FF5500]" />
-                    Upload Student Allotment Sheet
-                  </h2>
-                  <p className="text-xs text-[#71717A] mb-4">
-                    Required columns: student_id, roll_no, department, class_div, academic_term, preference_1, preference_2, preference_3
-                  </p>
-
-                  <div className="mb-4">
-                    <a
-                      href="/allotment_sem5_student_choices.csv"
-                      download="allotment_sem5_student_choices.csv"
-                      className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-[#FFF4ED] hover:bg-[#FFE8D9] border border-[#FED7AA] rounded text-xs text-[#C2410C] font-bold transition-all shadow-sm group"
-                    >
-                      <Download className="w-3.5 h-3.5 text-[#FF5500] group-hover:scale-110 transition-transform" />
-                      <span>Download Test Allotment CSV (140 Students • FCFS & Min-20 Rule)</span>
-                    </a>
+            {/* Column Reference */}
+            <div className="bg-white border border-[#E4E4E7] rounded-md p-5 shadow-sm">
+              <p className="text-xs font-bold text-[#09090B] uppercase tracking-wider mb-3 font-mono">
+                Excel Column Reference
+              </p>
+              <div className="space-y-2">
+                {[
+                  ['student_id', 'ST2024001', 'ERP student identifier'],
+                  ['roll_no', '24CE101', 'Used for deterministic sort'],
+                  ['department', 'Computer', 'Department name'],
+                  ['class_div', 'CE-A', 'Class division'],
+                  ['course_code', '25PCC13CE19', 'Must exist in courses table'],
+                  ['academic_term', '2026-27-SEM5', 'Matches offerings'],
+                ].map(([col, ex, desc]) => (
+                  <div key={col} className="flex items-start gap-2 text-xs">
+                    <span className="font-mono text-[#09090B] font-bold bg-[#F4F4F6] px-1.5 py-0.5 rounded border border-[#E4E4E7] w-28 flex-shrink-0">{col}</span>
+                    <span className="text-[#71717A] flex-1">{desc}</span>
                   </div>
-
-                  <UploadZone onFileSelect={setFile} file={file} loading={uploading} />
-
-                  {file && (
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        id="upload-submit-btn"
-                        onClick={handleUpload}
-                        disabled={uploading}
-                        className="flex-1 flex items-center justify-center gap-2 bg-[#FF5500] hover:bg-[#E64D00] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded transition-all shadow-md shadow-orange-500/20"
-                      >
-                        {uploading ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Processing…
-                          </>
-                        ) : (
-                          <>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            Run Allotment Engine
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => { setFile(null); setResult(null); }}
-                        className="p-2.5 bg-[#F4F4F6] hover:bg-zinc-200 rounded border border-[#E4E4E7] transition-all text-[#71717A]"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Column Reference */}
-                <div className="bg-white border border-[#E4E4E7] rounded-md p-5 shadow-sm">
-                  <p className="text-xs font-bold text-[#09090B] uppercase tracking-wider mb-3 font-mono">
-                    Excel Column Reference
-                  </p>
-                  <div className="space-y-2">
-                    {[
-                      ['student_id', 'ST2024001', 'ERP student identifier'],
-                      ['roll_no', '24CE101', 'Used for deterministic sort'],
-                      ['department', 'Computer', 'Department name'],
-                      ['class_div', 'CE-A', 'Class division'],
-                      ['course_code', '25PCC13CE19', 'Must exist in courses table'],
-                      ['academic_term', '2026-27-SEM5', 'Matches offerings'],
-                    ].map(([col, ex, desc]) => (
-                      <div key={col} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono text-[#09090B] font-bold bg-[#F4F4F6] px-1.5 py-0.5 rounded border border-[#E4E4E7] w-28 flex-shrink-0">{col}</span>
-                        <span className="text-[#71717A] flex-1">{desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* TAB 2: Faculty Teaching Matrix */}
-            {uploadTab === 'faculty' && (
-              <>
-                <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-sm font-bold text-[#09090B] flex items-center gap-2">
-                      <GraduationCap className="w-4 h-4 text-[#FF5500]" />
-                      Upload Faculty Teaching Matrix
-                    </h2>
-                  </div>
-                  <p className="text-xs text-[#71717A] mb-4">
-                    Auto-allocate teachers to proper classes & batches based on teaching specifications.
-                  </p>
-
-                  <div className="mb-4">
-                    <button
-                      type="button"
-                      onClick={downloadSampleFacultyMatrix}
-                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-[#F4F4F6] hover:bg-zinc-200 border border-[#E4E4E7] rounded text-xs text-[#09090B] font-bold transition-all"
-                    >
-                      <Download className="w-3.5 h-3.5 text-[#FF5500]" />
-                      Download Sample Faculty Matrix CSV
-                    </button>
-                  </div>
-
-                  <UploadZone onFileSelect={setFacultyFile} file={facultyFile} loading={uploadingFaculty} />
-
-                  {facultyFile && (
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        onClick={handleUploadFacultyMatrix}
-                        disabled={uploadingFaculty}
-                        className="flex-1 flex items-center justify-center gap-2 bg-[#FF5500] hover:bg-[#E64D00] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded transition-all shadow-md shadow-orange-500/20"
-                      >
-                        {uploadingFaculty ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Allocating Faculty…
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            Run Faculty Allocation
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => { setFacultyFile(null); setFacultyUploadResult(null); }}
-                        className="p-2.5 bg-[#F4F4F6] hover:bg-zinc-200 rounded border border-[#E4E4E7] transition-all text-[#71717A]"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Faculty Column Reference */}
-                <div className="bg-white border border-[#E4E4E7] rounded-md p-5 shadow-sm">
-                  <p className="text-xs font-bold text-[#09090B] uppercase tracking-wider mb-3 font-mono">
-                    Faculty Matrix Column Reference
-                  </p>
-                  <div className="space-y-2">
-                    {[
-                      ['faculty_email', 'anita.kulkarni@academic.edu', 'Teacher identifier / email'],
-                      ['course_code', '25PCC13CE14', 'Course code in curriculum'],
-                      ['class_div', 'COMP-A', 'Class division to teach'],
-                      ['batch_name', 'ALL / COMP-A-B1', 'ALL for theory; B1/B2 for practical lab'],
-                      ['academic_term', '2026-27-SEM5', 'Semester term'],
-                    ].map(([col, ex, desc]) => (
-                      <div key={col} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono text-[#09090B] font-bold bg-[#F4F4F6] px-1.5 py-0.5 rounded border border-[#E4E4E7] w-28 flex-shrink-0">{col}</span>
-                        <span className="text-[#71717A] flex-1">{desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Right: Results + Offerings */}
           <div className="lg:col-span-3 space-y-6">
+            {dissolveSuccessMsg && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-900 flex items-start justify-between gap-3 shadow-sm animate-in fade-in">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-emerald-950">Elective Allotments Dissolved</p>
+                    <p className="text-emerald-800 mt-0.5">{dissolveSuccessMsg}</p>
+                    <p className="text-[11px] text-emerald-700 mt-1 font-mono">
+                      ✓ Core mandatory courses intact • Official college faculty mapped and ready for fresh allotment engine run.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDissolveSuccessMsg(null)}
+                  className="text-emerald-600 hover:text-emerald-800 p-0.5 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {result && <UploadResultCard result={result} />}
-            {facultyUploadResult && <FacultyUploadResultCard result={facultyUploadResult} />}
 
             {/* Offerings Panel */}
             <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
@@ -1182,6 +1006,20 @@ export default function AdminAllotmentPage() {
                   >
                     <RefreshCw className={`w-3 h-3 ${autoAssigning ? 'animate-spin' : ''}`} />
                     {autoAssigning ? 'Assigning…' : 'Auto-Assign Faculty'}
+                  </button>
+                  <button
+                    id="dissolve-allotment-btn"
+                    onClick={() => {
+                      setDissolveSuccessMsg(null);
+                      setDissolveErrorMsg(null);
+                      setShowDissolveModal(true);
+                    }}
+                    disabled={dissolvingAllotment}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                    title="Dissolve all student elective allotments (PEC, PECL, OE) for re-testing"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    Dissolve Electives
                   </button>
                   <div className="relative">
                     <select
@@ -1334,6 +1172,114 @@ export default function AdminAllotmentPage() {
           </div>
         </div>
       )}
+
+      {/* Dissolve Allotment Confirmation Modal */}
+      {showDissolveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-lg bg-white border border-[#E4E4E7] rounded-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-100 rounded text-rose-600 border border-rose-200">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#09090B]">Dissolve Elective Allotments</h3>
+                  <p className="text-xs text-[#71717A] font-mono">{selectedTerm}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDissolveModal(false)}
+                className="p-1.5 text-[#71717A] hover:text-[#09090B] rounded hover:bg-[#F4F4F6] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-5 text-xs text-[#3F3F46]">
+              <p>
+                This action will wipe all student enrollments, theory sections, and lab batches for elective courses in <strong className="text-[#09090B]">{selectedTerm}</strong>:
+              </p>
+              
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded font-mono text-[11px] space-y-1.5">
+                <div className="text-amber-900 font-bold flex items-start gap-1.5">
+                  <span className="text-[#FF5500] font-mono">1.</span>
+                  <span>Department Electives (PEC / PECL):</span>
+                </div>
+                <p className="text-amber-800 pl-4 font-sans text-xs">
+                  Blockchain Technology, Deep Learning, Cyber Security, Natural Language Processing Lab, Image Processing Lab, Industrial IoT Lab.
+                </p>
+
+                <div className="text-amber-900 font-bold flex items-start gap-1.5 pt-1">
+                  <span className="text-[#FF5500] font-mono">2.</span>
+                  <span>Institute Open Electives (OE):</span>
+                </div>
+                <p className="text-amber-800 pl-4 font-sans text-xs">
+                  Health, Wellness & Psychology, Emotional & Spiritual Intelligence.
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-950 text-xs flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Core Mandatory Courses & Student Data Preserved:</span>
+                  <p className="text-emerald-800 text-[11px] mt-0.5">
+                    Data Warehousing, Computer Networks, Cryptography, TCS, Cloud Computing Lab, and all 140 student accounts remain 100% untouched.
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[#71717A] text-[11px]">
+                After dissolving, you can re-run the Allotment Engine test fresh. The engine will assign the 22 official college faculty members to all courses.
+              </p>
+            </div>
+
+            {dissolveErrorMsg && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-600" />
+                <span>{dissolveErrorMsg}</span>
+              </div>
+            )}
+
+            {dissolveSuccessMsg && (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                <span>{dissolveSuccessMsg}</span>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#E4E4E7]">
+              <button
+                type="button"
+                onClick={() => setShowDissolveModal(false)}
+                disabled={dissolvingAllotment}
+                className="px-4 py-2 bg-[#F4F4F6] hover:bg-zinc-200 text-[#09090B] text-xs font-bold rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-dissolve-btn"
+                onClick={handleDissolveAllotment}
+                disabled={dissolvingAllotment}
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
+              >
+                {dissolvingAllotment ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    Dissolving Allotments…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Confirm & Dissolve Electives
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

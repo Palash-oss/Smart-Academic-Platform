@@ -127,15 +127,20 @@ export const Navbar: React.FC = () => {
               <span>AI Chat</span>
             </Link>
 
-            {user.role !== 'ADMIN' && (
+            {user.role === 'STUDENT' && (
               <Link href="/enrollments" className={navLinkClass('/enrollments')}>
                 <BookOpen style={{ width: '14px', height: '14px' }} />
-                <span>{user.role === 'FACULTY' ? 'Teaching Subjects' : 'My Subjects'}</span>
+                <span>My Subjects</span>
               </Link>
             )}
 
-            {user.role === 'FACULTY' && (
+            {(user.role === 'FACULTY' || user.role === 'ADMIN') && (
               <>
+                <Link href="/enrollments" className={navLinkClass('/enrollments')}>
+                  <BookOpen style={{ width: '14px', height: '14px' }} />
+                  <span>Teaching Subjects</span>
+                </Link>
+
                 <Link href="/faculty" className={navLinkClass('/faculty')}>
                   <ClipboardList style={{ width: '14px', height: '14px' }} />
                   <span>Attendance Ledger</span>

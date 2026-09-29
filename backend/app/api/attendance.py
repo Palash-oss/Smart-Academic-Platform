@@ -54,12 +54,13 @@ async def get_student_attendance_by_id(
 async def get_faculty_attendance_overview(
     dept_code: Optional[str] = Query(None),
     div_name: Optional[str] = Query(None),
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
-    """Faculty Dashboard endpoint: Returns attendance breakdown scoped to Faculty's Department."""
+    """Faculty Dashboard endpoint: Returns attendance breakdown scoped to Faculty's Department & Subjects."""
     return await fetch_all_students_faculty_overview(
         db,
+        faculty_user=current_user,
         faculty_dept_id=current_user.department_id,
         dept_code=dept_code,
         div_name=div_name
@@ -68,7 +69,7 @@ async def get_faculty_attendance_overview(
 
 @router.get("/faculty/departments")
 async def get_faculty_departments(
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns list of departments and divisions available for current faculty."""
@@ -83,7 +84,7 @@ async def get_faculty_courses(
     dept_code: Optional[str] = Query(None),
     department_code: Optional[str] = Query(None),
     semester: Optional[int] = Query(5),
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns courses for lecture session selection, scoped to the faculty member in the ongoing semester."""
@@ -98,7 +99,7 @@ async def get_faculty_division_students(
     div_name: Optional[str] = Query(None),
     division_name: Optional[str] = Query(None),
     batch_name: Optional[str] = Query(None),
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns student roster for a specific Department + Division (e.g. COMP-A, COMP-B) and optional batch."""
@@ -111,7 +112,7 @@ async def get_faculty_division_students(
 async def get_faculty_marked_sessions(
     subject: str = Query(...),
     session_date: str = Query(...),
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Fetches marked lecture sessions for a given date and subject to display session history & enable Undo."""
@@ -126,7 +127,7 @@ async def get_faculty_marked_sessions(
 @router.post("/faculty/mark")
 async def mark_attendance_endpoint(
     req: MarkAttendanceRequest,
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Live Attendance Marking endpoint for Faculty (Strict Daily Cap: Max 2 lectures per day per subject)."""
@@ -157,7 +158,7 @@ async def mark_attendance_endpoint(
 @router.post("/faculty/sessions/{session_id}/undo")
 async def undo_attendance_session_endpoint(
     session_id: uuid.UUID,
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Reverts (undoes) a previously submitted lecture session, decrementing total & attended classes."""
@@ -177,7 +178,7 @@ async def undo_attendance_session_endpoint(
 @router.post("/faculty/roster/import")
 async def import_roster_endpoint(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_role(["FACULTY"])),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
     db: AsyncSession = Depends(get_db)
 ):
     """Bulk Import endpoint accepting CSV upload (name,email)."""

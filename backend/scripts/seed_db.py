@@ -28,27 +28,33 @@ TERM_SEM5 = "2026-27-SEM5"  # July - December 2026 (Ongoing)
 TERM_SEM6 = "2026-27-SEM6"  # January - June 2027 (Upcoming)
 
 # ---------------------------------------------------------------------------
-# EXACTLY 18 FACULTY PROFILES (Computer Engineering Department)
+# EXACTLY 22 COLLEGE FACULTY PROFILES (Computer Engineering Department)
+# From: https://docs.google.com/spreadsheets/d/1fTBdcpQP_3vJ_BZI5yS36z0KGQOVOgWmRvqXqPw19nc/edit?usp=sharing
 # ---------------------------------------------------------------------------
 FACULTY_PROFILES = [
-    {"name": "Prof. David Vance", "email": "faculty@academic.edu"},
-    {"name": "Prof. Anita Kulkarni", "email": "anita.kulkarni@academic.edu"},
-    {"name": "Prof. Rajesh Iyer", "email": "rajesh.iyer@academic.edu"},
-    {"name": "Prof. Sneha Deshmukh", "email": "sneha.deshmukh@academic.edu"},
-    {"name": "Prof. Vikram Malhotra", "email": "vikram.malhotra@academic.edu"},
-    {"name": "Prof. Priya Sharma", "email": "priya.sharma@academic.edu"},
-    {"name": "Prof. Arjun Nair", "email": "arjun.nair@academic.edu"},
-    {"name": "Prof. Sunita Deshpande", "email": "sunita.deshpande@academic.edu"},
-    {"name": "Prof. Manoj Patil", "email": "manoj.patil@academic.edu"},
-    {"name": "Prof. Deepa Joshi", "email": "deepa.joshi@academic.edu"},
-    {"name": "Prof. Sachin Kulkarni", "email": "sachin.kulkarni@academic.edu"},
-    {"name": "Prof. Neha Gupta", "email": "neha.gupta@academic.edu"},
-    {"name": "Prof. Sanjay Mehta", "email": "sanjay.mehta@academic.edu"},
-    {"name": "Prof. Pooja Rane", "email": "pooja.rane@academic.edu"},
-    {"name": "Prof. Amit Verma", "email": "amit.verma@academic.edu"},
-    {"name": "Prof. Kavita Rao", "email": "kavita.rao@academic.edu"},
-    {"name": "Prof. Rahul Shah", "email": "rahul.shah@academic.edu"},
-    {"name": "Prof. Swati Shinde", "email": "swati.shinde@academic.edu"},
+    {"name": "Dr. Sujata Deshmukh", "email": "sujata.deshmukh@academic.edu"},
+    {"name": "Prof. Merly Thomas", "email": "merly.thomas@academic.edu"},
+    {"name": "Dr. Monica Khanore", "email": "monica.khanore@academic.edu"},
+    {"name": "Dr. Ashok Kanthe", "email": "ashok.kanthe@academic.edu"},
+    {"name": "Dr. Roshni Padate", "email": "roshni.padate@academic.edu"},
+    {"name": "Dr. Smita Ambarkar", "email": "smita.ambarkar@academic.edu"},
+    {"name": "Dr. Kalpana Deorukhkar", "email": "kalpana.deorukhkar@academic.edu"},
+    {"name": "Prof. Ashwini Pansare", "email": "ashwini.pansare@academic.edu"},
+    {"name": "Dr. Supriya Kamoji", "email": "supriya.kamoji@academic.edu"},
+    {"name": "Prof. Sushma Nagdeote", "email": "sushma.nagdeote@academic.edu"},
+    {"name": "Dr. Monali Shetty", "email": "monali.shetty@academic.edu"},
+    {"name": "Prof. Sangeeta Parshionikar", "email": "sangeeta.parshionikar@academic.edu"},
+    {"name": "Prof. Lokhande Unik", "email": "unik.lokhande@academic.edu"},
+    {"name": "Prof. Ankita Amburle", "email": "ankita.amburle@academic.edu"},
+    {"name": "Dr. Vijay Shelake", "email": "vijay.shelake@academic.edu"},
+    {"name": "Prof. Nirajsingh R Yeotikar", "email": "nirajsingh.yeotikar@academic.edu"},
+    {"name": "Prof. Prity Bansode", "email": "prity.bansode@academic.edu"},
+    {"name": "Prof. Khushboo Singh", "email": "khushboo.singh@academic.edu"},
+    {"name": "Prof. Garima Singh", "email": "garima.singh@academic.edu"},
+    {"name": "Prof. Varsha Phulpagar", "email": "varsha.phulpagar@academic.edu"},
+    {"name": "Prof. Akshata Satyawan Patil", "email": "akshata.patil@academic.edu"},
+    {"name": "Prof. Kranti Kiran Wagle", "email": "kranti.wagle@academic.edu"},
+    {"name": "Dr. Sujata Deshmukh", "email": "faculty@academic.edu"},
 ]
 
 # Realistic names for 70 students in COMP-A
@@ -98,30 +104,17 @@ LAST_NAMES_B = [
 # ---------------------------------------------------------------------------
 CORE_COURSES_SEM5 = [
     {
-        "code": "25PCC13CE19",
-        "name": "Cryptography and System Security",
+        "code": "25PCC13CE14",
+        "name": "Data Warehousing and Mining",
         "tier": "CLASS",
         "delivery_mode": "INTEGRATED_TH_PR",
         "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
-        "theory_fac_a": "rajesh.iyer@academic.edu",
-        "theory_fac_b": "rajesh.iyer@academic.edu",
-        "lab_fac_a": ["rajesh.iyer@academic.edu"] * 4,
-        "lab_fac_b": ["rajesh.iyer@academic.edu"] * 4,
-    },
-    {
-        "code": "25PCC13CE21",
-        "name": "Theory of Computer Science",
-        "tier": "CLASS",
-        "delivery_mode": "THEORY_TUTORIAL",
-        "th_hours": 2,
-        "pr_hours": 0,
-        "tu_hours": 1,
-        "theory_fac_a": "vikram.malhotra@academic.edu",
-        "theory_fac_b": "sneha.deshmukh@academic.edu",
-        "lab_fac_a": ["vikram.malhotra@academic.edu"] * 4,
-        "lab_fac_b": ["sneha.deshmukh@academic.edu"] * 4,
+        "theory_fac_a": "sushma.nagdeote@academic.edu",
+        "theory_fac_b": "sujata.deshmukh@academic.edu",
+        "lab_fac_a": ["sushma.nagdeote@academic.edu", "sushma.nagdeote@academic.edu", "prity.bansode@academic.edu", "prity.bansode@academic.edu"],
+        "lab_fac_b": ["sujata.deshmukh@academic.edu", "sujata.deshmukh@academic.edu", "prity.bansode@academic.edu", "prity.bansode@academic.edu"],
     },
     {
         "code": "25PCC13CE22",
@@ -131,24 +124,36 @@ CORE_COURSES_SEM5 = [
         "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
-        # Prof. David Vance teaches COMP-A Theory (70) and all 4 Lab batches (B1, B2, B3, B4)
-        "theory_fac_a": "faculty@academic.edu",
-        "theory_fac_b": "priya.sharma@academic.edu",
-        "lab_fac_a": ["faculty@academic.edu"] * 4,
-        "lab_fac_b": ["priya.sharma@academic.edu"] * 4,
+        "theory_fac_a": "merly.thomas@academic.edu",
+        "theory_fac_b": "ashok.kanthe@academic.edu",
+        "lab_fac_a": ["merly.thomas@academic.edu", "merly.thomas@academic.edu", "khushboo.singh@academic.edu", "khushboo.singh@academic.edu"],
+        "lab_fac_b": ["ashok.kanthe@academic.edu", "ashok.kanthe@academic.edu", "khushboo.singh@academic.edu", "khushboo.singh@academic.edu"],
     },
     {
-        "code": "25PCC13CE14",
-        "name": "Data Warehousing and Mining",
+        "code": "25PCC13CE19",
+        "name": "Cryptography and System Security",
         "tier": "CLASS",
         "delivery_mode": "INTEGRATED_TH_PR",
         "th_hours": 2,
         "pr_hours": 2,
         "tu_hours": 0,
-        "theory_fac_a": "anita.kulkarni@academic.edu",
-        "theory_fac_b": "anita.kulkarni@academic.edu",
-        "lab_fac_a": ["anita.kulkarni@academic.edu", "anita.kulkarni@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
-        "lab_fac_b": ["anita.kulkarni@academic.edu", "anita.kulkarni@academic.edu", "sneha.deshmukh@academic.edu", "sneha.deshmukh@academic.edu"],
+        "theory_fac_a": "monica.khanore@academic.edu",
+        "theory_fac_b": "monali.shetty@academic.edu",
+        "lab_fac_a": ["monica.khanore@academic.edu", "monica.khanore@academic.edu", "smita.ambarkar@academic.edu", "smita.ambarkar@academic.edu"],
+        "lab_fac_b": ["monali.shetty@academic.edu", "monali.shetty@academic.edu", "smita.ambarkar@academic.edu", "smita.ambarkar@academic.edu"],
+    },
+    {
+        "code": "25PCC13CE21",
+        "name": "Theory of Computer Science",
+        "tier": "CLASS",
+        "delivery_mode": "THEORY_TUTORIAL",
+        "th_hours": 2,
+        "pr_hours": 0,
+        "tu_hours": 1,
+        "theory_fac_a": "kalpana.deorukhkar@academic.edu",
+        "theory_fac_b": "ankita.amburle@academic.edu",
+        "lab_fac_a": ["kalpana.deorukhkar@academic.edu"] * 4,
+        "lab_fac_b": ["ankita.amburle@academic.edu"] * 4,
     },
     {
         "code": "25VSE13CE04",
@@ -160,8 +165,8 @@ CORE_COURSES_SEM5 = [
         "tu_hours": 0,
         "theory_fac_a": None,
         "theory_fac_b": None,
-        "lab_fac_a": ["arjun.nair@academic.edu"] * 4,
-        "lab_fac_b": ["deepa.joshi@academic.edu"] * 4,
+        "lab_fac_a": ["supriya.kamoji@academic.edu", "supriya.kamoji@academic.edu", "vijay.shelake@academic.edu", "vijay.shelake@academic.edu"],
+        "lab_fac_b": ["unik.lokhande@academic.edu", "unik.lokhande@academic.edu", "vijay.shelake@academic.edu", "vijay.shelake@academic.edu"],
     },
 ]
 
@@ -175,7 +180,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "sunita.deshpande@academic.edu"
+        "faculty": "ashok.kanthe@academic.edu",
     },
     {
         "code": "25PEC13CE12",
@@ -185,7 +190,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "manoj.patil@academic.edu"
+        "faculty": "kalpana.deorukhkar@academic.edu",
     },
     {
         "code": "25PEC13CE13",
@@ -195,7 +200,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "sachin.kulkarni@academic.edu"
+        "faculty": "smita.ambarkar@academic.edu",
     },
     {
         "code": "25PEC13CE14",
@@ -205,7 +210,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "neha.gupta@academic.edu"
+        "faculty": "ankita.amburle@academic.edu",
     },
     # Department Electives - Laboratory (PECL)
     {
@@ -216,7 +221,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "sanjay.mehta@academic.edu"
+        "faculty": "nirajsingh.yeotikar@academic.edu",
     },
     {
         "code": "25PECL13CE12",
@@ -226,7 +231,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "pooja.rane@academic.edu"
+        "faculty": "varsha.phulpagar@academic.edu",
     },
     {
         "code": "25PECL13CE15",
@@ -236,7 +241,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "amit.verma@academic.edu"
+        "faculty": "unik.lokhande@academic.edu",
     },
     {
         "code": "25PECL13CE13",
@@ -246,7 +251,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 2,
         "tu_hours": 0,
         "tier": "DEPARTMENT",
-        "faculty": "kavita.rao@academic.edu"
+        "faculty": "roshni.padate@academic.edu",
     },
     # Institute Open Electives (OE)
     {
@@ -257,7 +262,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 0,
         "tu_hours": 0,
         "tier": "INSTITUTE",
-        "faculty": "rahul.shah@academic.edu"
+        "faculty": "roshni.padate@academic.edu",
     },
     {
         "code": "25OE13CE32",
@@ -267,7 +272,7 @@ ELECTIVE_COURSES_SEM5 = [
         "pr_hours": 0,
         "tu_hours": 0,
         "tier": "INSTITUTE",
-        "faculty": "swati.shinde@academic.edu"
+        "faculty": "garima.singh@academic.edu",
     },
 ]
 

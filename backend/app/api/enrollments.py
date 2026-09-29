@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 import io
 import pandas as pd
-from typing import Optional
+from typing import Optional, Dict, List, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
@@ -135,12 +135,12 @@ async def assign_faculty_to_section(
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
 
-    # Verify faculty user exists and has FACULTY role
-    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
+    # Verify faculty user exists and has FACULTY or ADMIN role
+    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role.in_(["FACULTY", "ADMIN"]))
     fac_result = await db.execute(fac_stmt)
     faculty = fac_result.scalar_one_or_none()
     if faculty is None:
-        raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
+        raise HTTPException(status_code=404, detail="Faculty user not found or not a valid instructor")
 
     section.faculty_id = payload.faculty_id
 
@@ -185,11 +185,11 @@ async def assign_faculty_to_batch(
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role == "FACULTY")
+    fac_stmt = select(User).where(User.id == payload.faculty_id, User.role.in_(["FACULTY", "ADMIN"]))
     fac_result = await db.execute(fac_stmt)
     faculty = fac_result.scalar_one_or_none()
     if faculty is None:
-        raise HTTPException(status_code=404, detail="Faculty user not found or not a FACULTY role")
+        raise HTTPException(status_code=404, detail="Faculty user not found or not a valid instructor")
 
     batch.faculty_id = payload.faculty_id
     await db.commit()
@@ -216,7 +216,11 @@ async def list_all_faculty(
     current_user: User = Depends(require_role(["ADMIN", "FACULTY"])),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(User).where(User.role == "FACULTY").order_by(User.full_name)
+    stmt = (
+        select(User)
+        .where(User.role.in_(["FACULTY", "ADMIN"]), User.email != "admin@academic.edu")
+        .order_by(User.full_name)
+    )
     result = await db.execute(stmt)
     faculty_list = result.scalars().all()
     return [
@@ -563,8 +567,138 @@ async def auto_enroll_core(
 
 
 # ===========================================================================
+# ADMIN: Dissolve Elective Allotments for an Academic Term
+# ===========================================================================
+
+@router.post(
+    "/v1/admin/dissolve-allotment",
+    summary="Admin: Dissolve all student elective enrollments (PEC, PECL, OE) for an academic term",
+)
+async def dissolve_allotment(
+    academic_term: str = Query(..., description="e.g. '2026-27-SEM5'"),
+    current_user: User = Depends(require_role(["ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dissolves Department (PEC / PECL) and Institute (OE) elective enrollments for the specified term.
+    Removes:
+      1. StudentEnrollment records for elective offerings
+      2. Generated ClassSections and PracticalBatches for elective offerings
+      3. Attendance logs associated with dissolved elective courses
+      4. Elective CourseOffering records to provide a 100% clean slate
+    Preserves:
+      1. Core mandatory courses (CLASS tier: PCC, VSEC)
+      2. Student user accounts and divisions
+      3. Faculty user accounts
+    Leaves the slate clean to re-run the Allotment Engine with newly assigned faculty!
+    """
+    from app.db.models import AttendanceLog
+    from sqlalchemy import delete
+
+    # Find all elective offerings for the given term
+    stmt = (
+        select(CourseOffering)
+        .join(Course)
+        .where(
+            CourseOffering.academic_term == academic_term,
+            (Course.course_tier.in_(["DEPARTMENT", "INSTITUTE"]))
+            | (Course.code.startswith("25PEC"))
+            | (Course.code.startswith("25PECL"))
+            | (Course.code.startswith("25OE")),
+        )
+        .options(
+            selectinload(CourseOffering.course),
+            selectinload(CourseOffering.sections),
+            selectinload(CourseOffering.batches),
+        )
+    )
+    res = await db.execute(stmt)
+    elective_offerings = res.scalars().all()
+
+    if not elective_offerings:
+        return {
+            "status": "success",
+            "academic_term": academic_term,
+            "message": f"No elective offerings found for {academic_term} to dissolve.",
+            "enrollments_removed": 0,
+            "sections_removed": 0,
+            "batches_removed": 0,
+            "electives_cleared": [],
+        }
+
+    offering_ids = [off.id for off in elective_offerings]
+    cleared_course_codes = [off.course.code for off in elective_offerings if off.course]
+    cleared_course_names = [off.course.name for off in elective_offerings if off.course]
+
+    # 1. Delete student enrollments in these elective offerings
+    del_enr = await db.execute(
+        delete(StudentEnrollment).where(StudentEnrollment.offering_id.in_(offering_ids))
+    )
+    enrollments_removed = del_enr.rowcount
+
+    # 2. Delete elective practical batches
+    del_batch = await db.execute(
+        delete(PracticalBatch).where(PracticalBatch.offering_id.in_(offering_ids))
+    )
+    batches_removed = del_batch.rowcount
+
+    # 3. Delete elective class sections
+    del_sec = await db.execute(
+        delete(ClassSection).where(ClassSection.offering_id.in_(offering_ids))
+    )
+    sections_removed = del_sec.rowcount
+
+    # 4. Clean up any attendance logs for these elective courses
+    for code, name in zip(cleared_course_codes, cleared_course_names):
+        await db.execute(
+            delete(AttendanceLog).where(
+                (AttendanceLog.subject.ilike(f"%{code}%")) | (AttendanceLog.subject.ilike(f"%{name}%"))
+            )
+        )
+
+    # 5. Delete the elective CourseOffering records so no ghost offerings remain
+    await db.execute(
+        delete(CourseOffering).where(CourseOffering.id.in_(offering_ids))
+    )
+
+    await db.commit()
+
+    return {
+        "status": "success",
+        "academic_term": academic_term,
+        "message": f"Successfully dissolved elective allotments for {academic_term}. Removed {enrollments_removed} student enrollments across {len(cleared_course_codes)} elective courses. Slate is clean for allotment engine re-run.",
+        "enrollments_removed": enrollments_removed,
+        "sections_removed": sections_removed,
+        "batches_removed": batches_removed,
+        "electives_cleared": cleared_course_codes,
+    }
+
+
+# ===========================================================================
 # ADMIN: Auto-Assign Faculty to All Unassigned Slots
 # ===========================================================================
+
+# College faculty subject mapping
+COLLEGE_SUBJECT_FACULTY = {
+    "DATAWARE": ["sushma.nagdeote@academic.edu", "sujata.deshmukh@academic.edu", "prity.bansode@academic.edu"],
+    "DATA WAREHOUSING": ["sushma.nagdeote@academic.edu", "sujata.deshmukh@academic.edu", "prity.bansode@academic.edu"],
+    "NETWORKS": ["merly.thomas@academic.edu", "ashok.kanthe@academic.edu", "khushboo.singh@academic.edu"],
+    "CRYPTOGRAPHY": ["monica.khanore@academic.edu", "monali.shetty@academic.edu", "smita.ambarkar@academic.edu"],
+    "THEORY OF COMPUTER": ["kalpana.deorukhkar@academic.edu", "ankita.amburle@academic.edu"],
+    "THEORETICAL": ["kalpana.deorukhkar@academic.edu", "ankita.amburle@academic.edu"],
+    "CLOUD": ["supriya.kamoji@academic.edu", "vijay.shelake@academic.edu", "unik.lokhande@academic.edu"],
+    "DEEP LEARNING": ["kalpana.deorukhkar@academic.edu", "ashwini.pansare@academic.edu", "sangeeta.parshionikar@academic.edu"],
+    "CYBER SECURITY": ["smita.ambarkar@academic.edu", "akshata.patil@academic.edu"],
+    "BIG DATA": ["ankita.amburle@academic.edu"],
+    "BLOCKCHAIN": ["ashok.kanthe@academic.edu", "khushboo.singh@academic.edu", "garima.singh@academic.edu"],
+    "HUMAN MACHINE": ["roshni.padate@academic.edu", "khushboo.singh@academic.edu", "garima.singh@academic.edu"],
+    "NATURAL LANGUAGE": ["varsha.phulpagar@academic.edu", "kranti.wagle@academic.edu", "prity.bansode@academic.edu", "akshata.patil@academic.edu"],
+    "ETHICAL HACKING": ["unik.lokhande@academic.edu"],
+    "INNOVATIVE PRODUCT": ["nirajsingh.yeotikar@academic.edu"],
+    "IMAGE PROCESSING": ["nirajsingh.yeotikar@academic.edu"],
+    "HEALTH": ["roshni.padate@academic.edu"],
+    "EMOTIONAL": ["garima.singh@academic.edu"],
+}
 
 @router.post(
     "/v1/admin/auto-assign-faculty",
@@ -575,12 +709,13 @@ async def auto_assign_faculty(
     current_user: User = Depends(require_role(["ADMIN"])),
     db: AsyncSession = Depends(get_db),
 ):
-    # Fetch all faculty
-    fac_stmt = select(User).where(User.role == "FACULTY").order_by(User.full_name)
+    fac_stmt = select(User).where(User.role.in_(["FACULTY", "ADMIN"]), User.email != "admin@academic.edu").order_by(User.full_name)
     fac_res = await db.execute(fac_stmt)
     faculty_members = fac_res.scalars().all()
     if not faculty_members:
         raise HTTPException(status_code=400, detail="No faculty members found in database")
+
+    fac_by_email = {f.email.lower(): f for f in faculty_members}
 
     # Fetch offerings for the term
     off_stmt = (
@@ -601,20 +736,37 @@ async def auto_assign_faculty(
 
     for off in offerings:
         delivery_mode = off.course.delivery_mode
-        for sec in off.sections:
+        c_name = off.course.name.upper()
+
+        # Find candidate faculty emails for this subject
+        qualified_emails: list[str] = []
+        for kw, emails in COLLEGE_SUBJECT_FACULTY.items():
+            if kw in c_name:
+                qualified_emails = emails
+                break
+
+        q_fac_list = [fac_by_email[em] for em in qualified_emails if em in fac_by_email]
+
+        for s_idx, sec in enumerate(off.sections):
             if not sec.faculty_id:
-                fac = faculty_members[fac_idx % num_fac]
+                if q_fac_list:
+                    fac = q_fac_list[s_idx % len(q_fac_list)]
+                else:
+                    fac = faculty_members[fac_idx % num_fac]
+                    fac_idx += 1
                 sec.faculty_id = fac.id
-                fac_idx += 1
                 assigned_count += 1
                 if delivery_mode in CASCADE_MODES:
                     await cascade_faculty_to_batches(db, sec.id, fac.id)
 
-        for b in off.batches:
+        for b_idx, b in enumerate(off.batches):
             if not b.faculty_id:
-                fac = faculty_members[fac_idx % num_fac]
+                if q_fac_list:
+                    fac = q_fac_list[b_idx % len(q_fac_list)]
+                else:
+                    fac = faculty_members[fac_idx % num_fac]
+                    fac_idx += 1
                 b.faculty_id = fac.id
-                fac_idx += 1
                 assigned_count += 1
 
     await db.commit()
