@@ -592,7 +592,7 @@ async def dissolve_allotment(
       3. Faculty user accounts
     Leaves the slate clean to re-run the Allotment Engine with newly assigned faculty!
     """
-    from app.db.models import AttendanceLog
+    from app.db.models import AttendanceLog, TimetableSlot
     from sqlalchemy import delete
 
     # Find all elective offerings for the given term
@@ -659,6 +659,11 @@ async def dissolve_allotment(
     # 5. Delete the elective CourseOffering records so no ghost offerings remain
     await db.execute(
         delete(CourseOffering).where(CourseOffering.id.in_(offering_ids))
+    )
+
+    # 6. Delete any generated timetable slots for this term so downstream schedule stays in sync
+    await db.execute(
+        delete(TimetableSlot).where(TimetableSlot.academic_term == academic_term)
     )
 
     await db.commit()

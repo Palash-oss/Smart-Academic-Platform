@@ -58,7 +58,6 @@ FACULTY_PROFILES = [
     {"name": "Prof. Varsha Phulpagar", "email": "varsha.phulpagar@academic.edu"},
     {"name": "Prof. Akshata Satyawan Patil", "email": "akshata.patil@academic.edu"},
     {"name": "Prof. Kranti Kiran Wagle", "email": "kranti.wagle@academic.edu"},
-    {"name": "Dr. Sujata Deshmukh", "email": "faculty@academic.edu"},
 ]
 
 # Realistic names for 70 students in COMP-A

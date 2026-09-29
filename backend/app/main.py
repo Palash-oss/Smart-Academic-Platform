@@ -5,6 +5,7 @@ from app.api.auth import router as auth_router
 from app.api.attendance import router as attendance_router
 from app.api.chat import router as chat_router
 from app.api.enrollments import router as enrollments_router
+from app.api.timetable import router as timetable_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -30,6 +31,20 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(attendance_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(enrollments_router, prefix="/api")
+app.include_router(timetable_router, prefix="/api")
+
+
+@app.on_event("startup")
+async def on_startup():
+    """Ensures all tables (including timetable_slots) exist in PostgreSQL / Neon DB."""
+    from app.db.models import Base
+    from app.db.session import async_engine
+    if async_engine:
+        try:
+            async with async_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception as e:
+            print(f"[Startup Warning] DB table auto-verification failed: {e}")
 
 
 @app.get("/")

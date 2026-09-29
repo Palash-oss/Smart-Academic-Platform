@@ -324,6 +324,49 @@ class LectureSession(Base):
 
 
 # ---------------------------------------------------------------------------
+# Timetable Slot (Post-Allotment Engine Master & Personalized Schedules)
+# ---------------------------------------------------------------------------
+
+class TimetableSlot(Base):
+    __tablename__ = "timetable_slots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    academic_term: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., '2026-27-SEM5'
+    division_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("divisions.id", ondelete="CASCADE"), nullable=True
+    )
+    day_of_week: Mapped[str] = mapped_column(String(20), nullable=False)    # Monday, Tuesday, Wednesday...
+    start_time: Mapped[str] = mapped_column(String(10), nullable=False)     # e.g., '08:45'
+    end_time: Mapped[str] = mapped_column(String(10), nullable=False)       # e.g., '09:45'
+    slot_type: Mapped[str] = mapped_column(String(30), nullable=False, default="THEORY")  # THEORY, PRACTICAL, BREAK, HONORS, PROJECT
+    room_number: Mapped[str] = mapped_column(String(50), nullable=False, default="703")
+    custom_title: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Links to finalized allotment entities
+    offering_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=True
+    )
+    section_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("class_sections.id", ondelete="CASCADE"), nullable=True
+    )
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("practical_batches.id", ondelete="CASCADE"), nullable=True
+    )
+    faculty_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Identifier for concurrent parallel practical lab batches (e.g. B1/B2/B3/B4 grouped together)
+    parallel_group_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    division = relationship("Division")
+    offering = relationship("CourseOffering")
+    section = relationship("ClassSection")
+    batch = relationship("PracticalBatch")
+    faculty = relationship("User", foreign_keys=[faculty_id])
+
+
+# ---------------------------------------------------------------------------
 # Document RAG
 # ---------------------------------------------------------------------------
 

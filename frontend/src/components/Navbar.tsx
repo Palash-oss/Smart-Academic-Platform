@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getStoredUser, clearAuthSession, User } from '@/lib/api';
-import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X } from 'lucide-react';
+import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -70,10 +70,16 @@ export const Navbar: React.FC = () => {
             </Link>
 
             {user.role === 'STUDENT' && (
-              <Link href="/enrollments" className={navLinkClass('/enrollments')}>
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>My Subjects</span>
-              </Link>
+              <>
+                <Link href="/enrollments" className={navLinkClass('/enrollments')}>
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>My Subjects</span>
+                </Link>
+                <Link href="/timetable" className={navLinkClass('/timetable')}>
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>My Timetable</span>
+                </Link>
+              </>
             )}
 
             {(user.role === 'FACULTY' || user.role === 'ADMIN') && (
@@ -92,14 +98,26 @@ export const Navbar: React.FC = () => {
                   <Users className="w-3.5 h-3.5" />
                   <span>Mark Attendance</span>
                 </Link>
+
+                <Link href="/faculty/timetable" className={navLinkClass('/faculty/timetable')}>
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>My Timetable</span>
+                </Link>
               </>
             )}
 
             {user.role === 'ADMIN' && (
-              <Link href="/admin/allotment" className={navLinkClass('/admin/allotment')}>
-                <Layers className="w-3.5 h-3.5" />
-                <span>Allotment Engine</span>
-              </Link>
+              <>
+                <Link href="/admin/allotment" className={navLinkClass('/admin/allotment')}>
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Allotment Engine</span>
+                </Link>
+
+                <Link href="/admin/timetable" className={navLinkClass('/admin/timetable')}>
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Master Timetable</span>
+                </Link>
+              </>
             )}
           </nav>
         )}
@@ -165,10 +183,16 @@ export const Navbar: React.FC = () => {
             </Link>
 
             {user.role === 'STUDENT' && (
-              <Link href="/enrollments" className={mobileNavLinkClass('/enrollments')}>
-                <BookOpen className="w-4 h-4 text-[#FF5500]" />
-                <span>My Subjects & Faculty</span>
-              </Link>
+              <>
+                <Link href="/enrollments" className={mobileNavLinkClass('/enrollments')}>
+                  <BookOpen className="w-4 h-4 text-[#FF5500]" />
+                  <span>My Subjects & Faculty</span>
+                </Link>
+                <Link href="/timetable" className={mobileNavLinkClass('/timetable')}>
+                  <Calendar className="w-4 h-4 text-[#FF5500]" />
+                  <span>My Timetable</span>
+                </Link>
+              </>
             )}
 
             {(user.role === 'FACULTY' || user.role === 'ADMIN') && (
@@ -187,14 +211,26 @@ export const Navbar: React.FC = () => {
                   <Users className="w-4 h-4 text-[#FF5500]" />
                   <span>Mark Attendance</span>
                 </Link>
+
+                <Link href="/faculty/timetable" className={mobileNavLinkClass('/faculty/timetable')}>
+                  <Calendar className="w-4 h-4 text-[#FF5500]" />
+                  <span>My Timetable</span>
+                </Link>
               </>
             )}
 
             {user.role === 'ADMIN' && (
-              <Link href="/admin/allotment" className={mobileNavLinkClass('/admin/allotment')}>
-                <Layers className="w-4 h-4 text-[#FF5500]" />
-                <span>Allotment Engine</span>
-              </Link>
+              <>
+                <Link href="/admin/allotment" className={mobileNavLinkClass('/admin/allotment')}>
+                  <Layers className="w-4 h-4 text-[#FF5500]" />
+                  <span>Allotment Engine</span>
+                </Link>
+
+                <Link href="/admin/timetable" className={mobileNavLinkClass('/admin/timetable')}>
+                  <Calendar className="w-4 h-4 text-[#FF5500]" />
+                  <span>Master Timetable</span>
+                </Link>
+              </>
             )}
           </nav>
 
@@ -211,3 +247,5 @@ export const Navbar: React.FC = () => {
     </header>
   );
 };
+
+export default Navbar;
