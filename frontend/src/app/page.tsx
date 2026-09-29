@@ -215,10 +215,9 @@ export default function LandingPage() {
 
       {/* ─── Hero Section with Typewriter Effect (Always Visible) ─── */}
       <section
-        className="tech-grid-bg"
+        className="tech-grid-bg py-12 sm:py-20 px-4 sm:px-6"
         style={{
           borderBottom: '1px solid #E4E4E7',
-          padding: '80px 24px 70px',
           position: 'relative',
         }}
       >
@@ -563,10 +562,10 @@ export default function LandingPage() {
 
       {/* ─── Institutional Accreditation Strip (SS3 Style, Clean Spacing) ─── */}
       <section
+        className="py-5 px-4 sm:px-6"
         style={{
           background: '#FFFFFF',
           borderBottom: '1px solid #E4E4E7',
-          padding: '24px',
           position: 'relative',
           zIndex: 1,
         }}
@@ -579,14 +578,14 @@ export default function LandingPage() {
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '24px',
+            gap: '20px',
           }}
         >
           <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             ACCREDITATIONS & ARCHITECTURE:
           </span>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '32px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px' }}>
             {[
               { label: 'Autonomous Scheme', sub: 'FRCRCE-3-26' },
               { label: 'NAAC Grade A++', sub: 'Institutional Score' },
@@ -607,7 +606,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── Live Metrics Strip (Independent Clean Section) ─── */}
-      <section id="metrics" style={{ padding: '60px 24px', background: '#ECECEE', borderBottom: '1px solid #E4E4E7', position: 'relative' }}>
+      <section id="metrics" className="py-10 sm:py-16 px-4 sm:px-6" style={{ background: '#ECECEE', borderBottom: '1px solid #E4E4E7', position: 'relative' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -647,7 +646,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── Platform Architecture Panels (SS3 Layout) ─── */}
-      <section id="features" style={{ padding: '80px 24px', background: '#FFFFFF', borderBottom: '1px solid #E4E4E7' }}>
+      <section id="features" className="py-12 sm:py-20 px-4 sm:px-6" style={{ background: '#FFFFFF', borderBottom: '1px solid #E4E4E7' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
           
           <div style={{ marginBottom: '48px', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px' }}>
@@ -664,7 +663,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             
             {/* Card 1 */}
             <div style={{ background: '#F8F8FA', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '28px' }}>

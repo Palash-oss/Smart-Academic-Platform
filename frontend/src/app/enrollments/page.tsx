@@ -502,7 +502,7 @@ export default function MyEnrollmentsPage() {
       <Navbar />
 
       {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Page Title & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
@@ -637,16 +637,9 @@ export default function MyEnrollmentsPage() {
           })}
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: '6px', padding: '12px 16px', fontSize: '13px', marginBottom: '24px', fontFamily: 'Inter, sans-serif' }}>
-            {error}
-          </div>
-        )}
-
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 flex items-center justify-between gap-4">
+          <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded bg-white text-red-600 border border-red-200 flex-shrink-0">
                 <AlertCircle className="w-5 h-5" />
@@ -658,7 +651,7 @@ export default function MyEnrollmentsPage() {
             </div>
             <Link
               href="/login"
-              className="text-xs font-bold px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white transition-colors whitespace-nowrap"
+              className="text-xs font-bold px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white transition-colors text-center whitespace-nowrap self-start sm:self-auto"
             >
               Sign In Again
             </Link>

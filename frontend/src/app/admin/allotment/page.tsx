@@ -290,7 +290,7 @@ function OfferingsPanel({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           
           {/* Category Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-[#F4F4F6] rounded-md border border-[#E4E4E7]">
+          <div className="flex items-center gap-1 p-1 bg-[#F4F4F6] rounded-md border border-[#E4E4E7] overflow-x-auto max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab('CLASS')}
@@ -331,7 +331,7 @@ function OfferingsPanel({
           </div>
 
           {/* Search Box */}
-          <div className="relative flex-1 max-w-xs">
+          <div className="relative flex-1 w-full sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#71717A]" />
             <input
               type="text"
@@ -833,24 +833,24 @@ export default function AdminAllotmentPage() {
       {/* Unified Role-Aware Navbar */}
       <Navbar />
 
-      <main className="relative z-10 max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="mb-6 sm:mb-8">
           <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#FF5500', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
             Allotment Engine — Admin Panel
           </p>
-          <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '26px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '24px', fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em' }} className="sm:text-[26px]">
             Student Allotment & Batch Manager
           </h1>
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#71717A', marginTop: '4px' }}>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#71717A', marginTop: '4px' }} className="sm:text-sm">
             Upload the semester allotment sheet to auto-create theory sections, lab batches, and faculty slots.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8">
           {/* Left: Upload Panel */}
           <div className="lg:col-span-2 space-y-5">
             {/* Student Allotment Panel */}
-            <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
+            <div className="bg-white border border-[#E4E4E7] rounded-md p-4 sm:p-6 shadow-sm">
               <h2 className="text-sm font-bold text-[#09090B] mb-1 flex items-center gap-2">
                 <Upload className="w-4 h-4 text-[#FF5500]" />
                 Upload Student Allotment Sheet
@@ -977,7 +977,7 @@ export default function AdminAllotmentPage() {
             {result && <UploadResultCard result={result} />}
 
             {/* Offerings Panel */}
-            <div className="bg-white border border-[#E4E4E7] rounded-md p-6 shadow-sm">
+            <div className="bg-white border border-[#E4E4E7] rounded-md p-4 sm:p-6 shadow-sm">
               <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                 <h2 className="text-sm font-bold text-[#09090B] flex items-center gap-2">
                   <Layers className="w-4 h-4 text-[#FF5500]" />
@@ -1067,8 +1067,8 @@ export default function AdminAllotmentPage() {
 
       {/* Manual Add Faculty Modal */}
       {showAddFacultyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-md bg-white border border-[#E4E4E7] rounded-md p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-white border border-[#E4E4E7] rounded-md p-4 sm:p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-[#F4F4F6] rounded text-[#09090B] border border-[#E4E4E7]">
@@ -1175,8 +1175,8 @@ export default function AdminAllotmentPage() {
 
       {/* Dissolve Allotment Confirmation Modal */}
       {showDissolveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-lg bg-white border border-[#E4E4E7] rounded-md p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-lg bg-white border border-[#E4E4E7] rounded-md p-4 sm:p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-rose-100 rounded text-rose-600 border border-rose-200">

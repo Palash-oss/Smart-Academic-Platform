@@ -283,7 +283,7 @@ export default function MarkAttendancePage() {
     <div style={{ minHeight: '100vh', background: '#ECECEE', color: '#09090B', fontFamily: 'Inter, system-ui, sans-serif' }}>
       <Navbar />
 
-      <main style={{ maxWidth: '1180px', margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 w-full">
         
         {/* Navigation & Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E4E4E7', paddingBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -522,7 +522,7 @@ export default function MarkAttendancePage() {
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             
             {/* Header & Quick Filter */}
-            <div style={{ padding: '14px 18px', background: '#FAFAFB', borderBottom: '1px solid #E4E4E7', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div className="p-3 sm:p-4 bg-[#FAFAFB] border-b border-[#E4E4E7] flex flex-wrap items-center justify-between gap-3">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Users style={{ width: '16px', height: '16px', color: '#FF5500' }} />
                 <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '14px', fontWeight: 800, color: '#09090B' }}>
@@ -530,8 +530,8 @@ export default function MarkAttendancePage() {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ position: 'relative' }}>
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-initial">
                   <Search style={{ width: '13px', height: '13px', position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#71717A' }} />
                   <input
                     type="text"
@@ -539,7 +539,8 @@ export default function MarkAttendancePage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search student..."
                     disabled={isMaxDailyReached}
-                    style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '6px 10px 6px 30px', fontSize: '12px', color: '#09090B', width: '180px', outline: 'none' }}
+                    className="w-full sm:w-[180px]"
+                    style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '4px', padding: '6px 10px 6px 30px', fontSize: '12px', color: '#09090B', outline: 'none' }}
                   />
                 </div>
 

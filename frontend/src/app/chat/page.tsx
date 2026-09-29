@@ -179,8 +179,8 @@ export default function ChatPage() {
     <div style={{ minHeight: '100vh', background: '#ECECEE', fontFamily: 'Inter, system-ui, sans-serif', display: 'flex', flexDirection: 'column' }}>
       <Navbar />
 
-      <main style={{ flex: 1, maxWidth: '1360px', width: '100%', margin: '0 auto', padding: '28px 24px', display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}
-        className="lg-grid-2col">
+      <main style={{ flex: 1, maxWidth: '1360px', width: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}
+        className="lg-grid-2col px-4 sm:px-6 py-4 sm:py-7">
 
         {/* Chat Panel */}
         <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '600px' }}>
@@ -211,12 +211,12 @@ export default function ChatPage() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
+                className="max-w-[94%] sm:max-w-[85%]"
                 style={{
                   display: 'flex',
                   gap: '12px',
                   flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
                   alignItems: 'flex-start',
-                  maxWidth: '85%',
                   marginLeft: msg.role === 'user' ? 'auto' : '0',
                   marginRight: msg.role === 'user' ? '0' : 'auto',
                 }}
@@ -357,8 +357,8 @@ export default function ChatPage() {
               <button
                 type="submit"
                 disabled={isStreaming || !inputQuery.trim()}
+                className="px-3 sm:px-5 py-2.5"
                 style={{
-                  padding: '10px 20px',
                   background: isStreaming || !inputQuery.trim() ? '#E4E4E7' : '#FF5500',
                   color: isStreaming || !inputQuery.trim() ? '#A1A1AA' : '#FFFFFF',
                   border: 'none',
@@ -377,7 +377,7 @@ export default function ChatPage() {
                 onMouseEnter={e => { if (!isStreaming && inputQuery.trim()) { e.currentTarget.style.background = '#E64D00'; } }}
                 onMouseLeave={e => { if (!isStreaming && inputQuery.trim()) { e.currentTarget.style.background = '#FF5500'; } }}
               >
-                <span>Send</span>
+                <span className="hidden sm:inline">Send</span>
                 <Send style={{ width: '13px', height: '13px' }} />
               </button>
             </form>

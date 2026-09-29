@@ -354,7 +354,7 @@ export default function FacultyDashboardPage() {
     <div style={S.page}>
       <Navbar />
 
-      <main style={S.main}>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 w-full">
         {/* Page Header */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div>
@@ -1122,8 +1122,8 @@ export default function FacultyDashboardPage() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 9999,
-            padding: '20px',
           }}
+          className="p-2 sm:p-5"
           onClick={() => setRosterModalCourse(null)}
         >
           <div
@@ -1134,7 +1134,7 @@ export default function FacultyDashboardPage() {
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
               width: '100%',
               maxWidth: '940px',
-              maxHeight: '90vh',
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -1142,7 +1142,7 @@ export default function FacultyDashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FAFAFB' }}>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4.5 flex items-center justify-between bg-[#FAFAFB] border-b border-[#E4E4E7]">
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 800, color: '#FF5500', background: '#FFF4ED', border: '1px solid #FED7AA', borderRadius: '4px', padding: '2px 7px' }}>
@@ -1168,7 +1168,7 @@ export default function FacultyDashboardPage() {
             </div>
 
             {/* Modal Controls / Filter Bar */}
-            <div style={{ padding: '14px 24px', borderBottom: '1px solid #E4E4E7', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#FFFFFF' }}>
+            <div className="px-4 sm:px-6 py-3 sm:py-3.5 flex flex-wrap items-center justify-between gap-3 bg-white border-b border-[#E4E4E7]">
               {/* Batch / Section filter pills */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <button
@@ -1263,7 +1263,7 @@ export default function FacultyDashboardPage() {
             </div>
 
             {/* Modal Table Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '0' }} className="max-w-full">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: '#F4F4F6', borderBottom: '1px solid #E4E4E7', position: 'sticky', top: 0, zIndex: 1 }}>

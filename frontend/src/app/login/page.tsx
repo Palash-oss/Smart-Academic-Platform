@@ -237,15 +237,9 @@ export default function LoginPage() {
 
       {/* Right login panel */}
       <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '40px 24px',
-        }}
+        className="flex-1 flex items-center justify-center py-8 px-4 sm:p-8"
       >
-        <div style={{ width: '100%', maxWidth: '420px', background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '36px', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+        <div className="w-full max-w-[420px] bg-white border border-[#E4E4E7] rounded-md p-5 sm:p-9 shadow-sm">
 
           {/* Heading */}
           <div style={{ marginBottom: '24px' }}>
