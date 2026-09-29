@@ -26,7 +26,7 @@ from sqlalchemy.orm import selectinload, aliased
 from app.api.auth import get_current_user, require_role
 from app.core.security import hash_password
 from app.db.models import (
-    ClassSection, Course, CourseOffering, PracticalBatch, StudentEnrollment, User, Department,
+    ClassSection, Course, CourseOffering, PracticalBatch, StudentEnrollment, User, Department, Division,
 )
 from app.db.session import get_db
 from app.schemas.allotment import (
