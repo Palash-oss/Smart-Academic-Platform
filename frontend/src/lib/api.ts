@@ -44,6 +44,14 @@ export const clearAuthSession = () => {
   localStorage.removeItem('academic_user');
 };
 
+export const getApiUrl = (path: string): string => {
+  const backend = process.env.NEXT_PUBLIC_API_URL;
+  if (backend && path.startsWith('/api')) {
+    return `${backend.replace(/\/$/, '')}${path}`;
+  }
+  return path;
+};
+
 export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const token = getStoredToken();
   const headers = {
@@ -52,7 +60,8 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(url, { ...options, headers });
+  const finalUrl = getApiUrl(url);
+  const response = await fetch(finalUrl, { ...options, headers });
   if (response.status === 401) {
     clearAuthSession();
     if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {

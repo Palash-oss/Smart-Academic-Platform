@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { setAuthSession, TokenResponse } from '@/lib/api';
+import { setAuthSession, TokenResponse, getApiUrl } from '@/lib/api';
 import {
   GraduationCap,
   ArrowRight,
@@ -75,7 +75,7 @@ export default function LandingPage() {
     const pwd = role === 'STUDENT' ? 'student123' : role === 'FACULTY' ? 'faculty123' : 'admin123';
     setLoggingInRole(email);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pwd }),

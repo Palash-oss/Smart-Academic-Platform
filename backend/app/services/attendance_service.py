@@ -271,22 +271,21 @@ async def fetch_all_students_faculty_overview(
 
     # Ground truth: query each student's active enrollments in the current ongoing semester (Sem 5)
     enr_stmt = (
-        select(StudentEnrollment)
-        .where(StudentEnrollment.student_id.in_(student_ids))
-        .options(
-            selectinload(StudentEnrollment.offering).selectinload(CourseOffering.course)
+        select(StudentEnrollment.student_id, Course)
+        .join(CourseOffering, StudentEnrollment.offering_id == CourseOffering.id)
+        .join(Course, CourseOffering.course_id == Course.id)
+        .where(
+            StudentEnrollment.student_id.in_(student_ids),
+            Course.semester == 5,
         )
     )
-    enr_res = await db.execute(enr_stmt)
-    all_enrollments = enr_res.scalars().all()
+    if faculty_user and faculty_user.role == "FACULTY" and faculty_course_ids:
+        enr_stmt = enr_stmt.where(CourseOffering.course_id.in_(faculty_course_ids))
 
+    enr_res = await db.execute(enr_stmt)
     enrollments_by_student: Dict[uuid.UUID, List[Course]] = {}
-    for e in all_enrollments:
-        if e.offering and e.offering.course and e.offering.course.semester == 5:
-            # If FACULTY user: only include courses this teacher teaches!
-            if faculty_user and faculty_user.role == "FACULTY" and e.offering.course_id not in faculty_course_ids:
-                continue
-            enrollments_by_student.setdefault(e.student_id, []).append(e.offering.course)
+    for st_id, course in enr_res.all():
+        enrollments_by_student.setdefault(st_id, []).append(course)
 
     overview = []
     for student in students:

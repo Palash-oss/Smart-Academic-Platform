@@ -21,7 +21,7 @@ from typing import Optional, Dict, List, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased
 
 from app.api.auth import get_current_user, require_role
 from app.core.security import hash_password
@@ -795,45 +795,41 @@ async def my_enrollments(
     - Theory section name + faculty name (or 'To be assigned')
     - Practical batch name + faculty name (or 'To be assigned')
     """
+    fac_sec = aliased(User, name="fac_sec")
+    fac_batch = aliased(User, name="fac_batch")
+
     stmt = (
-        select(StudentEnrollment)
+        select(
+            StudentEnrollment, CourseOffering, Course, ClassSection, PracticalBatch,
+            fac_sec.full_name.label("sec_faculty_name"),
+            fac_batch.full_name.label("batch_faculty_name")
+        )
+        .join(CourseOffering, StudentEnrollment.offering_id == CourseOffering.id)
+        .join(Course, CourseOffering.course_id == Course.id)
+        .outerjoin(ClassSection, StudentEnrollment.section_id == ClassSection.id)
+        .outerjoin(fac_sec, ClassSection.faculty_id == fac_sec.id)
+        .outerjoin(PracticalBatch, StudentEnrollment.batch_id == PracticalBatch.id)
+        .outerjoin(fac_batch, PracticalBatch.faculty_id == fac_batch.id)
         .where(
             StudentEnrollment.student_id == current_user.id,
+            CourseOffering.academic_term == academic_term,
         )
-        .options(
-            selectinload(StudentEnrollment.offering).options(
-                selectinload(CourseOffering.course),
-            ),
-            selectinload(StudentEnrollment.section).selectinload(ClassSection.faculty),
-            selectinload(StudentEnrollment.batch).selectinload(PracticalBatch.faculty),
-        )
+        .order_by(Course.code)
     )
     result = await db.execute(stmt)
-    enrollments_raw = result.scalars().all()
-
-    # Filter by term after eager load (avoids complex join)
-    enrollments_raw = [
-        e for e in enrollments_raw
-        if e.offering.academic_term == academic_term
-    ]
+    rows = result.all()
 
     entries: list[EnrollmentEntry] = []
-    for e in enrollments_raw:
-        course = e.offering.course
-
+    for enr, off, course, sec, batch, sec_fac_name, batch_fac_name in rows:
         # Theory slot
         theory_slot: Optional[TheorySlot] = None
-        if e.section is not None:
-            fac_name = e.section.faculty.full_name if e.section.faculty else "To be assigned"
-            theory_slot = TheorySlot(section=e.section.section_name, faculty=fac_name)
-        elif course.delivery_mode not in ("PRACTICAL_ONLY",):
-            theory_slot = None  # no section created yet
+        if sec is not None:
+            theory_slot = TheorySlot(section=sec.section_name, faculty=sec_fac_name or "To be assigned")
 
         # Practical slot
         practical_slot: Optional[PracticalSlot] = None
-        if e.batch is not None:
-            fac_name = e.batch.faculty.full_name if e.batch.faculty else "To be assigned"
-            practical_slot = PracticalSlot(batch=e.batch.batch_name, faculty=fac_name)
+        if batch is not None:
+            practical_slot = PracticalSlot(batch=batch.batch_name, faculty=batch_fac_name or "To be assigned")
 
         entries.append(
             EnrollmentEntry(
@@ -906,117 +902,140 @@ async def faculty_my_subjects(
     Returns all courses in the specified academic_term where this faculty member
     is assigned to teach Theory Sections or Practical/Lab/Tutorial Batches.
     """
-    stmt = (
-        select(CourseOffering)
-        .where(CourseOffering.academic_term == academic_term)
-        .options(
-            selectinload(CourseOffering.course),
-            selectinload(CourseOffering.sections).selectinload(ClassSection.faculty),
-            selectinload(CourseOffering.sections).selectinload(ClassSection.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
-            selectinload(CourseOffering.batches).selectinload(PracticalBatch.faculty),
-            selectinload(CourseOffering.batches).selectinload(PracticalBatch.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
-            selectinload(CourseOffering.batches).selectinload(PracticalBatch.section),
-            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.student).selectinload(User.division),
-            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.section),
-            selectinload(CourseOffering.enrollments).selectinload(StudentEnrollment.batch),
-        )
-    )
-    result = await db.execute(stmt)
-    all_offerings = result.scalars().all()
-
     faculty_id = current_user.id
-    assigned_courses: list[FacultyCourseItem] = []
 
-    total_sections_count = 0
-    total_batches_count = 0
-    total_distinct_students: set[uuid.UUID] = set()
+    # 1. Fetch assigned sections with offering and course info
+    sec_rows = (await db.execute(
+        select(ClassSection, CourseOffering, Course)
+        .join(CourseOffering, ClassSection.offering_id == CourseOffering.id)
+        .join(Course, CourseOffering.course_id == Course.id)
+        .where(ClassSection.faculty_id == faculty_id, CourseOffering.academic_term == academic_term)
+    )).all()
 
-    for off in all_offerings:
-        # Check if sections or batches are assigned to this faculty
-        my_sections = [s for s in off.sections if s.faculty_id == faculty_id]
-        my_batches = [b for b in off.batches if b.faculty_id == faculty_id]
+    # 2. Fetch assigned batches with offering, course, and parent section info
+    batch_rows = (await db.execute(
+        select(PracticalBatch, CourseOffering, Course, ClassSection)
+        .join(CourseOffering, PracticalBatch.offering_id == CourseOffering.id)
+        .join(Course, CourseOffering.course_id == Course.id)
+        .outerjoin(ClassSection, PracticalBatch.section_id == ClassSection.id)
+        .where(PracticalBatch.faculty_id == faculty_id, CourseOffering.academic_term == academic_term)
+    )).all()
 
-        # For Admin viewing or if assigned
-        if not my_sections and not my_batches:
-            continue
+    if not sec_rows and not batch_rows:
+        return FacultySubjectsResponse(
+            faculty_id=str(current_user.id),
+            faculty_name=current_user.full_name,
+            department_name="Computer Engineering",
+            academic_term=academic_term,
+            total_courses=0,
+            total_sections=0,
+            total_batches=0,
+            total_students=0,
+            courses=[],
+        )
 
-        course = off.course
-        course_student_ids: set[uuid.UUID] = set()
+    sec_ids = [s[0].id for s in sec_rows]
+    batch_ids = [b[0].id for b in batch_rows]
 
-        sec_items: list[FacultySectionItem] = []
-        for s in my_sections:
-            count = len(s.enrollments)
-            sec_students: list[FacultyStudentRosterItem] = []
-            for enr in s.enrollments:
-                course_student_ids.add(enr.student_id)
-                total_distinct_students.add(enr.student_id)
-                std = enr.student
-                if std:
-                    div_label = std.division.name if std.division else (std.roll_no.split("-")[1] if std.roll_no and "-" in std.roll_no else "-")
-                    sec_students.append(FacultyStudentRosterItem(
-                        id=std.id,
-                        student_erp_id=std.student_erp_id,
-                        roll_no=std.roll_no or "-",
-                        name=std.full_name,
-                        email=std.email,
-                        division=div_label,
-                        section_name=s.section_name,
-                        batch_name=None,
-                    ))
-            sec_students.sort(key=lambda x: (x.roll_no or "", x.name))
-            div_label, _ = _parse_division_and_batch(s.section_name)
-            sec_items.append(
-                FacultySectionItem(
-                    id=s.id,
-                    section_name=s.section_name,
-                    student_count=count,
-                    division=div_label,
-                    component_type="THEORY",
-                    students=sec_students,
-                )
+    conds = []
+    if sec_ids:
+        conds.append(StudentEnrollment.section_id.in_(sec_ids))
+    if batch_ids:
+        conds.append(StudentEnrollment.batch_id.in_(batch_ids))
+
+    enr_rows = []
+    if conds:
+        enr_rows = (await db.execute(
+            select(
+                StudentEnrollment.section_id,
+                StudentEnrollment.batch_id,
+                User.id,
+                User.student_erp_id,
+                User.roll_no,
+                User.full_name,
+                User.email,
+                Division.name
             )
+            .join(User, StudentEnrollment.student_id == User.id)
+            .outerjoin(Division, User.division_id == Division.id)
+            .where(conds[0] if len(conds) == 1 else (conds[0] | conds[1]))
+        )).all()
 
-        batch_items: list[FacultyBatchItem] = []
-        for b in my_batches:
-            count = len(b.enrollments)
-            batch_students: list[FacultyStudentRosterItem] = []
-            for enr in b.enrollments:
-                course_student_ids.add(enr.student_id)
-                total_distinct_students.add(enr.student_id)
-                std = enr.student
-                if std:
-                    div_label = std.division.name if std.division else (std.roll_no.split("-")[1] if std.roll_no and "-" in std.roll_no else "-")
-                    batch_students.append(FacultyStudentRosterItem(
-                        id=std.id,
-                        student_erp_id=std.student_erp_id,
-                        roll_no=std.roll_no or "-",
-                        name=std.full_name,
-                        email=std.email,
-                        division=div_label,
-                        section_name=b.section.section_name if b.section else None,
-                        batch_name=b.batch_name,
-                    ))
-            batch_students.sort(key=lambda x: (x.roll_no or "", x.name))
-            sec_name = b.section.section_name if b.section else None
-            div_label, batch_lbl = _parse_division_and_batch(b.batch_name)
-            if not div_label and sec_name:
-                div_label, _ = _parse_division_and_batch(sec_name)
-            batch_items.append(
-                FacultyBatchItem(
-                    id=b.id,
-                    batch_name=b.batch_name,
-                    student_count=count,
-                    section_name=sec_name,
-                    division=div_label,
-                    batch_label=batch_lbl,
-                    component_type="PRACTICAL",
-                    students=batch_students,
-                )
+    from collections import defaultdict
+    students_by_sec = defaultdict(list)
+    students_by_batch = defaultdict(list)
+    total_distinct_students = set()
+
+    for sec_id, b_id, u_id, erp, roll, name, email, div_name in enr_rows:
+        total_distinct_students.add(u_id)
+        div_label = div_name or (roll.split("-")[1] if roll and "-" in roll else "-")
+        std_item = FacultyStudentRosterItem(
+            id=u_id,
+            student_erp_id=erp,
+            roll_no=roll or "-",
+            name=name,
+            email=email,
+            division=div_label,
+            section_name=None,
+            batch_name=None,
+        )
+        if sec_id and sec_id in sec_ids:
+            s_copy = std_item.model_copy()
+            students_by_sec[sec_id].append(s_copy)
+        if b_id and b_id in batch_ids:
+            b_copy = std_item.model_copy()
+            students_by_batch[b_id].append(b_copy)
+
+    # Group by offering
+    courses_by_off = {}
+    secs_by_off = defaultdict(list)
+    batches_by_off = defaultdict(list)
+
+    for sec, off, course in sec_rows:
+        courses_by_off[off.id] = (off, course)
+        s_students = students_by_sec[sec.id]
+        for s in s_students:
+            s.section_name = sec.section_name
+        s_students.sort(key=lambda x: (x.roll_no or "", x.name))
+        div_label, _ = _parse_division_and_batch(sec.section_name)
+        secs_by_off[off.id].append(
+            FacultySectionItem(
+                id=sec.id,
+                section_name=sec.section_name,
+                student_count=len(s_students),
+                division=div_label,
+                component_type="THEORY",
+                students=s_students,
             )
+        )
 
-        total_sections_count += len(sec_items)
-        total_batches_count += len(batch_items)
+    for batch, off, course, parent_sec in batch_rows:
+        courses_by_off[off.id] = (off, course)
+        b_students = students_by_batch[batch.id]
+        for b in b_students:
+            b.batch_name = batch.batch_name
+        b_students.sort(key=lambda x: (x.roll_no or "", x.name))
+        p_sec_name = parent_sec.section_name if parent_sec else None
+        div_label, batch_lbl = _parse_division_and_batch(batch.batch_name)
+        if not div_label and p_sec_name:
+            div_label, _ = _parse_division_and_batch(p_sec_name)
+        batches_by_off[off.id].append(
+            FacultyBatchItem(
+                id=batch.id,
+                batch_name=batch.batch_name,
+                student_count=len(b_students),
+                section_name=p_sec_name,
+                division=div_label,
+                batch_label=batch_lbl,
+                component_type="PRACTICAL",
+                students=b_students,
+            )
+        )
 
+    assigned_courses = []
+    for off_id, (off, course) in courses_by_off.items():
+        sec_items = secs_by_off[off_id]
+        batch_items = batches_by_off[off_id]
         course_divisions = sorted(list({item.division for item in sec_items + batch_items if item.division}))
         assigned_types = []
         if sec_items:
@@ -1024,7 +1043,6 @@ async def faculty_my_subjects(
         if batch_items:
             assigned_types.append("PRACTICAL")
 
-        # Distinct course-level student roster
         course_roster_dict: Dict[uuid.UUID, FacultyStudentRosterItem] = {}
         for s_item in sec_items:
             for std in s_item.students:
@@ -1050,22 +1068,21 @@ async def faculty_my_subjects(
                 tu_hours=course.tu_hours,
                 sections=sec_items,
                 batches=batch_items,
-                total_students=len(course_student_ids),
+                total_students=len(all_course_students),
                 divisions=course_divisions,
                 assigned_types=assigned_types,
                 students=all_course_students,
             )
         )
 
-    # If faculty has no direct section/batch assignments yet, check if there are offerings in their department to suggest or display
     return FacultySubjectsResponse(
         faculty_id=str(current_user.id),
         faculty_name=current_user.full_name,
         department_name="Computer Engineering",
         academic_term=academic_term,
         total_courses=len(assigned_courses),
-        total_sections=total_sections_count,
-        total_batches=total_batches_count,
+        total_sections=len(sec_rows),
+        total_batches=len(batch_rows),
         total_students=len(total_distinct_students),
         courses=assigned_courses,
     )

@@ -153,6 +153,10 @@ class AllotmentEngine:
         self.sections_created = 0
         self.batches_created = 0
         self.faculty_slots_generated = 0
+        self._section_cache: Dict[Tuple[uuid.UUID, str], ClassSection] = {}
+        self._batch_cache: Dict[Tuple[uuid.UUID, str], PracticalBatch] = {}
+        self._enrollment_cache: Dict[Tuple[uuid.UUID, uuid.UUID], StudentEnrollment] = {}
+        self._faculty_by_email: Dict[str, User] = {}
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -166,6 +170,10 @@ class AllotmentEngine:
           2. Multi-preference FCFS rows (ordered by timestamp, enforcing Min 20 students rule)
         Returns a summary dict. Raises on unrecoverable errors.
         """
+        # Pre-fetch all faculty into memory
+        fac_res = await self.db.execute(select(User).where(User.role.in_(["FACULTY", "ADMIN"])))
+        self._faculty_by_email = {u.email.lower(): u for u in fac_res.scalars().all()}
+
         df = self._parse_file(file_bytes, filename)
         df.columns = [c.strip().lower() for c in df.columns]
 
@@ -212,15 +220,61 @@ class AllotmentEngine:
             if pd.notna(c_val) and str(c_val).strip():
                 groups[(str(c_val).strip(), row["academic_term"])].append(row)
 
+        valid_groups: Dict[Tuple[str, str], Tuple[Course, List[pd.Series]]] = {}
+        course_ids = []
+        terms = set()
         for (course_code, term), rows in groups.items():
-            if course_code not in course_map:
-                continue
-            course = course_map[course_code]
-            offering = await self._get_or_create_offering(course, term)
-            # Clear previous allocations for this offering to allow clean recalculation
-            await self._clear_offering_allocations(offering)
+            if course_code in course_map:
+                course = course_map[course_code]
+                valid_groups[(course_code, term)] = (course, rows)
+                course_ids.append(course.id)
+                terms.add(term)
+
+        if not valid_groups:
+            return self._summary(total_rows)
+
+        # Pre-fetch all offerings for these courses and terms in a single query
+        off_stmt = select(CourseOffering).where(
+            CourseOffering.course_id.in_(course_ids),
+            CourseOffering.academic_term.in_(list(terms)),
+        )
+        off_res = await self.db.execute(off_stmt)
+        offering_lookup: Dict[Tuple[uuid.UUID, str], CourseOffering] = {
+            (off.course_id, off.academic_term): off for off in off_res.scalars().all()
+        }
+
+        all_offering_ids = []
+        offerings_by_key: Dict[Tuple[str, str], CourseOffering] = {}
+        for (course_code, term), (course, _) in valid_groups.items():
+            offering = offering_lookup.get((course.id, term))
+            if offering is None:
+                offering = CourseOffering(id=uuid.uuid4(), course_id=course.id, academic_term=term)
+                self.db.add(offering)
+                offering_lookup[(course.id, term)] = offering
+            offerings_by_key[(course_code, term)] = offering
+            all_offering_ids.append(offering.id)
+
+        # Bulk clear existing allocations for ALL affected offerings in 3 queries instead of 3*N
+        if all_offering_ids:
+            await self.db.execute(
+                delete(StudentEnrollment).where(StudentEnrollment.offering_id.in_(all_offering_ids))
+            )
+            await self.db.execute(
+                delete(PracticalBatch).where(PracticalBatch.offering_id.in_(all_offering_ids))
+            )
+            await self.db.execute(
+                delete(ClassSection).where(ClassSection.offering_id.in_(all_offering_ids))
+            )
+            self._section_cache = {k: v for k, v in self._section_cache.items() if k[0] not in all_offering_ids}
+            self._batch_cache = {k: v for k, v in self._batch_cache.items() if k[0] not in all_offering_ids}
+            self._enrollment_cache = {k: v for k, v in self._enrollment_cache.items() if k[1] not in all_offering_ids}
+
+        # Run tier allotment for each group (in-memory operations only, 0 DB queries!)
+        for (course_code, term), (course, rows) in valid_groups.items():
+            offering = offerings_by_key[(course_code, term)]
             await self._run_tier_allotment(course, offering, rows, student_map)
 
+        await self.db.flush()
         return self._summary(total_rows)
 
     async def auto_enroll_core_for_term(self, academic_term: str) -> Dict[str, Any]:
@@ -301,6 +355,7 @@ class AllotmentEngine:
                         await self._upsert_enrollment(std, offering, section=section, batch=batch)
                         total_enrolled += 1
 
+        await self.db.flush()
         return {
             "status": "success",
             "academic_term": academic_term,
@@ -361,28 +416,36 @@ class AllotmentEngine:
             if u.roll_no:
                 student_map[u.roll_no] = u
 
+        pw_hash = None
+        new_students_added = False
         for _, row in df.iterrows():
             sid = str(row["student_id"]).strip()
             roll = str(row.get("roll_no", sid)).strip()
             
             matched = student_map.get(sid) or student_map.get(roll)
             if not matched and sid:
+                if pw_hash is None:
+                    pw_hash = hash_password("student123")
                 # Auto-create student if truly new
                 student_user = User(
+                    id=uuid.uuid4(),
                     email=f"{sid.lower()}@student.academic.edu",
-                    hashed_password=hash_password("student123"),
+                    hashed_password=pw_hash,
                     full_name=f"Student {sid}",
                     role="STUDENT",
                     student_erp_id=sid,
                     roll_no=roll,
                 )
                 self.db.add(student_user)
-                await self.db.flush()
                 student_map[sid] = student_user
                 student_map[roll] = student_user
+                new_students_added = True
             elif matched:
                 student_map[sid] = matched
                 student_map[roll] = matched
+
+        if new_students_added:
+            await self.db.flush()
 
         return student_map
 
@@ -547,16 +610,14 @@ class AllotmentEngine:
                         f"Notice: Elective course {c_code} has only {count} students allotted, which is below the mandatory minimum of {MIN_STUDENTS_PER_ELECTIVE} students."
                     )
 
-    async def _resolve_faculty_for_course(self, course_code: str) -> Optional[User]:
+    def _resolve_faculty_for_course(self, course_code: str) -> Optional[User]:
         clean_code = course_code.strip().upper()
         email = DEFAULT_ELECTIVE_FACULTY_EMAILS.get(clean_code)
         if not email:
             return None
-        stmt = select(User).where(User.email == email, User.role.in_(["FACULTY", "ADMIN"]))
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        return self._faculty_by_email.get(email.lower())
 
-    async def _resolve_faculty_for_batch(self, course_code: str, batch_idx: int) -> Optional[User]:
+    def _resolve_faculty_for_batch(self, course_code: str, batch_idx: int) -> Optional[User]:
         clean_code = course_code.strip().upper()
         batch_emails = DEFAULT_ELECTIVE_BATCH_FACULTY_EMAILS.get(clean_code)
         if batch_emails:
@@ -565,9 +626,7 @@ class AllotmentEngine:
             email = DEFAULT_ELECTIVE_FACULTY_EMAILS.get(clean_code)
         if not email:
             return None
-        stmt = select(User).where(User.email == email, User.role.in_(["FACULTY", "ADMIN"]))
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        return self._faculty_by_email.get(email.lower())
 
     async def _get_or_create_offering(self, course: Course, term: str) -> CourseOffering:
         """Fetch or create a CourseOffering for this (course, term) pair."""
@@ -578,9 +637,8 @@ class AllotmentEngine:
         result = await self.db.execute(stmt)
         offering = result.scalar_one_or_none()
         if offering is None:
-            offering = CourseOffering(course_id=course.id, academic_term=term)
+            offering = CourseOffering(id=uuid.uuid4(), course_id=course.id, academic_term=term)
             self.db.add(offering)
-            await self.db.flush()  # get offering.id
         return offering
 
     async def _clear_offering_allocations(self, offering: CourseOffering) -> None:
@@ -594,7 +652,9 @@ class AllotmentEngine:
         await self.db.execute(
             delete(ClassSection).where(ClassSection.offering_id == offering.id)
         )
-        await self.db.flush()
+        self._section_cache = {k: v for k, v in self._section_cache.items() if k[0] != offering.id}
+        self._batch_cache = {k: v for k, v in self._batch_cache.items() if k[0] != offering.id}
+        self._enrollment_cache = {k: v for k, v in self._enrollment_cache.items() if k[1] != offering.id}
 
     # ------------------------------------------------------------------
     # Tier-Based Allotment Dispatcher
@@ -698,7 +758,7 @@ class AllotmentEngine:
         theory_chunks = balanced_chunks(students, DEPT_THEORY_MAX)
 
         base_name = course.code.replace("25PEC", "PEC").replace("25PECL", "PECL")
-        fac_user = await self._resolve_faculty_for_course(course.code)
+        fac_user = self._resolve_faculty_for_course(course.code)
         fac_id = fac_user.id if fac_user else None
 
         for sec_idx, sec_students in enumerate(theory_chunks, start=1):
@@ -714,7 +774,7 @@ class AllotmentEngine:
                 batch_chunks = balanced_chunks(sec_students, DEPT_BATCH_MAX)
                 for b_idx, chunk in enumerate(batch_chunks, start=1):
                     batch_name = f"{section_name}-Lab{b_idx}"
-                    batch_fac = await self._resolve_faculty_for_batch(course.code, b_idx)
+                    batch_fac = self._resolve_faculty_for_batch(course.code, b_idx)
                     b_fac_id = batch_fac.id if batch_fac else fac_id
                     batch = await self._get_or_create_batch(offering, batch_name, parent_section=section, faculty_id=b_fac_id)
                     if mode == "PRACTICAL_ONLY":
@@ -759,7 +819,7 @@ class AllotmentEngine:
 
         theory_chunks = balanced_chunks(students, INST_THEORY_MAX)
         base_name = course.code
-        fac_user = await self._resolve_faculty_for_course(course.code)
+        fac_user = self._resolve_faculty_for_course(course.code)
         fac_id = fac_user.id if fac_user else None
 
         for sec_idx, sec_students in enumerate(theory_chunks, start=1):
@@ -803,19 +863,22 @@ class AllotmentEngine:
     async def _get_or_create_section(
         self, offering: CourseOffering, section_name: str, faculty_id: Optional[uuid.UUID] = None
     ) -> ClassSection:
-        stmt = select(ClassSection).where(
-            ClassSection.offering_id == offering.id,
-            ClassSection.section_name == section_name,
+        cache_key = (offering.id, section_name)
+        if cache_key in self._section_cache:
+            sec = self._section_cache[cache_key]
+            if faculty_id and not sec.faculty_id:
+                sec.faculty_id = faculty_id
+            return sec
+
+        section = ClassSection(
+            id=uuid.uuid4(),
+            offering_id=offering.id,
+            section_name=section_name,
+            faculty_id=faculty_id,
         )
-        result = await self.db.execute(stmt)
-        section = result.scalar_one_or_none()
-        if section is None:
-            section = ClassSection(offering_id=offering.id, section_name=section_name, faculty_id=faculty_id)
-            self.db.add(section)
-            await self.db.flush()
-            self.sections_created += 1
-        elif faculty_id and not section.faculty_id:
-            section.faculty_id = faculty_id
+        self.db.add(section)
+        self.sections_created += 1
+        self._section_cache[cache_key] = section
         return section
 
     async def _get_or_create_batch(
@@ -825,24 +888,23 @@ class AllotmentEngine:
         parent_section: Optional[ClassSection] = None,
         faculty_id: Optional[uuid.UUID] = None,
     ) -> PracticalBatch:
-        stmt = select(PracticalBatch).where(
-            PracticalBatch.offering_id == offering.id,
-            PracticalBatch.batch_name == batch_name,
+        cache_key = (offering.id, batch_name)
+        if cache_key in self._batch_cache:
+            b = self._batch_cache[cache_key]
+            if faculty_id and not b.faculty_id:
+                b.faculty_id = faculty_id
+            return b
+
+        batch = PracticalBatch(
+            id=uuid.uuid4(),
+            offering_id=offering.id,
+            section_id=parent_section.id if parent_section else None,
+            batch_name=batch_name,
+            faculty_id=faculty_id,
         )
-        result = await self.db.execute(stmt)
-        batch = result.scalar_one_or_none()
-        if batch is None:
-            batch = PracticalBatch(
-                offering_id=offering.id,
-                section_id=parent_section.id if parent_section else None,
-                batch_name=batch_name,
-                faculty_id=faculty_id,
-            )
-            self.db.add(batch)
-            await self.db.flush()
-            self.batches_created += 1
-        elif faculty_id and not batch.faculty_id:
-            batch.faculty_id = faculty_id
+        self.db.add(batch)
+        self.batches_created += 1
+        self._batch_cache[cache_key] = batch
         return batch
 
     async def _upsert_enrollment(
@@ -852,27 +914,25 @@ class AllotmentEngine:
         section: Optional[ClassSection],
         batch: Optional[PracticalBatch],
     ) -> None:
-        """Create or update a StudentEnrollment record (idempotent on re-upload)."""
-        stmt = select(StudentEnrollment).where(
-            StudentEnrollment.student_id == student.id,
-            StudentEnrollment.offering_id == offering.id,
-        )
-        result = await self.db.execute(stmt)
-        enrollment = result.scalar_one_or_none()
-        if enrollment is None:
-            enrollment = StudentEnrollment(
-                student_id=student.id,
-                offering_id=offering.id,
-                section_id=section.id if section else None,
-                batch_id=batch.id if batch else None,
-            )
-            self.db.add(enrollment)
-        else:
+        """Create or update a StudentEnrollment record (idempotent in-memory, batch flushed)."""
+        cache_key = (student.id, offering.id)
+        if cache_key in self._enrollment_cache:
+            enrollment = self._enrollment_cache[cache_key]
             if section:
                 enrollment.section_id = section.id
             if batch:
                 enrollment.batch_id = batch.id
-        await self.db.flush()
+            return
+
+        enrollment = StudentEnrollment(
+            id=uuid.uuid4(),
+            student_id=student.id,
+            offering_id=offering.id,
+            section_id=section.id if section else None,
+            batch_id=batch.id if batch else None,
+        )
+        self.db.add(enrollment)
+        self._enrollment_cache[cache_key] = enrollment
 
     # ------------------------------------------------------------------
     # Summary Helper

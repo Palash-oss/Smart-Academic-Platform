@@ -36,6 +36,7 @@ import {
   getStoredUser,
   clearAuthSession,
   fetchWithAuth,
+  getApiUrl,
 } from '@/lib/api';
 import {
   AllotmentUploadResponse,
@@ -776,7 +777,7 @@ export default function AdminAllotmentPage() {
       const formData = new FormData();
       formData.append('file', file);
       const token = getStoredToken();
-      const res = await fetch('/api/v1/enrollments/upload-allotment', {
+      const res = await fetch(getApiUrl('/api/v1/enrollments/upload-allotment'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,

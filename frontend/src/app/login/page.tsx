@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { setAuthSession, TokenResponse } from '@/lib/api';
+import { setAuthSession, TokenResponse, getApiUrl } from '@/lib/api';
 import { GraduationCap, Lock, Mail, User as UserIcon, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
@@ -25,7 +25,7 @@ export default function LoginPage() {
 
     try {
       if (isRegister) {
-        const regRes = await fetch('/api/auth/register', {
+        const regRes = await fetch(getApiUrl('/api/auth/register'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password, full_name: fullName, role }),
@@ -43,7 +43,7 @@ export default function LoginPage() {
         }
       }
 
-      const loginRes = await fetch('/api/auth/login', {
+      const loginRes = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -92,7 +92,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const loginRes = await fetch('/api/auth/login', {
+      const loginRes = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: demoEmail, password: demoPassword }),

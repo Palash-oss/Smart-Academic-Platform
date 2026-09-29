@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { LiveRoutingTrace } from '@/components/LiveRoutingTrace';
-import { getStoredToken, getStoredUser, fetchWithAuth, User as UserType } from '@/lib/api';
+import { getStoredToken, getStoredUser, fetchWithAuth, User as UserType, getApiUrl } from '@/lib/api';
 import { Send, Bot, User as UserIcon, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface ChatMessage {
@@ -94,7 +94,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { id: assistantMessageId, role: 'assistant', content: '', agent: null }]);
 
     try {
-      const response = await fetch('/api/chat/stream', {
+      const response = await fetch(getApiUrl('/api/chat/stream'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
         body: JSON.stringify({ message: query }),
