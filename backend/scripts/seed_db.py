@@ -7,6 +7,10 @@ import random
 # Add parent directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from dotenv import load_dotenv
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")), override=True)
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env")), override=True)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.db.session import AsyncSessionLocal, sync_engine, Base
@@ -635,6 +639,9 @@ async def seed_database():
           * SEMESTER 5: July – December 2026 (2026-27-SEM5) [Ongoing]
           * SEMESTER 6: January – June 2027 (2026-27-SEM6) [Upcoming]
     """
+    from app.core.config import settings
+    db_target = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else settings.DATABASE_URL
+    print(f"[*] Target Database Host: {db_target}")
     print("[*] Ensuring database tables exist...")
     Base.metadata.create_all(bind=sync_engine)
 

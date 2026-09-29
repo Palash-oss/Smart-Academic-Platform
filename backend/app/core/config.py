@@ -1,6 +1,18 @@
 import socket
+import os
+from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Automatically load .env from current directory, backend, or project root
+_curr = Path.cwd()
+_backend = Path(__file__).resolve().parent.parent.parent
+_root = _backend.parent
+for _env_path in [_curr / ".env", _backend / ".env", _root / ".env"]:
+    if _env_path.exists():
+        load_dotenv(dotenv_path=_env_path, override=False)
+        break
 
 
 def resolve_db_host(host: str) -> str:
