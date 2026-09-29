@@ -7,6 +7,10 @@ import sys
 # Add parent directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from dotenv import load_dotenv
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")), override=True)
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env")), override=True)
+
 from sqlalchemy import select, delete, update
 from app.db.session import AsyncSessionLocal
 from app.db.models import (
@@ -149,6 +153,35 @@ async def seed_real_students_and_core():
                 db.add(u)
                 students_by_div["B"].append((u, batch_key, roll))
 
+        # Add demo test accounts for convenience
+        demo_student = User(
+            id=uuid.uuid4(),
+            email="student@academic.edu",
+            hashed_password=pw_hash,
+            full_name="Demo Student",
+            role="STUDENT",
+            student_erp_id="COMP2024A000",
+            roll_no="10000",
+            department_id=dept_comp.id,
+            division_id=divs["A"].id,
+        )
+        db.add(demo_student)
+        students_by_div["A"].append((demo_student, "B1", "10000"))
+
+        atrisk_student = User(
+            id=uuid.uuid4(),
+            email="atrisk.student@academic.edu",
+            hashed_password=pw_hash,
+            full_name="At Risk Student",
+            role="STUDENT",
+            student_erp_id="COMP2024A099",
+            roll_no="10099",
+            department_id=dept_comp.id,
+            division_id=divs["A"].id,
+        )
+        db.add(atrisk_student)
+        students_by_div["A"].append((atrisk_student, "B1", "10099"))
+
         await db.flush()
         print(f"[5] Ingested {len(students_by_div['A'])} COMPS A students and {len(students_by_div['B'])} COMPS B students.")
 
@@ -219,6 +252,7 @@ async def seed_real_students_and_core():
 
         sections_by_course_div = {}
         batches_by_course_div_b = {}
+        offerings_by_code = {}
 
         for code, conf in CORE_CONFIG.items():
             course = courses.get(code)
@@ -241,6 +275,7 @@ async def seed_real_students_and_core():
                 )
                 db.add(off)
                 await db.flush()
+            offerings_by_code[code] = off
 
             # Clean old sections and batches
             await db.execute(delete(PracticalBatch).where(PracticalBatch.offering_id == off.id))
@@ -307,12 +342,7 @@ async def seed_real_students_and_core():
             for u, batch_key, roll in students_by_div[div_name]:
                 for code in CORE_CONFIG.keys():
                     course = courses[code]
-                    off = (await db.execute(
-                        select(CourseOffering).where(
-                            CourseOffering.course_id == course.id,
-                            CourseOffering.academic_term == "2026-27-SEM5"
-                        )
-                    )).scalar_one()
+                    off = offerings_by_code[code]
 
                     sec = sections_by_course_div.get((code, div_name))
                     batch = batches_by_course_div_b.get((code, div_name, batch_key))
