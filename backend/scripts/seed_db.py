@@ -641,8 +641,15 @@ async def seed_database():
     """
     from app.core.config import settings
     db_target = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else settings.DATABASE_URL
-    print(f"[*] Target Database Host: {db_target}")
-    print("[*] Ensuring database tables exist...")
+    print("[*] Ensuring pgvector extension and database tables exist...")
+    from sqlalchemy import text
+    try:
+        with sync_engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+    except Exception as e:
+        print(f"[!] Warning creating vector extension (might already exist): {e}")
+
     Base.metadata.create_all(bind=sync_engine)
 
     pw_hash_student = hash_password("student123")
