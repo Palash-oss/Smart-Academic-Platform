@@ -56,9 +56,11 @@ class Settings(BaseSettings):
         env_url = os.getenv("DATABASE_URL") or self.DATABASE_URL_OVERRIDE
         if env_url and not env_url.startswith("postgresql+asyncpg://postgres:postgres@db:"):
             if env_url.startswith("postgres://"):
-                return env_url.replace("postgres://", "postgresql+asyncpg://", 1)
+                env_url = env_url.replace("postgres://", "postgresql+asyncpg://", 1)
             elif env_url.startswith("postgresql://") and "+asyncpg" not in env_url:
-                return env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+                env_url = env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            env_url = env_url.replace("sslmode=require", "ssl=require")
+            env_url = env_url.replace("&channel_binding=require", "").replace("?channel_binding=require", "")
             return env_url
         host = self.EFFECTIVE_POSTGRES_HOST
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{host}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -69,11 +71,12 @@ class Settings(BaseSettings):
         env_url = os.getenv("DATABASE_URL_SYNC") or os.getenv("DATABASE_URL") or self.DATABASE_URL_SYNC_OVERRIDE
         if env_url and not env_url.startswith("postgresql+psycopg2://postgres:postgres@db:"):
             if env_url.startswith("postgres://"):
-                return env_url.replace("postgres://", "postgresql+psycopg2://", 1)
+                env_url = env_url.replace("postgres://", "postgresql+psycopg2://", 1)
             elif env_url.startswith("postgresql+asyncpg://"):
-                return env_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+                env_url = env_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
             elif env_url.startswith("postgresql://") and "+psycopg2" not in env_url:
-                return env_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+                env_url = env_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            env_url = env_url.replace("&channel_binding=require", "").replace("?channel_binding=require", "")
             return env_url
         host = self.EFFECTIVE_POSTGRES_HOST
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{host}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
