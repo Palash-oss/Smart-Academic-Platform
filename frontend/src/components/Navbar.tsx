@@ -26,15 +26,24 @@ export const Navbar: React.FC = () => {
     return null;
   }
 
+  const isLinkActive = (href: string) => {
+    if (!pathname) return false;
+    if (pathname === href) return true;
+    if (href === '/faculty' || href === '/admin' || href === '/chat') {
+      return pathname === href;
+    }
+    return pathname.startsWith(href + '/');
+  };
+
   const navLinkClass = (href: string) => {
-    const isActive = pathname === href || (href !== '/chat' && pathname?.startsWith(href));
+    const isActive = isLinkActive(href);
     return isActive
       ? 'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold bg-[#18181B] text-white border border-[#18181B] transition-all'
       : 'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-[#71717A] hover:text-[#09090B] hover:bg-[#F4F4F6] transition-all';
   };
 
   const mobileNavLinkClass = (href: string) => {
-    const isActive = pathname === href || (href !== '/chat' && pathname?.startsWith(href));
+    const isActive = isLinkActive(href);
     return isActive
       ? 'flex items-center gap-3 px-3.5 py-2.5 rounded-md text-sm font-bold bg-[#18181B] text-white transition-all'
       : 'flex items-center gap-3 px-3.5 py-2.5 rounded-md text-sm font-medium text-[#52525B] hover:text-[#09090B] hover:bg-[#F4F4F6] transition-all';
