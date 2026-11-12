@@ -25,7 +25,20 @@
   --color-warning-bg:     #FFFBEB;
 }
 
-/* ─── Base Reset ─── */
+/* ─── Login Technical Sidebar (Prevents Flicker & Preserves SS3 Two-Panel Layout) ─── */
+.login-left-sidebar {
+  display: flex !important;
+  width: 42%;
+  min-width: 360px;
+  max-width: 520px;
+}
+
+@media (max-width: 860px) {
+  .login-left-sidebar {
+    display: none !important;
+  }
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }

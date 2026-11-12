@@ -30,6 +30,8 @@ import {
   Sparkles,
   Clock,
   Trash2,
+  RotateCcw,
+  AlertCircle,
 } from 'lucide-react';
 import {
   getStoredToken,
@@ -598,6 +600,26 @@ export default function AdminAllotmentPage() {
   const [dissolveSuccessMsg, setDissolveSuccessMsg] = useState<string | null>(null);
   const [dissolveErrorMsg, setDissolveErrorMsg] = useState<string | null>(null);
 
+  // Automated Elective Allotment Hub State
+  const [electiveProgress, setElectiveProgress] = useState<{
+    academic_term: string;
+    total_eligible_students: number;
+    submitted_students_count: number;
+    pending_students_count: number;
+    submission_percentage: number;
+    status: string;
+    category_distribution: Record<string, Record<string, number>>;
+    pending_students: any[];
+    allotted_students_count: number;
+  } | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [runningAutoAllotment, setRunningAutoAllotment] = useState(false);
+  const [autoAllotmentMsg, setAutoAllotmentMsg] = useState<{ success?: string; error?: string } | null>(null);
+  const [deallocatingHub, setDeallocatingHub] = useState(false);
+  const [showResetChoicesModal, setShowResetChoicesModal] = useState(false);
+  const [resettingChoices, setResettingChoices] = useState(false);
+  const [showDistribution, setShowDistribution] = useState(false);
+
   const loadFaculty = useCallback(async () => {
     try {
       const res = await fetchWithAuth('/api/v1/faculty/all');
@@ -627,6 +649,23 @@ export default function AdminAllotmentPage() {
     }
   }, [selectedTerm]);
 
+  const loadElectiveProgress = useCallback(async () => {
+    setLoadingProgress(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/electives/admin-progress?academic_term=${encodeURIComponent(selectedTerm)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setElectiveProgress(data);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingProgress(false);
+    }
+  }, [selectedTerm]);
+
   useEffect(() => {
     const token = getStoredToken();
     if (!token) { router.push('/login'); return; }
@@ -640,7 +679,91 @@ export default function AdminAllotmentPage() {
     }
     loadOfferings();
     loadFaculty();
-  }, [loadOfferings, loadFaculty, router]);
+    loadElectiveProgress();
+
+    // Live Auto-Refresh: Polls every 4 seconds so the counter updates in real-time without user reloading
+    const pollInterval = setInterval(() => {
+      loadElectiveProgress();
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [loadOfferings, loadFaculty, loadElectiveProgress, router]);
+
+  const handleRunAutoAllotment = async () => {
+    setRunningAutoAllotment(true);
+    setAutoAllotmentMsg(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/electives/run-automated-allotment?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setAutoAllotmentMsg({ error: data?.detail || 'Automated allotment failed.' });
+      } else {
+        setAutoAllotmentMsg({
+          success: `Allotment completed! Created ${data.sections_created} theory sections and ${data.batches_created} lab batches. Core courses auto-enrolled!`,
+        });
+        await loadOfferings();
+        await loadElectiveProgress();
+      }
+    } catch {
+      setAutoAllotmentMsg({ error: 'Network error executing automated allotment.' });
+    } finally {
+      setRunningAutoAllotment(false);
+    }
+  };
+
+  const handleDeallocateHub = async () => {
+    setDeallocatingHub(true);
+    setAutoAllotmentMsg(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/electives/deallocate?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setAutoAllotmentMsg({ error: data?.detail || 'De-allocation failed.' });
+      } else {
+        setAutoAllotmentMsg({
+          success: `Allotments de-allocated successfully (${data.enrollments_removed} enrollments and ${data.batches_removed} batches cleared). Student choices remain preserved for demo.`,
+        });
+        await loadOfferings();
+        await loadElectiveProgress();
+      }
+    } catch {
+      setAutoAllotmentMsg({ error: 'Network error during de-allocation.' });
+    } finally {
+      setDeallocatingHub(false);
+    }
+  };
+
+  const handleResetStudentChoices = async () => {
+    setResettingChoices(true);
+    setAutoAllotmentMsg(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/electives/reset-student-choices?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setAutoAllotmentMsg({ error: data?.detail || 'Failed to reset student choices.' });
+      } else {
+        setAutoAllotmentMsg({
+          success: `Student choices reset (${data.choices_cleared} choices removed). Students will now see the choice form on login.`,
+        });
+        setShowResetChoicesModal(false);
+        await loadOfferings();
+        await loadElectiveProgress();
+      }
+    } catch {
+      setAutoAllotmentMsg({ error: 'Network error resetting student choices.' });
+    } finally {
+      setResettingChoices(false);
+    }
+  };
 
   const handleAssignSection = async (sectionId: string, facultyId: string) => {
     try {
@@ -845,6 +968,238 @@ export default function AdminAllotmentPage() {
           <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#71717A', marginTop: '4px' }} className="sm:text-sm">
             Upload the semester allotment sheet to auto-create theory sections, lab batches, and faculty slots.
           </p>
+        </div>
+
+        {/* ==================================================================== */}
+        {/* AUTOMATED STUDENT ELECTIVE ALLOTMENT HUB */}
+        {/* ==================================================================== */}
+        <div className="mb-8 bg-white border border-[#E4E4E7] rounded-xl shadow-sm overflow-hidden">
+          {/* Top Decorative Gradient */}
+          <div className="h-2 bg-gradient-to-r from-[#18181B] via-[#FF5500] to-[#18181B]" />
+
+          <div className="p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E4E4E7] pb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#18181B] text-white font-mono">
+                    <Sparkles className="w-3.5 h-3.5 text-[#FF5500]" />
+                    Engine Hub
+                  </span>
+                  <span className="text-xs font-mono font-semibold text-[#71717A]">
+                    Revision FRCRCE-3-26
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-[#09090B] tracking-tight">
+                  Automated Student Elective Allotment Hub
+                </h2>
+                <p className="text-xs text-[#71717A] mt-0.5">
+                  Integrated student onboarding form, FCFS preference resolution, and 1-click balanced section/batch generation.
+                </p>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="flex items-center gap-2">
+                {electiveProgress?.allotted_students_count ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#E8F8EE] text-[#1E7E34] border border-[#B7E4C7]">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Allotted & Live ({electiveProgress.allotted_students_count} Students)
+                  </span>
+                ) : electiveProgress?.status === 'READY_FOR_ALLOTMENT' ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Ready for Allotment (100% Submitted)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]">
+                    <Clock className="w-3.5 h-3.5" />
+                    Collecting Form Choices ({electiveProgress?.submitted_students_count || 0}/{electiveProgress?.total_eligible_students || 0})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Notification Feedback */}
+            {autoAllotmentMsg?.success && (
+              <div className="mt-4 p-3.5 bg-[#E8F8EE] border border-[#B7E4C7] rounded-lg text-xs font-medium text-[#1E7E34] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{autoAllotmentMsg.success}</span>
+                </div>
+                <button
+                  onClick={() => setAutoAllotmentMsg(null)}
+                  className="text-xs font-bold hover:underline cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {autoAllotmentMsg?.error && (
+              <div className="mt-4 p-3.5 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg text-xs font-medium text-[#991B1B] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{autoAllotmentMsg.error}</span>
+                </div>
+                <button
+                  onClick={() => setAutoAllotmentMsg(null)}
+                  className="text-xs font-bold hover:underline cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* 3 Interactive Cards */}
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Card 1: Intake Progress */}
+              <div className="p-4 bg-[#FAFAFA] border border-[#E4E4E7] rounded-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-[#A1A1AA] uppercase tracking-wider block mb-1">
+                    Student Form Intake
+                  </span>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-xl font-extrabold text-[#09090B]">
+                      {electiveProgress?.submitted_students_count || 0}{' '}
+                      <span className="text-xs font-normal text-[#71717A]">
+                        / {electiveProgress?.total_eligible_students || 0} students
+                      </span>
+                    </span>
+                    <span className="font-mono text-xs font-bold text-[#FF5500]">
+                      {electiveProgress?.submission_percentage || 0}%
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-[#E4E4E7] h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#FF5500] h-full transition-all duration-500 rounded-full"
+                      style={{ width: `${electiveProgress?.submission_percentage || 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-[#E4E4E7] flex items-center justify-between text-[11px] text-[#71717A]">
+                  <span>Pending: <strong>{electiveProgress?.pending_students_count || 0}</strong></span>
+                  <Link
+                    href="/electives/select"
+                    target="_blank"
+                    className="text-[#FF5500] font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>Inspect Form</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Card 2: 1-Click Allotment Trigger */}
+              <div className="p-4 bg-[#FFF8F3] border border-[#FFD0B8] rounded-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-[#C2410C] uppercase tracking-wider block mb-1">
+                    Execute Allotment Engine
+                  </span>
+                  <p className="text-xs text-[#71717A] leading-relaxed mb-3">
+                    Automatically resolves student preferences with <strong>Min-20 threshold</strong>, creates balanced lab batches, and assigns professors.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  id="run-auto-allotment-btn"
+                  onClick={handleRunAutoAllotment}
+                  disabled={runningAutoAllotment}
+                  className="w-full py-2.5 px-4 bg-[#FF5500] hover:bg-[#E64D00] text-white text-xs font-bold rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {runningAutoAllotment ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Allotting Students...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Run Automated Allotment</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Card 3: De-Allocation / Reset Button (Demo Controls) */}
+              <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block mb-1">
+                    Demo Controls & Reset
+                  </span>
+                  <p className="text-xs text-rose-900/80 leading-relaxed mb-3">
+                    Instantly dissolve allotments to re-demo the allocation live. <strong>Preserves student choices!</strong>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    id="deallocate-electives-btn"
+                    onClick={handleDeallocateHub}
+                    disabled={deallocatingHub}
+                    className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {deallocatingHub ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>De-Allocating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>De-Allocate / Reset Allotment</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowResetChoicesModal(true)}
+                    className="w-full py-1.5 text-[11px] font-bold text-rose-700 hover:text-rose-950 hover:underline text-center cursor-pointer block"
+                  >
+                    Wipe Form Choices (Demo Fresh Intake)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Collapsible Choice Distribution Viewer */}
+            <div className="mt-4 pt-3 border-t border-[#E4E4E7]">
+              <button
+                type="button"
+                onClick={() => setShowDistribution(!showDistribution)}
+                className="text-xs font-bold text-[#71717A] hover:text-[#09090B] flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{showDistribution ? 'Hide' : 'View'} Live Subject Preference Distribution</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showDistribution ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showDistribution && electiveProgress?.category_distribution && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in duration-200">
+                  {Object.entries(electiveProgress.category_distribution).map(([cat, courses]) => (
+                    <div key={cat} className="p-3 bg-[#F4F4F6] rounded-lg border border-[#E4E4E7] text-xs">
+                      <span className="font-mono font-bold text-[10px] text-[#FF5500] block mb-1.5 uppercase">
+                        {cat === 'PEC' ? 'Professional Elective (Theory)' : cat === 'PECL' ? 'Elective Lab (Practical)' : 'Open Elective (Institute)'}
+                      </span>
+                      <div className="space-y-1">
+                        {Object.entries(courses).map(([cCode, count]) => (
+                          <div key={cCode} className="flex items-center justify-between text-[11px] py-0.5">
+                            <span className="font-mono text-[#52525B]">{cCode}</span>
+                            <span className="font-bold text-[#09090B] bg-white px-2 py-0.5 rounded border border-[#E4E4E7]">
+                              {count} students
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8">
@@ -1273,6 +1628,65 @@ export default function AdminAllotmentPage() {
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     Confirm & Dissolve Electives
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wipe Choices Modal (For demoing intake from scratch) */}
+      {showResetChoicesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-white border border-[#E4E4E7] rounded-xl p-5 sm:p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 rounded-lg text-amber-700">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#09090B]">Reset Form Submissions?</h3>
+                  <p className="text-xs text-[#71717A] font-mono">{selectedTerm}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowResetChoicesModal(false)}
+                className="p-1.5 text-[#71717A] hover:text-[#09090B] rounded hover:bg-[#F4F4F6]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#52525B] leading-relaxed mb-4">
+              This will clear the submitted elective preferences for all students in <strong className="text-[#09090B]">{selectedTerm}</strong>.
+              Use this if you want to demonstrate a student logging in and filling the Google-Form style elective form from scratch!
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E4E4E7]">
+              <button
+                type="button"
+                onClick={() => setShowResetChoicesModal(false)}
+                disabled={resettingChoices}
+                className="px-4 py-2 bg-[#F4F4F6] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#E4E4E7]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetStudentChoices}
+                disabled={resettingChoices}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-1.5"
+              >
+                {resettingChoices ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Wipe Submissions
                   </>
                 )}
               </button>

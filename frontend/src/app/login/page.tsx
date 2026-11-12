@@ -75,6 +75,21 @@ export default function LoginPage() {
       } else if (data.role === 'ADMIN') {
         router.push('/admin/allotment');
       } else {
+        // Check if 3rd-year student needs to complete elective onboarding form
+        try {
+          const stRes = await fetch(getApiUrl('/api/v1/electives/student-status'), {
+            headers: { Authorization: `Bearer ${data.access_token}` },
+          });
+          if (stRes.ok) {
+            const stData = await stRes.json();
+            if (stData.eligible && stData.requires_form_prompt) {
+              router.push('/electives/select?onboarding=1');
+              return;
+            }
+          }
+        } catch {
+          // fallback if offline
+        }
         router.push('/chat');
       }
     } catch (err: any) {
@@ -124,6 +139,21 @@ export default function LoginPage() {
       } else if (data.role === 'ADMIN') {
         router.push('/admin/allotment');
       } else {
+        // Check if 3rd-year student needs to complete elective onboarding form
+        try {
+          const stRes = await fetch(getApiUrl('/api/v1/electives/student-status'), {
+            headers: { Authorization: `Bearer ${data.access_token}` },
+          });
+          if (stRes.ok) {
+            const stData = await stRes.json();
+            if (stData.eligible && stData.requires_form_prompt) {
+              router.push('/electives/select?onboarding=1');
+              return;
+            }
+          }
+        } catch {
+          // fallback if offline
+        }
         router.push('/chat');
       }
     } catch (err: any) {
@@ -152,8 +182,9 @@ export default function LoginPage() {
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
+    boxSizing: 'border-box',
     background: '#FFFFFF',
-    border: '1px solid #E4E4E7',
+    border: '1px solid #D4D4D8',
     borderRadius: '6px',
     padding: '10px 12px 10px 38px',
     fontFamily: 'Inter, sans-serif',
@@ -165,9 +196,13 @@ export default function LoginPage() {
 
   return (
     <div
+      className="tech-grid-bg"
       style={{
         minHeight: '100vh',
         background: '#ECECEE',
+        backgroundImage:
+          'linear-gradient(to right, rgba(0, 0, 0, 0.065) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 0, 0, 0.065) 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
         display: 'flex',
         fontFamily: 'Inter, system-ui, sans-serif',
         position: 'relative',
@@ -176,9 +211,8 @@ export default function LoginPage() {
     >
       {/* Left decorative technical panel (SS3 Style) */}
       <div
+        className="login-left-sidebar"
         style={{
-          display: 'none',
-          width: '42%',
           background: '#09090B',
           padding: '52px',
           flexDirection: 'column',
@@ -187,7 +221,6 @@ export default function LoginPage() {
           overflow: 'hidden',
           borderRight: '1px solid #27272A',
         }}
-        className="hidden lg:flex"
       >
         {/* Subtle Technical Grid */}
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
@@ -237,9 +270,26 @@ export default function LoginPage() {
 
       {/* Right login panel */}
       <div
-        className="flex-1 flex items-center justify-center py-8 px-4 sm:p-8"
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 16px',
+          minHeight: '100vh',
+        }}
       >
-        <div className="w-full max-w-[420px] bg-white border border-[#E4E4E7] rounded-md p-5 sm:p-9 shadow-sm">
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '430px',
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
+            borderRadius: '8px',
+            padding: '38px 34px',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.05)',
+          }}
+        >
 
           {/* Heading */}
           <div style={{ marginBottom: '24px' }}>
@@ -443,13 +493,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <style jsx global>{`
-        .hidden { display: none !important; }
-        @media (min-width: 1024px) {
-          .lg\\:flex { display: flex !important; }
-          .lg\\:hidden { display: none !important; }
-        }
-      `}</style>
+
     </div>
   );
 }

@@ -23,6 +23,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login-form")
 
 
+_USER_OBJECT_CACHE: Dict[str, tuple[float, User]] = {}
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
@@ -41,12 +43,20 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
 
+    import time
+    now_ts = time.time()
+    if user_id in _USER_OBJECT_CACHE:
+        cached_ts, cached_user = _USER_OBJECT_CACHE[user_id]
+        if now_ts - cached_ts < 60.0:
+            return cached_user
+
     stmt = select(User).where(User.id == uuid.UUID(user_id))
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
 
+    _USER_OBJECT_CACHE[user_id] = (now_ts, user)
     return user
 
 
@@ -251,14 +261,20 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
 
-    pw_valid = verify_password(clean_password, user.hashed_password)
-    if not pw_valid and clean_password in ["teacher123", "faculty123"] and user and user.role in ["FACULTY", "ADMIN"]:
-        pw_valid = True
-
-    if not user or not pw_valid:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Invalid email or password"
+        )
+
+    pw_valid = verify_password(clean_password, user.hashed_password)
+    if not pw_valid and clean_password in ["teacher123", "faculty123"] and user.role in ["FACULTY", "ADMIN"]:
+        pw_valid = True
+
+    if not pw_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
         )
 
     token = create_access_token(

@@ -3,12 +3,6 @@ const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL ||
 
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.cache = false; // Disable persistent disk caching in dev to prevent stale chunk lock errors
-    }
-    return config;
-  },
   async rewrites() {
     return [
       {

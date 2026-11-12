@@ -71,6 +71,10 @@ export const Navbar: React.FC = () => {
 
             {user.role === 'STUDENT' && (
               <>
+                <Link href="/electives/select" className={navLinkClass('/electives/select')}>
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  <span>Elective Selection</span>
+                </Link>
                 <Link href="/enrollments" className={navLinkClass('/enrollments')}>
                   <BookOpen className="w-3.5 h-3.5" />
                   <span>My Subjects</span>
@@ -184,6 +188,10 @@ export const Navbar: React.FC = () => {
 
             {user.role === 'STUDENT' && (
               <>
+                <Link href="/electives/select" className={mobileNavLinkClass('/electives/select')}>
+                  <ClipboardList className="w-4 h-4 text-[#FF5500]" />
+                  <span>Elective Selection Form</span>
+                </Link>
                 <Link href="/enrollments" className={mobileNavLinkClass('/enrollments')}>
                   <BookOpen className="w-4 h-4 text-[#FF5500]" />
                   <span>My Subjects & Faculty</span>

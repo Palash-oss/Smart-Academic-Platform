@@ -6,6 +6,7 @@ from app.api.attendance import router as attendance_router
 from app.api.chat import router as chat_router
 from app.api.enrollments import router as enrollments_router
 from app.api.timetable import router as timetable_router
+from app.api.electives import router as electives_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,6 +33,7 @@ app.include_router(attendance_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(enrollments_router, prefix="/api")
 app.include_router(timetable_router, prefix="/api")
+app.include_router(electives_router, prefix="/api")
 
 
 @app.on_event("startup")

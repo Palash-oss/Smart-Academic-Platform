@@ -10,7 +10,7 @@ Covers:
 from __future__ import annotations
 
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -199,4 +199,99 @@ class FacultyAllocationUploadResponse(BaseModel):
     sections_assigned: int
     batches_assigned: int
     errors: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Student Elective Form & Selection Schemas (Revision FRCRCE-3-26)
+# ---------------------------------------------------------------------------
+
+class ElectiveSubjectOption(BaseModel):
+    code: str
+    name: str
+    course_tier: str
+    delivery_mode: str
+    th_hours: int = 3
+    pr_hours: int = 2
+    tu_hours: int = 0
+    credits: int = 3
+    description: Optional[str] = None
+
+
+class ElectiveCategoryGroup(BaseModel):
+    category: str         # PEC | PECL | OE
+    category_label: str   # "Professional Elective I (Theory)", etc.
+    description: str
+    min_choices: int = 1
+    max_choices: int = 3
+    options: List[ElectiveSubjectOption] = []
+
+
+class TermElectiveConfig(BaseModel):
+    academic_term: str
+    semester: int
+    semester_label: str
+    categories: List[ElectiveCategoryGroup] = []
+
+
+class ElectiveChoiceSubmissionItem(BaseModel):
+    category: str
+    preference_1: str
+    preference_2: Optional[str] = None
+    preference_3: Optional[str] = None
+
+
+class SubmitElectivesRequest(BaseModel):
+    academic_term: str
+    choices: List[ElectiveChoiceSubmissionItem]
+
+
+class StudentChoiceItemRead(BaseModel):
+    category: str
+    category_label: str
+    preference_1: str
+    preference_1_name: Optional[str] = None
+    preference_2: Optional[str] = None
+    preference_2_name: Optional[str] = None
+    preference_3: Optional[str] = None
+    preference_3_name: Optional[str] = None
+    allotted_course_code: Optional[str] = None
+    allotted_course_name: Optional[str] = None
+    section_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    submitted_at: Optional[str] = None
+
+
+class StudentTermStatus(BaseModel):
+    academic_term: str
+    semester: int
+    submitted: bool
+    allotted: bool
+    submitted_at: Optional[str] = None
+    choices: List[StudentChoiceItemRead] = []
+
+
+class StudentElectiveStatusResponse(BaseModel):
+    eligible: bool
+    student_id: Optional[str] = None
+    student_erp_id: Optional[str] = None
+    full_name: Optional[str] = None
+    roll_no: Optional[str] = None
+    department_name: Optional[str] = None
+    division_name: Optional[str] = None
+    semester: Optional[int] = None
+    requires_form_prompt: bool = False
+    terms: List[StudentTermStatus] = []
+
+
+class AdminElectiveProgressResponse(BaseModel):
+    academic_term: str
+    total_eligible_students: int
+    submitted_students_count: int
+    pending_students_count: int
+    submission_percentage: float
+    status: str  # "EMPTY" | "COLLECTING" | "READY_FOR_ALLOTMENT" | "ALLOTTED"
+    category_distribution: Dict[str, Dict[str, int]] = {}
+    pending_students: List[Dict[str, Any]] = []
+    allotted_students_count: int = 0
+
 

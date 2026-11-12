@@ -216,6 +216,41 @@ class StudentEnrollment(Base):
 
 
 # ---------------------------------------------------------------------------
+# Student Elective Form Choices (Revision FRCRCE-3-26)
+# ---------------------------------------------------------------------------
+
+class StudentElectiveChoice(Base):
+    """
+    Stores elective preferences submitted by students via the onboarding/login form.
+    Categories:
+      - 'PEC'  (Professional Elective Course - Theory)
+      - 'PECL' (Professional Elective Course - Lab)
+      - 'OE'   (Open Elective - Institute level)
+    """
+    __tablename__ = "student_elective_choices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    academic_term: Mapped[str] = mapped_column(String(30), nullable=False)  # e.g. "2026-27-SEM5", "2026-27-SEM6"
+    category: Mapped[str] = mapped_column(String(20), nullable=False)       # PEC | PECL | OE
+
+    preference_1: Mapped[str] = mapped_column(String(50), nullable=False)   # Course code
+    preference_2: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    preference_3: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    allotted_course_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    student = relationship("User", foreign_keys=[student_id], back_populates="elective_choices")
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "academic_term", "category", name="uq_student_term_category"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Users & Access Control
 # ---------------------------------------------------------------------------
 
@@ -249,6 +284,7 @@ class User(Base):
     enrollments = relationship("StudentEnrollment", back_populates="student",
                                foreign_keys="[StudentEnrollment.student_id]",
                                cascade="all, delete-orphan")
+    elective_choices = relationship("StudentElectiveChoice", back_populates="student", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("role IN ('STUDENT', 'FACULTY', 'ADMIN')", name="check_user_role"),

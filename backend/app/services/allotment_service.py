@@ -23,12 +23,12 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     User, Course, CourseOffering, ClassSection, PracticalBatch, StudentEnrollment,
-    Department, Division,
+    Department, Division, StudentElectiveChoice,
 )
 from app.schemas.allotment import AllotmentRowError
 from sqlalchemy.orm import selectinload
@@ -53,8 +53,9 @@ INST_TUTORIAL_MAX = 30      # Tier 3: DM tutorial batch target
 # Delivery modes that cascade theory faculty to all batches
 CASCADE_MODES = {"INTEGRATED_TH_PR", "THEORY_TUTORIAL"}
 
-# Default elective faculty mapping for Semester 5 (from college faculty sheet)
+# Default elective faculty mapping for Semester 5 & Semester 6 (from college faculty sheet)
 DEFAULT_ELECTIVE_FACULTY_EMAILS = {
+    # Semester 5 Electives
     "25PEC13CE11": "ashok.kanthe@academic.edu",         # Dr. Ashok Kanthe (Blockchain / HMI)
     "25PEC13CE12": "kalpana.deorukhkar@academic.edu",    # Dr. Kalpana Deorukhkar (Deep Learning)
     "25PEC13CE13": "smita.ambarkar@academic.edu",        # Dr. Smita Ambarkar (Cyber Security)
@@ -65,6 +66,13 @@ DEFAULT_ELECTIVE_FACULTY_EMAILS = {
     "25PECL13CE15": "unik.lokhande@academic.edu",         # Prof. Lokhande Unik (Ethical Hacking Lab)
     "25OE13CE31": "roshni.padate@academic.edu",           # Dr. Roshni Padate (Health & Wellness)
     "25OE13CE32": "garima.singh@academic.edu",            # Prof. Garima Singh (Emotional Intelligence)
+    # Semester 6 Electives
+    "25PEC13CE21": "ashok.kanthe@academic.edu",         # Dr. Ashok Kanthe (Decentralized Finance)
+    "25PEC13CE22": "kalpana.deorukhkar@academic.edu",    # Dr. Kalpana Deorukhkar (Generative AI)
+    "25PEC13CE23": "smita.ambarkar@academic.edu",        # Dr. Smita Ambarkar (Digital Forensics)
+    "25PECL13CE21": "nirajsingh.yeotikar@academic.edu",  # Prof. Nirajsingh R Yeotikar (Social Media Analytics Lab)
+    "25PECL13CE25": "varsha.phulpagar@academic.edu",     # Prof. Varsha Phulpagar (Explainable AI Lab)
+    "25OE13CE41": "garima.singh@academic.edu",           # Prof. Garima Singh (PR & Corporate Communication)
 }
 
 # Per-batch faculty distribution for multi-batch electives (round-robin among qualified teachers)
@@ -77,6 +85,11 @@ DEFAULT_ELECTIVE_BATCH_FACULTY_EMAILS = {
     "25PECL13CE15": ["unik.lokhande@academic.edu"],
     "25PECL13CE11": ["nirajsingh.yeotikar@academic.edu"],
     "25PECL13CE13": ["roshni.padate@academic.edu"],
+    "25PEC13CE21": ["khushboo.singh@academic.edu", "ashok.kanthe@academic.edu"],
+    "25PEC13CE22": ["ashwini.pansare@academic.edu", "kalpana.deorukhkar@academic.edu"],
+    "25PEC13CE23": ["akshata.patil@academic.edu", "smita.ambarkar@academic.edu"],
+    "25PECL13CE21": ["nirajsingh.yeotikar@academic.edu"],
+    "25PECL13CE25": ["varsha.phulpagar@academic.edu"],
 }
 
 
@@ -159,12 +172,19 @@ class AllotmentEngine:
         self._faculty_by_email: Dict[str, User] = {}
 
     # ------------------------------------------------------------------
-    # Public entry point
+    # Public entry points
     # ------------------------------------------------------------------
 
     async def process_file(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
         """
-        Parse the Excel/CSV file, run the allotment pipeline, and commit.
+        Parse the Excel/CSV file and run the allotment pipeline.
+        """
+        df = self._parse_file(file_bytes, filename)
+        return await self.process_dataframe(df)
+
+    async def process_dataframe(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Run the allotment pipeline on a prepared DataFrame.
         Supports:
           1. Direct course_code rows (with Min 20 Students threshold validation)
           2. Multi-preference FCFS rows (ordered by timestamp, enforcing Min 20 students rule)
@@ -174,7 +194,6 @@ class AllotmentEngine:
         fac_res = await self.db.execute(select(User).where(User.role.in_(["FACULTY", "ADMIN"])))
         self._faculty_by_email = {u.email.lower(): u for u in fac_res.scalars().all()}
 
-        df = self._parse_file(file_bytes, filename)
         df.columns = [c.strip().lower() for c in df.columns]
 
         missing = validate_dataframe(df)
@@ -277,6 +296,160 @@ class AllotmentEngine:
         await self.db.flush()
         return self._summary(total_rows)
 
+    async def run_allotment_from_db_preferences(self, academic_term: str) -> Dict[str, Any]:
+        """
+        Run the automated allotment engine directly from student elective choices stored in the DB.
+        Enforces FCFS / timestamp ranking, minimum 20 students threshold, balanced chunking,
+        and auto-enrolls core mandatory courses.
+        """
+        stmt = (
+            select(StudentElectiveChoice)
+            .where(StudentElectiveChoice.academic_term == academic_term)
+            .options(
+                selectinload(StudentElectiveChoice.student).selectinload(User.division)
+            )
+            .order_by(StudentElectiveChoice.submitted_at.asc())
+        )
+        res = await self.db.execute(stmt)
+        choices = res.scalars().all()
+
+        if not choices:
+            raise ValueError(f"No student elective choices found in the database for {academic_term}")
+
+        rows = []
+        for ch in choices:
+            st = ch.student
+            div_name = st.division.name if (st and st.division) else "A"
+            dept_name = "Computer"
+            sid = (st.student_erp_id if st else None) or (str(st.id) if st else "UNKNOWN")
+            roll = (st.roll_no if st else None) or sid
+            ts_str = ch.submitted_at.isoformat() if ch.submitted_at else "2026-07-15 09:00:00"
+
+            rows.append({
+                "student_id": sid,
+                "roll_no": roll,
+                "department": dept_name,
+                "class_div": f"COMP-{div_name}",
+                "academic_term": ch.academic_term,
+                "category": ch.category,
+                "preference_1": ch.preference_1,
+                "preference_2": ch.preference_2 or "",
+                "preference_3": ch.preference_3 or "",
+                "timestamp": ts_str,
+            })
+
+        df = pd.DataFrame(rows)
+        summary = await self.process_dataframe(df)
+
+        # Also auto-enroll core courses for the term
+        try:
+            core_summary = await self.auto_enroll_core_for_term(academic_term)
+            summary["core_enrolled"] = core_summary.get("total_enrollments", 0)
+        except Exception as e:
+            print(f"[Warning] Auto-enroll core failed: {e}")
+
+        # Update allotted_course_code in student_elective_choices table
+        enr_stmt = (
+            select(StudentEnrollment)
+            .join(CourseOffering)
+            .join(Course)
+            .where(CourseOffering.academic_term == academic_term)
+            .options(
+                selectinload(StudentEnrollment.offering).selectinload(CourseOffering.course)
+            )
+        )
+        enr_res = await self.db.execute(enr_stmt)
+        enrollments = enr_res.scalars().all()
+
+        student_cat_allotted = {}
+        for enr in enrollments:
+            if not (enr.offering and enr.offering.course):
+                continue
+            c_code = enr.offering.course.code.upper()
+            if "PECL" in c_code:
+                cat = "PECL"
+            elif "PEC" in c_code:
+                cat = "PEC"
+            elif "OE" in c_code:
+                cat = "OE"
+            else:
+                continue
+            student_cat_allotted[(enr.student_id, cat)] = c_code
+
+        for ch in choices:
+            allotted_code = student_cat_allotted.get((ch.student_id, ch.category))
+            if allotted_code:
+                ch.allotted_course_code = allotted_code
+
+        await self.db.commit()
+        return summary
+
+    async def deallocate_electives_for_term(self, academic_term: str) -> Dict[str, Any]:
+        """
+        De-allocate / dissolve student elective allotments for an academic term.
+        Clears generated StudentEnrollment, PracticalBatch, ClassSection, and CourseOffering for electives.
+        Preserves student choices in student_elective_choices but resets allotted_course_code = None.
+        Leaves the system ready for another instant demonstration!
+        """
+        from app.db.models import AttendanceLog
+
+        stmt = (
+            select(CourseOffering)
+            .join(Course)
+            .where(
+                CourseOffering.academic_term == academic_term,
+                (Course.course_tier.in_(["DEPARTMENT", "INSTITUTE"]))
+                | (Course.code.startswith("25PEC"))
+                | (Course.code.startswith("25PECL"))
+                | (Course.code.startswith("25OE")),
+            )
+        )
+        res = await self.db.execute(stmt)
+        elective_offerings = res.scalars().all()
+        offering_ids = [off.id for off in elective_offerings]
+
+        enrollments_removed = 0
+        batches_removed = 0
+        sections_removed = 0
+
+        if offering_ids:
+            del_enr = await self.db.execute(
+                delete(StudentEnrollment).where(StudentEnrollment.offering_id.in_(offering_ids))
+            )
+            enrollments_removed = del_enr.rowcount or 0
+
+            del_batch = await self.db.execute(
+                delete(PracticalBatch).where(PracticalBatch.offering_id.in_(offering_ids))
+            )
+            batches_removed = del_batch.rowcount or 0
+
+            del_sec = await self.db.execute(
+                delete(ClassSection).where(ClassSection.offering_id.in_(offering_ids))
+            )
+            sections_removed = del_sec.rowcount or 0
+
+            await self.db.execute(
+                delete(CourseOffering).where(CourseOffering.id.in_(offering_ids))
+            )
+
+        # Reset allotted_course_code = None on student choices
+        await self.db.execute(
+            update(StudentElectiveChoice)
+            .where(StudentElectiveChoice.academic_term == academic_term)
+            .values(allotted_course_code=None)
+        )
+
+        await self.db.commit()
+
+        return {
+            "status": "success",
+            "academic_term": academic_term,
+            "enrollments_removed": enrollments_removed,
+            "batches_removed": batches_removed,
+            "sections_removed": sections_removed,
+            "message": f"Elective allotments for {academic_term} de-allocated successfully. Student choices preserved."
+        }
+
     async def auto_enroll_core_for_term(self, academic_term: str) -> Dict[str, Any]:
         """
         Auto-enroll all students in active divisions into their mandatory Core courses (Tier 1: CLASS).
@@ -294,6 +467,19 @@ class AllotmentEngine:
         )
         div_res = await self.db.execute(div_stmt)
         divisions = div_res.scalars().all()
+
+        # Preload existing sections, batches, and enrollments for instantaneous O(1) in-memory resolution
+        sec_stmt = select(ClassSection).join(CourseOffering).where(CourseOffering.academic_term == academic_term)
+        for s in (await self.db.execute(sec_stmt)).scalars().all():
+            self._section_cache[(s.offering_id, s.section_name)] = s
+
+        bat_stmt = select(PracticalBatch).join(CourseOffering).where(CourseOffering.academic_term == academic_term)
+        for b in (await self.db.execute(bat_stmt)).scalars().all():
+            self._batch_cache[(b.offering_id, b.batch_name)] = b
+
+        enr_stmt = select(StudentEnrollment).join(CourseOffering).where(CourseOffering.academic_term == academic_term)
+        for e in (await self.db.execute(enr_stmt)).scalars().all():
+            self._enrollment_cache[(e.student_id, e.offering_id)] = e
 
         total_enrolled = 0
 
@@ -914,7 +1100,7 @@ class AllotmentEngine:
         section: Optional[ClassSection],
         batch: Optional[PracticalBatch],
     ) -> None:
-        """Create or update a StudentEnrollment record (idempotent in-memory, batch flushed)."""
+        """Create or update a StudentEnrollment record (fast O(1) in-memory cache)."""
         cache_key = (student.id, offering.id)
         if cache_key in self._enrollment_cache:
             enrollment = self._enrollment_cache[cache_key]
