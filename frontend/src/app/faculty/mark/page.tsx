@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock } from 'lucide-react';
+import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock, Copy } from 'lucide-react';
 import Link from 'next/link';
 
 interface Department {
@@ -58,6 +58,12 @@ export default function MarkAttendancePage() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [undoingSessionId, setUndoingSessionId] = useState<string | null>(null);
+  const [copyingPrevious, setCopyingPrevious] = useState(false);
+  const [copiedBanner, setCopiedBanner] = useState<{
+    sessionDate: string;
+    sessionNumber: number;
+    matchedCount: number;
+  } | null>(null);
 
   const [resultBanner, setResultBanner] = useState<{
     subject: string;
@@ -139,6 +145,7 @@ export default function MarkAttendancePage() {
 
   const loadStudents = async (deptCode: string, divName: string, batchName = selectedBatch) => {
     setLoadingStudents(true);
+    setCopiedBanner(null);
     try {
       const batchParam = batchName && batchName !== 'ALL' ? `&batch_name=${batchName}` : '';
       const res = await fetchWithAuth(`/api/attendance/faculty/students?dept_code=${deptCode}&div_name=${divName}${batchParam}`);
@@ -187,10 +194,53 @@ export default function MarkAttendancePage() {
   };
 
   const toggleAll = (select: boolean) => {
+    setCopiedBanner(null);
     if (select) {
       setPresentStudentIds(new Set(students.map((s) => s.student_id)));
     } else {
       setPresentStudentIds(new Set());
+    }
+  };
+
+  const handleCopyPreviousLecture = async () => {
+    if (!selectedCourseName || students.length === 0 || isMaxDailyReached) return;
+
+    setCopyingPrevious(true);
+    setErrorMessage(null);
+    setCopiedBanner(null);
+    setResultBanner(null);
+
+    try {
+      const res = await fetchWithAuth(
+        `/api/attendance/faculty/sessions/previous?subject=${encodeURIComponent(selectedCourseName)}&before_date=${encodeURIComponent(sessionDate)}`
+      );
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setErrorMessage(errData.detail || 'Failed to fetch previous lecture attendance.');
+        return;
+      }
+
+      const data = await res.json();
+      if (!data.found) {
+        setErrorMessage(`No previous marked lecture found for "${selectedCourseName}" on or before ${sessionDate}.`);
+        return;
+      }
+
+      const rosterIds = new Set(students.map((s) => s.student_id));
+      const prevPresent = new Set<string>(
+        (data.present_student_ids || []).filter((id: string) => rosterIds.has(id))
+      );
+      setPresentStudentIds(prevPresent);
+      setCopiedBanner({
+        sessionDate: data.session_date,
+        sessionNumber: data.session_number,
+        matchedCount: prevPresent.size,
+      });
+    } catch (err) {
+      console.error('Failed to copy previous lecture attendance:', err);
+      setErrorMessage('Network error while fetching previous lecture attendance.');
+    } finally {
+      setCopyingPrevious(false);
     }
   };
 
@@ -212,6 +262,7 @@ export default function MarkAttendancePage() {
     setSubmitting(true);
     setResultBanner(null);
     setErrorMessage(null);
+    setCopiedBanner(null);
 
     const allIds = students.map((s) => s.student_id);
     const presentIds = Array.from(presentStudentIds);
@@ -518,6 +569,18 @@ export default function MarkAttendancePage() {
             </div>
           </div>
 
+          {/* Copied Previous Lecture Banner */}
+          {copiedBanner && (
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Copy style={{ width: '15px', height: '15px', color: '#2563EB', flexShrink: 0 }} />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#1E40AF' }}>
+                  Copied attendance from <strong>Session #{copiedBanner.sessionNumber}</strong> ({copiedBanner.sessionDate}) — <strong>{copiedBanner.matchedCount} / {students.length}</strong> marked present. Review and submit when ready.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Student Roster Checkbox List */}
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             
@@ -544,7 +607,30 @@ export default function MarkAttendancePage() {
                   />
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleCopyPreviousLecture}
+                    disabled={isMaxDailyReached || loadingStudents || copyingPrevious || students.length === 0 || !selectedCourseName}
+                    style={{
+                      padding: '6px 12px',
+                      background: '#FFF7ED',
+                      border: '1px solid #FED7AA',
+                      borderRadius: '4px',
+                      fontFamily: '"Plus Jakarta Sans", sans-serif',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#C2410C',
+                      cursor: isMaxDailyReached || loadingStudents || copyingPrevious || students.length === 0 || !selectedCourseName ? 'not-allowed' : 'pointer',
+                      opacity: isMaxDailyReached || loadingStudents || copyingPrevious || students.length === 0 || !selectedCourseName ? 0.6 : 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <Copy style={{ width: '12px', height: '12px' }} />
+                    <span>{copyingPrevious ? 'Copying...' : 'Copy Previous Lecture'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => toggleAll(true)}

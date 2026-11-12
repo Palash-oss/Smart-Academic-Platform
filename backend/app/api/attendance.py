@@ -18,6 +18,7 @@ from app.services.attendance_service import (
     fetch_students_by_division,
     mark_session_attendance,
     fetch_marked_sessions_for_date,
+    fetch_previous_lecture_session,
     undo_lecture_session,
     bulk_import_roster
 )
@@ -121,6 +122,22 @@ async def get_faculty_marked_sessions(
         faculty_id=current_user.id,
         subject=subject,
         session_date=session_date
+    )
+
+
+@router.get("/faculty/sessions/previous")
+async def get_previous_lecture_session(
+    subject: str = Query(...),
+    before_date: Optional[str] = Query(None),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns the most recent marked lecture session for copying attendance."""
+    return await fetch_previous_lecture_session(
+        db=db,
+        faculty_id=current_user.id,
+        subject=subject,
+        before_date=before_date
     )
 
 

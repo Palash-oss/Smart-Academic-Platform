@@ -602,6 +602,46 @@ async def fetch_marked_sessions_for_date(
     }
 
 
+async def fetch_previous_lecture_session(
+    db: AsyncSession,
+    faculty_id: uuid.UUID,
+    subject: str,
+    before_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Fetches the most recent marked LectureSession for a subject & faculty to support copying attendance."""
+    stmt = select(LectureSession).where(
+        LectureSession.faculty_id == faculty_id,
+        LectureSession.subject.ilike(f"%{subject}%"),
+    )
+    if before_date:
+        stmt = stmt.where(LectureSession.session_date <= before_date)
+
+    stmt = stmt.order_by(
+        LectureSession.session_date.desc(),
+        LectureSession.session_number.desc(),
+        LectureSession.created_at.desc(),
+    ).limit(1)
+
+    res = await db.execute(stmt)
+    prev = res.scalar_one_or_none()
+    if not prev:
+        return {"found": False}
+
+    present_ids = prev.present_student_ids or []
+    enrolled_ids = prev.all_enrolled_student_ids or []
+    return {
+        "found": True,
+        "session_id": str(prev.id),
+        "subject": prev.subject,
+        "session_date": prev.session_date,
+        "session_number": prev.session_number,
+        "present_student_ids": present_ids,
+        "present_count": len(present_ids),
+        "total_enrolled": len(enrolled_ids),
+        "created_at": prev.created_at.strftime("%H:%M:%S") if prev.created_at else "",
+    }
+
+
 async def undo_lecture_session(
     db: AsyncSession,
     session_id: uuid.UUID,
