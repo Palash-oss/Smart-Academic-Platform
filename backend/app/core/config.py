@@ -5,6 +5,34 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# ISP DNS Fallback: Certain ISPs (e.g. Reliance Jio in India) refuse DNS queries for *.neon.tech.
+# If system DNS resolution fails, fallback to Google / Cloudflare public DNS (8.8.8.8, 1.1.1.1) or static IPs.
+_orig_getaddrinfo = socket.getaddrinfo
+
+def _resilient_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        return _orig_getaddrinfo(host, port, family, type, proto, flags)
+    except socket.gaierror:
+        if isinstance(host, str) and "neon.tech" in host:
+            try:
+                import dns.resolver
+                resolver = dns.resolver.Resolver()
+                resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+                resolver.timeout = 2.0
+                resolver.lifetime = 3.0
+                answers = resolver.resolve(host, "A")
+                if answers:
+                    return _orig_getaddrinfo(answers[0].to_text(), port, family, type, proto, flags)
+            except Exception:
+                pass
+            if "ap-southeast-1" in host:
+                return _orig_getaddrinfo("13.228.46.236", port, family, type, proto, flags)
+            elif "us-east-2" in host:
+                return _orig_getaddrinfo("3.14.88.243", port, family, type, proto, flags)
+        raise
+
+socket.getaddrinfo = _resilient_getaddrinfo
+
 # Automatically load .env from current directory, backend, or project root
 _curr = Path.cwd()
 _backend = Path(__file__).resolve().parent.parent.parent
