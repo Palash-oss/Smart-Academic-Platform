@@ -25,7 +25,8 @@ def classify_query_intent(user_query: str) -> str:
         "what if", "what happens", "before exam", "still below", "policy", "rule", "regulation",
         "handbook", "guideline", "syllabus", "condonation", "re-evaluation", "gpa", "cgpa",
         "exam hall ticket", "debarment", "debar", "passing marks", "special exam", "shortage policy",
-        "minimum requirement", "remedial policy"
+        "minimum requirement", "remedial policy", "rule 4.2", "rule 4.1", "form 4", "defaulter",
+        "swap", "substitution", "class swap", "exchange class", "substitute teacher"
     ]
 
     for p in policy_triggers:

@@ -44,3 +44,33 @@ class MarkAttendanceRequest(BaseModel):
 class RosterStudentRow(BaseModel):
     name: str
     email: EmailStr
+
+
+# ---------------------------------------------------------------------------
+# Attendance Condonation & Defaulters Governance Schemas
+# ---------------------------------------------------------------------------
+
+class CreateCondonationRequest(BaseModel):
+    student_id: uuid.UUID
+    subject: str
+    leave_type: str = "MEDICAL"  # 'MEDICAL', 'DUTY_SPORTS', 'DUTY_NSS_CULTURAL', 'SPECIAL_DELEGATION'
+    missed_sessions_count: int = 1
+    granted_classes: int = 1
+    reason: str
+
+
+class CondonationResponse(BaseModel):
+    id: uuid.UUID
+    student_id: uuid.UUID
+    student_name: str
+    subject: str
+    leave_type: str
+    missed_sessions_count: int
+    granted_classes: int
+    reason: str
+    status: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+

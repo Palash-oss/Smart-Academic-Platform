@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Navbar } from '@/components/Navbar';
 import TimetableGrid from '@/components/TimetableGrid';
 import {
@@ -40,6 +40,13 @@ export default function StudentTimetablePage() {
   const [status, setStatus] = useState<TimetableStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const hasSubstitutions = useMemo(() => {
+    if (!studentData?.schedule) return false;
+    return Object.values(studentData.schedule).some((dayCells) =>
+      dayCells.some((c) => c.is_substituted)
+    );
+  }, [studentData]);
 
   useEffect(() => {
     const u = getStoredUser();
@@ -243,6 +250,29 @@ export default function StudentTimetablePage() {
         {/* ------------------------------------------------------------------- */}
         {activeTab === 'personal' && (
           <>
+            {hasSubstitutions && (
+              <div
+                style={{
+                  background: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  borderRadius: '6px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '12px',
+                  color: '#92400E',
+                }}
+              >
+                <span style={{ fontSize: '15px' }}>📢</span>
+                <div>
+                  <strong>Official Timetable Notice:</strong> Class substitution / peer faculty coverage is active for your division. See highlighted cells below for covering professor details.
+                </div>
+              </div>
+            )}
+
             {studentData && (
               <div
                 style={{
@@ -444,11 +474,18 @@ export default function StudentTimetablePage() {
                                       verticalAlign: 'middle',
                                     }}
                                   >
+                                    {cell.is_substituted && cell.substitute_faculty_name && (
+                                      <div style={{ fontSize: '9px', fontWeight: 800, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: '3px', marginBottom: '3px', display: 'inline-block' }}>
+                                        Covering: {cell.substitute_faculty_name.split(' ')[0]}
+                                      </div>
+                                    )}
                                     <div style={{ fontWeight: 800, fontSize: '12px', color: isLab ? '#15803D' : '#1D4ED8' }}>
                                       {cell.course_abbr} {isLab ? 'Lab' : ''}
                                     </div>
                                     <div style={{ fontSize: '10.5px', color: '#1F2937', fontWeight: 700, marginTop: '2px' }}>
-                                      {cell.faculty_initials || ''}
+                                      {cell.is_substituted && cell.substitute_faculty_name
+                                        ? cell.substitute_faculty_name
+                                        : cell.faculty_initials || ''}
                                     </div>
                                     <div style={{ fontSize: '9.5px', color: '#6B7280', marginTop: '2px' }}>
                                       📍 {cell.room_number || 'Room 703'}

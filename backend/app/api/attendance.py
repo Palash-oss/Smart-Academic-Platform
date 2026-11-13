@@ -6,10 +6,16 @@ import io
 from datetime import date
 from typing import List, Dict, Any, Optional
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.db.session import get_db
-from app.db.models import User
+from app.db.models import User, AttendanceCondonation, AttendanceLog
 from app.api.auth import get_current_user, require_role
-from app.schemas.attendance import MarkAttendanceRequest
+from app.schemas.attendance import (
+    MarkAttendanceRequest,
+    CreateCondonationRequest,
+    CondonationResponse,
+)
 from app.services.attendance_service import (
     fetch_student_attendance_records,
     fetch_all_students_faculty_overview,
@@ -223,3 +229,155 @@ async def import_roster_endpoint(
         )
 
     return await bulk_import_roster(db, students_data)
+
+
+# ===========================================================================
+# Institutional Attendance Condonation & Official Defaulter Governance (Rule 4.2)
+# ===========================================================================
+
+@router.post("/condonation", summary="Grant attendance condonation under Autonomous Scheme Rule 4.2")
+async def grant_condonation_endpoint(
+    payload: CreateCondonationRequest,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Grants official condonation (medical leave / official duty under Rule 4.2).
+    Updates AttendanceCondonation audit registry and reflects real-time in student attendance.
+    """
+    stu_res = await db.execute(select(User).where(User.id == payload.student_id))
+    student = stu_res.scalar_one_or_none()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    condonation = AttendanceCondonation(
+        student_id=payload.student_id,
+        subject=payload.subject,
+        leave_type=payload.leave_type,
+        missed_sessions_count=payload.missed_sessions_count,
+        granted_classes=payload.granted_classes,
+        reason=payload.reason,
+        approved_by=current_user.id,
+        status="APPROVED",
+    )
+    db.add(condonation)
+
+    # Update student's AttendanceLog in real time
+    log_stmt = select(AttendanceLog).where(
+        AttendanceLog.student_id == payload.student_id,
+        AttendanceLog.subject.ilike(f"%{payload.subject}%")
+    )
+    log_res = await db.execute(log_stmt)
+    log = log_res.scalar_one_or_none()
+    if log:
+        log.attended_classes = min(log.total_classes, log.attended_classes + payload.granted_classes)
+        new_pct = round((log.attended_classes / log.total_classes) * 100, 2)
+    else:
+        new_pct = 75.0
+
+    await db.commit()
+    await db.refresh(condonation)
+
+    return {
+        "status": "success",
+        "condonation_id": str(condonation.id),
+        "student_name": student.full_name,
+        "subject": payload.subject,
+        "leave_type": payload.leave_type,
+        "granted_classes": payload.granted_classes,
+        "new_attendance_percentage": new_pct,
+        "message": f"Successfully granted {payload.granted_classes} condoned sessions under Rule 4.2 for {student.full_name} ({payload.subject}).",
+    }
+
+
+@router.get("/condonations", summary="List attendance condonation audit records")
+async def list_condonations_endpoint(
+    student_id: Optional[uuid.UUID] = None,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN", "STUDENT"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns official condonation audit records."""
+    stmt = (
+        select(AttendanceCondonation)
+        .options(
+            selectinload(AttendanceCondonation.student),
+            selectinload(AttendanceCondonation.approver)
+        )
+        .order_by(AttendanceCondonation.created_at.desc())
+    )
+
+    if current_user.role == "STUDENT":
+        stmt = stmt.where(AttendanceCondonation.student_id == current_user.id)
+    elif student_id:
+        stmt = stmt.where(AttendanceCondonation.student_id == student_id)
+
+    res = await db.execute(stmt)
+    records = res.scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "student_id": str(r.student_id),
+            "student_name": r.student.full_name if r.student else "Student",
+            "subject": r.subject,
+            "leave_type": r.leave_type,
+            "missed_sessions_count": r.missed_sessions_count,
+            "granted_classes": r.granted_classes,
+            "reason": r.reason,
+            "status": r.status,
+            "approved_by_name": r.approver.full_name if r.approver else "Academic Dean / HOD",
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in records
+    ]
+
+
+@router.get("/defaulters", summary="Official Defaulter Notice (Form 4) Registry")
+async def get_defaulters_registry(
+    dept_code: Optional[str] = Query("COMP"),
+    min_threshold: float = Query(75.0),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Compiles the University Form 4 Defaulter List for display & print.
+    Groups students into Critical, Severe, and Borderline (Condonation-Eligible).
+    """
+    overview = await fetch_all_students_faculty_overview(db, dept_code)
+    all_students = overview.get("students", [])
+
+    defaulters = []
+    for s in all_students:
+        pct = s.get("overall_percentage", 0)
+        if pct < min_threshold:
+            if pct < 50.0:
+                category = "CRITICAL"
+                action = "Parent Summons & Academic Debarment Warning"
+            elif pct < 65.0:
+                category = "SEVERE"
+                action = "Formal Written Undertaking & Remedial Sessions"
+            else:
+                category = "BORDERLINE"
+                action = "Condonation Review Eligible (Autonomous Rule 4.2)"
+
+            defaulters.append({
+                "student_id": str(s.get("student_id")),
+                "roll_no": s.get("roll_no") or s.get("email", "").split("@")[0].split(".")[-1] or "-",
+                "full_name": s.get("student_name"),
+                "email": s.get("student_email"),
+                "overall_percentage": pct,
+                "category": category,
+                "recommended_action": action,
+                "is_condonation_eligible": pct >= 65.0,
+                "subjects_at_risk": s.get("subjects_at_risk", 0),
+                "total_subjects": s.get("total_subjects", 0),
+            })
+
+    defaulters.sort(key=lambda x: x["overall_percentage"])
+    return {
+        "status": "success",
+        "department": dept_code,
+        "threshold": min_threshold,
+        "total_defaulters_count": len(defaulters),
+        "defaulters": defaulters,
+    }
+

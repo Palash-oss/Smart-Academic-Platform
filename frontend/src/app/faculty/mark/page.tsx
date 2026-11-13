@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock, Copy } from 'lucide-react';
+import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock, Copy, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 interface Department {
@@ -38,11 +39,18 @@ interface MarkedSession {
   created_at: string;
 }
 
-export default function MarkAttendancePage() {
+function MarkAttendanceContent() {
+  const searchParams = useSearchParams();
+  const queryCourse = searchParams.get('course') || searchParams.get('subject') || '';
+  const queryDiv = searchParams.get('div') || searchParams.get('division') || '';
+  const queryBatch = searchParams.get('batch') || '';
+  const queryDate = searchParams.get('date') || '';
+  const isSyncedFromTimetable = Boolean(queryCourse || queryDiv || queryBatch || queryDate);
+
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDeptCode, setSelectedDeptCode] = useState('COMP');
-  const [selectedDivName, setSelectedDivName] = useState('A');
-  const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
+  const [selectedDivName, setSelectedDivName] = useState(queryDiv || 'A');
+  const [selectedBatch, setSelectedBatch] = useState<string>(queryBatch || 'ALL');
   
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseName, setSelectedCourseName] = useState('');
@@ -51,7 +59,7 @@ export default function MarkAttendancePage() {
   const [presentStudentIds, setPresentStudentIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [sessionDate, setSessionDate] = useState('2026-08-24');
+  const [sessionDate, setSessionDate] = useState(queryDate || '2026-08-24');
   const [markedSessions, setMarkedSessions] = useState<MarkedSession[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
@@ -111,7 +119,9 @@ export default function MarkAttendancePage() {
         if (data.length > 0) {
           const compDept = data.find((d) => d.code === 'COMP') || data[0];
           setSelectedDeptCode(compDept.code);
-          if (compDept.divisions.length > 0) {
+          if (queryDiv && compDept.divisions.some((d) => d.name.toLowerCase() === queryDiv.toLowerCase())) {
+            setSelectedDivName(queryDiv.toUpperCase());
+          } else if (compDept.divisions.length > 0) {
             setSelectedDivName(compDept.divisions[0].name);
           }
         }
@@ -131,7 +141,21 @@ export default function MarkAttendancePage() {
         const data: Course[] = await res.json();
         setCourses(data);
         if (data.length > 0) {
-          setSelectedCourseName(data[0].full_label);
+          if (queryCourse) {
+            const cleanQuery = queryCourse.toLowerCase();
+            const matched = data.find((c) =>
+              c.full_label.toLowerCase().includes(cleanQuery) ||
+              c.name.toLowerCase().includes(cleanQuery) ||
+              c.code.toLowerCase().includes(cleanQuery)
+            );
+            if (matched) {
+              setSelectedCourseName(matched.full_label);
+            } else {
+              setSelectedCourseName(data[0].full_label);
+            }
+          } else {
+            setSelectedCourseName(data[0].full_label);
+          }
         } else {
           setSelectedCourseName('');
         }
@@ -376,6 +400,36 @@ export default function MarkAttendancePage() {
             </span>
           </div>
         </div>
+
+        {/* Timetable Synchronized Session Banner */}
+        {isSyncedFromTimetable && (
+          <div
+            style={{
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: '6px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: '12px',
+              color: '#92400E',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles style={{ width: '15px', height: '15px', color: '#D97706', flexShrink: 0 }} />
+              <span>
+                <strong>Timetable-Linked Session:</strong> Pre-populated for Division {selectedDivName} {selectedBatch !== 'ALL' ? `(Batch ${selectedBatch})` : '(Full Division)'} • Scheduled Date: {sessionDate}
+              </span>
+            </div>
+            <span style={{ background: '#FDE68A', color: '#78350F', padding: '3px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 800 }}>
+              ⚡ TIMETABLE DIRECT LINK
+            </span>
+          </div>
+        )}
 
         {/* Error Alert Banner */}
         {errorMessage && (
@@ -756,5 +810,13 @@ export default function MarkAttendancePage() {
 
       </main>
     </div>
+  );
+}
+
+export default function MarkAttendancePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#FBFBFA] flex items-center justify-center font-mono text-xs text-zinc-500">Loading Attendance Console...</div>}>
+      <MarkAttendanceContent />
+    </Suspense>
   );
 }

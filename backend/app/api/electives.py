@@ -762,12 +762,12 @@ async def reset_student_choices(
 
 
 # ===========================================================================
-# 8. Live Demo Preset: Seed 140 Students, Leave Palash Pending, De-Allocate All
+# 8. Live Demo Preset: Seed Background Cohort, Leave 4 Testers (Palash, Manav, Shonit, Saad) Pending
 # ===========================================================================
 
 @router.post(
     "/v1/electives/demo-prep-live",
-    summary="Admin / Demo: Seed 140 student choices, leave Palash unsubmitted, and de-allocate all",
+    summary="Admin / Demo: Seed background cohort, leave 4 testers (Palash, Manav, Shonit, Saad) unsubmitted, de-allocate all",
 )
 async def demo_prep_live(
     academic_term: str = Query("2026-27-SEM5", description="e.g. '2026-27-SEM5'"),
@@ -777,27 +777,34 @@ async def demo_prep_live(
     """
     Sets up the system for the live presentation demo:
       1. De-allocates all active elective enrollments (allotment count becomes 0).
-      2. Ensures all other ~140 students have submitted form choices.
-      3. Completely wipes choices for Palash Rajesh Pathare.
-      4. Results in: 140 Submitted, 1 Pending (Palash), 0 Allotted.
+      2. Completely wipes choices for the 4 live interactive testers (Palash, Manav, Shonit, Saad).
+      3. Ensures all other background students have submitted form choices with realistic distributions.
+      4. Results in: ~137 Submitted, 4 Pending (Palash, Manav, Shonit, Saad), 0 Allotted.
     """
     engine = AllotmentEngine(db)
     await engine.deallocate_electives_for_term(academic_term)
 
-    # 2. Identify Palash
+    # 2. Identify the 4 live anchor testers
     stu_stmt = select(User).where(
         User.role == "STUDENT",
-        (User.full_name.ilike("%Palash%")) | (User.email == "crce.10265.ceb@gmail.com")
+        (User.full_name.ilike("%Palash%"))
+        | (User.email == "crce.10265.ceb@gmail.com")
+        | (User.full_name.ilike("%Manav%"))
+        | (User.email == "crce.10279.ceb@gmail.com")
+        | (User.full_name.ilike("%Shonit%"))
+        | (User.email == "crce.10277.ceb@gmail.com")
+        | (User.full_name.ilike("%Saad%"))
+        | (User.email == "crce.10468.ceb@gmail.com")
     )
     res_stu = await db.execute(stu_stmt)
-    palash_students = res_stu.scalars().all()
-    palash_ids = {s.id for s in palash_students}
+    tester_students = res_stu.scalars().all()
+    tester_ids = {s.id for s in tester_students}
 
-    # 3. Wipe choices for Palash
-    if palash_ids:
+    # 3. Wipe choices for the 4 testers
+    if tester_ids:
         await db.execute(
             delete(StudentElectiveChoice).where(
-                StudentElectiveChoice.student_id.in_(palash_ids),
+                StudentElectiveChoice.student_id.in_(tester_ids),
                 StudentElectiveChoice.academic_term == academic_term,
             )
         )
@@ -805,7 +812,7 @@ async def demo_prep_live(
     # 4. Verify all OTHER students have submitted choices
     all_stu_stmt = (
         select(User)
-        .where(User.role == "STUDENT", ~User.id.in_(palash_ids))
+        .where(User.role == "STUDENT", ~User.id.in_(tester_ids))
     )
     all_res = await db.execute(all_stu_stmt)
     other_students = all_res.scalars().all()
@@ -875,15 +882,15 @@ async def demo_prep_live(
     await db.commit()
     invalidate_student_cache()
 
-    palash_name = palash_students[0].full_name if palash_students else "Palash Rajesh Pathare"
+    tester_names = [s.full_name for s in tester_students]
 
     return {
         "status": "success",
         "academic_term": academic_term,
-        "message": f"Live demo mode ready! 140 student forms are submitted. {palash_name} is PENDING. Allotments are de-allocated (0 enrolled).",
-        "total_eligible_students": len(other_students) + len(palash_students),
+        "message": f"Live demo mode ready! {len(other_students)} student forms are submitted. 4 Testers are PENDING: {', '.join(tester_names)}. Allotments are de-allocated (0 enrolled).",
+        "total_eligible_students": len(other_students) + len(tester_students),
         "submitted_students_count": len(other_students),
-        "pending_student": palash_name,
+        "pending_testers": tester_names,
         "allotted_count": 0,
     }
 

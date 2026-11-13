@@ -437,3 +437,63 @@ class DocumentEmbedding(Base):
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
 
     document = relationship("Document", back_populates="embeddings")
+
+
+# ---------------------------------------------------------------------------
+# Peer-to-Peer Faculty Class Substitution & Mutual Slot Exchange Protocol
+# ---------------------------------------------------------------------------
+
+class ClassSwapRequest(Base):
+    __tablename__ = "class_swap_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    academic_term: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., '2026-27-SEM5'
+    source_slot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("timetable_slots.id", ondelete="CASCADE"), nullable=False
+    )
+    requesting_faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    target_faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    target_slot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("timetable_slots.id", ondelete="SET NULL"), nullable=True
+    )
+    swap_date: Mapped[str] = mapped_column(String(20), nullable=False)      # 'YYYY-MM-DD'
+    swap_type: Mapped[str] = mapped_column(String(30), default="SUBSTITUTION")  # 'SUBSTITUTION' or 'EXCHANGE'
+    reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")      # 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source_slot = relationship("TimetableSlot", foreign_keys=[source_slot_id])
+    target_slot = relationship("TimetableSlot", foreign_keys=[target_slot_id])
+    requesting_faculty = relationship("User", foreign_keys=[requesting_faculty_id])
+    target_faculty = relationship("User", foreign_keys=[target_faculty_id])
+
+
+# ---------------------------------------------------------------------------
+# Attendance Condonation & Official Duty Leave (Autonomous Scheme Rule 4.2)
+# ---------------------------------------------------------------------------
+
+class AttendanceCondonation(Base):
+    __tablename__ = "attendance_condonations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    leave_type: Mapped[str] = mapped_column(String(50), nullable=False)     # 'MEDICAL', 'DUTY_SPORTS', 'DUTY_NSS_CULTURAL', 'SPECIAL_DELEGATION'
+    missed_sessions_count: Mapped[int] = mapped_column(Integer, default=1)
+    granted_classes: Mapped[int] = mapped_column(Integer, default=1)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="APPROVED")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    student = relationship("User", foreign_keys=[student_id])
+    approver = relationship("User", foreign_keys=[approved_by])

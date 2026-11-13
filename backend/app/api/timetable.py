@@ -13,10 +13,11 @@ from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete
+from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from app.api.auth import get_current_user, require_role
-from app.db.models import User, TimetableSlot
+from app.db.models import User, TimetableSlot, ClassSwapRequest, CourseOffering, Course
 from app.db.session import get_db
 from app.schemas.timetable import (
     MasterTimetableResponse,
@@ -24,6 +25,9 @@ from app.schemas.timetable import (
     StudentTimetableResponse,
     TimetableStatusResponse,
     TimetableGenerateRequest,
+    CreateSwapRequestPayload,
+    RespondSwapRequestPayload,
+    SwapRequestsListResponse,
 )
 from app.services.timetable_service import TimetableService
 
@@ -190,3 +194,193 @@ async def clear_timetable(
         "slots_deleted": deleted_count,
         "message": f"Successfully dissolved timetable for {term}. Removed scheduled slots.",
     }
+
+
+# ===========================================================================
+# Peer-to-Peer Faculty Class Substitution & Mutual Exchange Protocol
+# ===========================================================================
+
+@router.get(
+    "/v1/timetable/faculty/colleagues",
+    summary="Get list of faculty colleagues for class swap / substitution selection",
+)
+async def get_faculty_colleagues_for_swap(
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns faculty list (excluding self) to choose a peer for coverage or mutual swap."""
+    stmt = select(User).where(User.role.in_(["FACULTY", "ADMIN"])).order_by(User.full_name)
+    res = await db.execute(stmt)
+    faculty_users = res.scalars().all()
+    return [
+        {
+            "id": str(u.id),
+            "full_name": u.full_name,
+            "email": u.email,
+        }
+        for u in faculty_users
+        if u.id != current_user.id
+    ]
+
+
+@router.post(
+    "/v1/timetable/swap-request",
+    summary="Request a peer class swap or substitution",
+)
+async def create_class_swap_request(
+    payload: CreateSwapRequestPayload,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Initiates a formal class substitution or mutual schedule exchange between teachers."""
+    slot_stmt = (
+        select(TimetableSlot)
+        .where(TimetableSlot.id == payload.source_slot_id)
+        .options(
+            selectinload(TimetableSlot.offering).selectinload(CourseOffering.course),
+            selectinload(TimetableSlot.division),
+        )
+    )
+    res = await db.execute(slot_stmt)
+    slot = res.scalar_one_or_none()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Source timetable slot not found.")
+
+    target_res = await db.execute(select(User).where(User.id == payload.target_faculty_id))
+    target_user = target_res.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target faculty member not found.")
+
+    swap = ClassSwapRequest(
+        academic_term=payload.academic_term,
+        source_slot_id=payload.source_slot_id,
+        requesting_faculty_id=current_user.id,
+        target_faculty_id=payload.target_faculty_id,
+        target_slot_id=payload.target_slot_id,
+        swap_date=payload.swap_date,
+        swap_type=payload.swap_type,
+        reason=payload.reason,
+        status="PENDING",
+    )
+    db.add(swap)
+    await db.commit()
+    await db.refresh(swap)
+
+    course_name = slot.offering.course.name if slot.offering and slot.offering.course else "Lecture"
+    return {
+        "status": "success",
+        "request_id": str(swap.id),
+        "target_faculty_name": target_user.full_name,
+        "message": f"Class substitution request sent to {target_user.full_name} for {course_name} on {payload.swap_date}.",
+    }
+
+
+@router.get(
+    "/v1/timetable/swap-requests",
+    response_model=SwapRequestsListResponse,
+    summary="Get incoming and outgoing class swap requests",
+)
+async def get_swap_requests(
+    academic_term: Optional[str] = Query("2026-27-SEM5"),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lists received requests (need response) and sent requests (awaiting colleague action)."""
+    stmt = (
+        select(ClassSwapRequest)
+        .where(
+            (ClassSwapRequest.target_faculty_id == current_user.id)
+            | (ClassSwapRequest.requesting_faculty_id == current_user.id)
+        )
+        .options(
+            selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.offering).selectinload(CourseOffering.course),
+            selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.division),
+            selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.batch),
+            selectinload(ClassSwapRequest.requesting_faculty),
+            selectinload(ClassSwapRequest.target_faculty),
+        )
+        .order_by(ClassSwapRequest.created_at.desc())
+    )
+    res = await db.execute(stmt)
+    swaps = res.scalars().all()
+
+    received = []
+    sent = []
+
+    for s in swaps:
+        slot = s.source_slot
+        c_name = slot.offering.course.name if slot and slot.offering and slot.offering.course else "Subject"
+        c_code = slot.offering.course.code if slot and slot.offering and slot.offering.course else ""
+        c_abbr = slot.custom_title or (slot.offering.course.code if slot and slot.offering and slot.offering.course else "LEC")
+        sec = f"COMP-{slot.division.name}" if slot and slot.division else None
+
+        item = {
+            "id": str(s.id),
+            "academic_term": s.academic_term,
+            "source_slot_id": str(s.source_slot_id),
+            "target_slot_id": str(s.target_slot_id) if s.target_slot_id else None,
+            "swap_date": s.swap_date,
+            "swap_type": s.swap_type,
+            "reason": s.reason,
+            "status": s.status,
+            "created_at": s.created_at.isoformat() if s.created_at else "",
+            "requesting_faculty_id": str(s.requesting_faculty_id),
+            "requesting_faculty_name": s.requesting_faculty.full_name if s.requesting_faculty else "Unknown",
+            "target_faculty_id": str(s.target_faculty_id),
+            "target_faculty_name": s.target_faculty.full_name if s.target_faculty else "Unknown",
+            "source_course_abbr": c_abbr,
+            "source_course_name": c_name,
+            "source_day": slot.day_of_week if slot else "",
+            "source_time": f"{slot.start_time} - {slot.end_time}" if slot else "",
+            "source_section": sec,
+            "source_room": slot.room_number if slot else None,
+        }
+        if s.target_faculty_id == current_user.id:
+            received.append(item)
+        else:
+            sent.append(item)
+
+    return {"received": received, "sent": sent}
+
+
+@router.post(
+    "/v1/timetable/swap-respond",
+    summary="Respond (Approve / Reject) to a peer class swap request",
+)
+async def respond_to_swap_request(
+    payload: RespondSwapRequestPayload,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approving a substitution authorizes the covering teacher to conduct and mark the session."""
+    stmt = (
+        select(ClassSwapRequest)
+        .where(ClassSwapRequest.id == payload.request_id)
+        .options(
+            selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.offering).selectinload(CourseOffering.course),
+            selectinload(ClassSwapRequest.requesting_faculty),
+            selectinload(ClassSwapRequest.target_faculty),
+        )
+    )
+    res = await db.execute(stmt)
+    swap = res.scalar_one_or_none()
+    if not swap:
+        raise HTTPException(status_code=404, detail="Swap request not found.")
+
+    if current_user.role != "ADMIN" and swap.target_faculty_id != current_user.id and swap.requesting_faculty_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You are not authorized to respond to this swap request.")
+
+    new_status = payload.action.upper()
+    if new_status not in ["APPROVED", "REJECTED", "CANCELLED"]:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be APPROVED, REJECTED, or CANCELLED.")
+
+    swap.status = new_status
+    await db.commit()
+
+    return {
+        "status": "success",
+        "request_id": str(swap.id),
+        "new_status": new_status,
+        "message": f"Class swap request marked as {new_status}.",
+    }
+

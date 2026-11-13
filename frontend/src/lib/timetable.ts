@@ -33,6 +33,11 @@ export interface TimetableCell {
   faculty_name?: string;
   section_name?: string;
   batch_name?: string;
+  slot_id?: string;
+  is_substituted?: boolean;
+  original_faculty_name?: string;
+  substitute_faculty_name?: string;
+  swap_request_id?: string;
   is_parallel?: boolean;
   parallel_items?: ParallelBatchItem[];
 }

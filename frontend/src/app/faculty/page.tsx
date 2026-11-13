@@ -18,6 +18,11 @@ import {
   X,
   Filter,
   GraduationCap,
+  FileText,
+  Printer,
+  ShieldCheck,
+  Award,
+  Send,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -135,6 +140,84 @@ export default function FacultyDashboardPage() {
   const [rosterModalCourse, setRosterModalCourse] = useState<FacultyAssignedCourse | null>(null);
   const [rosterBatchFilter, setRosterBatchFilter] = useState<string>('ALL');
   const [rosterSearchQuery, setRosterSearchQuery] = useState<string>('');
+
+  // Condonation Review Modal state (Rule 4.2)
+  const [showCondonationModal, setShowCondonationModal] = useState(false);
+  const [selectedStudentForCondonation, setSelectedStudentForCondonation] = useState<{
+    id: string;
+    name: string;
+    subject: string;
+    currentPct: number;
+  } | null>(null);
+  const [condonationLeaveType, setCondonationLeaveType] = useState('MEDICAL');
+  const [condonationGrantedClasses, setCondonationGrantedClasses] = useState(2);
+  const [condonationReason, setCondonationReason] = useState('');
+  const [grantingCondonation, setGrantingCondonation] = useState(false);
+  const [condonationSuccessMsg, setCondonationSuccessMsg] = useState<string | null>(null);
+
+  // Form 4 Defaulter Notice Modal state
+  const [showDefaulterNoticeModal, setShowDefaulterNoticeModal] = useState(false);
+  const [defaultersData, setDefaultersData] = useState<any[]>([]);
+  const [loadingDefaulters, setLoadingDefaulters] = useState(false);
+
+  const handleOpenCondonation = (student: StudentOverview, subjectName?: string) => {
+    setSelectedStudentForCondonation({
+      id: student.student_id,
+      name: student.student_name,
+      subject: subjectName || student.subjects[0]?.subject || 'Theory of Computer Science (25PCC13CE01)',
+      currentPct: student.overall_percentage,
+    });
+    setCondonationSuccessMsg(null);
+    setShowCondonationModal(true);
+  };
+
+  const handleGrantCondonation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForCondonation) return;
+    setGrantingCondonation(true);
+    setCondonationSuccessMsg(null);
+    try {
+      const res = await fetchWithAuth('/api/attendance/condonation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: selectedStudentForCondonation.id,
+          subject: selectedStudentForCondonation.subject,
+          leave_type: condonationLeaveType,
+          missed_sessions_count: condonationGrantedClasses,
+          granted_classes: condonationGrantedClasses,
+          reason: condonationReason || 'Sanctioned under Autonomous Ordinance Rule 4.2',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCondonationSuccessMsg(`Granted ${condonationGrantedClasses} condoned sessions. New Attendance: ${data.new_attendance_percentage}%`);
+        await loadFacultyData(selectedTerm);
+      } else {
+        alert(data.detail || 'Failed to grant condonation');
+      }
+    } catch (err) {
+      console.error('Error granting condonation:', err);
+    } finally {
+      setGrantingCondonation(false);
+    }
+  };
+
+  const handleOpenDefaulterNotice = async () => {
+    setShowDefaulterNoticeModal(true);
+    setLoadingDefaulters(true);
+    try {
+      const res = await fetchWithAuth('/api/attendance/defaulters?dept_code=COMP&min_threshold=75');
+      if (res.ok) {
+        const data = await res.json();
+        setDefaultersData(data.defaulters || []);
+      }
+    } catch (err) {
+      console.error('Failed to load defaulters:', err);
+    } finally {
+      setLoadingDefaulters(false);
+    }
+  };
 
   useEffect(() => {
     loadFacultyData(selectedTerm);
@@ -425,6 +508,36 @@ export default function FacultyDashboardPage() {
               <Plus style={{ width: '15px', height: '15px' }} />
               <span>Mark Attendance</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={handleOpenDefaulterNotice}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                background: '#FFFFFF',
+                color: '#DC2626',
+                border: '1px solid #FECACA',
+                borderRadius: '6px',
+                fontFamily: '"Plus Jakarta Sans", sans-serif',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#FEF2F2';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#FFFFFF';
+              }}
+            >
+              <FileText style={{ width: '15px', height: '15px' }} />
+              <span>University Defaulter Notice (Form 4)</span>
+            </button>
           </div>
         </div>
 
@@ -1031,12 +1144,39 @@ export default function FacultyDashboardPage() {
                         <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '9.5px', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>OVERALL</p>
                       </div>
 
-                      {/* Risk Badge */}
+                      {/* Risk Badge & Condonation */}
                       {student.overall_risk ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 600, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '3px 8px' }}>
-                          <AlertTriangle style={{ width: '11px', height: '11px' }} />
-                          At Risk
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 600, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '3px 8px' }}>
+                            <AlertTriangle style={{ width: '11px', height: '11px' }} />
+                            At Risk
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCondonation(student);
+                            }}
+                            title="Review Medical or Duty Leave under Autonomous Rule 4.2"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontFamily: '"JetBrains Mono", monospace',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: '#1D4ED8',
+                              background: '#EFF6FF',
+                              border: '1px solid #BFDBFE',
+                              borderRadius: '4px',
+                              padding: '3px 8px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <ShieldCheck style={{ width: '12px', height: '12px' }} />
+                            <span>Condonation</span>
+                          </button>
+                        </div>
                       ) : (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 600, color: '#16A34A', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '4px', padding: '3px 8px' }}>
                           <CheckCircle2 style={{ width: '11px', height: '11px' }} />
@@ -1089,12 +1229,37 @@ export default function FacultyDashboardPage() {
                               <div style={{ height: '4px', background: '#E4E4E7', borderRadius: '99px', overflow: 'hidden', marginBottom: '8px' }}>
                                 <div style={{ height: '100%', width: `${Math.min(sub.percentage, 100)}%`, background: subColor, borderRadius: '99px' }} />
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
                                 <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A' }}>{sub.attended_classes} / {sub.total_classes} classes</span>
                                 {sub.is_at_risk && (
-                                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 700, color: '#DC2626' }}>
-                                    +{sub.classes_needed_to_clear_risk} needed
-                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 700, color: '#DC2626' }}>
+                                      +{sub.classes_needed_to_clear_risk} needed
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenCondonation(student, sub.subject);
+                                      }}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '2px',
+                                        fontSize: '9.5px',
+                                        fontWeight: 700,
+                                        background: '#EFF6FF',
+                                        color: '#1D4ED8',
+                                        border: '1px solid #BFDBFE',
+                                        padding: '1px 5px',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <ShieldCheck style={{ width: '10px', height: '10px' }} />
+                                      <span>Rule 4.2</span>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1346,6 +1511,335 @@ export default function FacultyDashboardPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Condonation Review Modal (Autonomous Scheme Rule 4.2) */}
+      {showCondonationModal && selectedStudentForCondonation && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(9, 9, 11, 0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              background: '#FFFFFF',
+              border: '1px solid #E4E4E7',
+              borderRadius: '10px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck style={{ width: '20px', height: '20px', color: '#2563EB' }} />
+                <h3 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '17px', fontWeight: 800, color: '#09090B' }}>
+                  Autonomous Ordinance Rule 4.2 Review
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCondonationModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#71717A' }}
+              >
+                <X style={{ width: '18px', height: '18px' }} />
+              </button>
+            </div>
+
+            {condonationSuccessMsg && (
+              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '6px', padding: '10px 14px', marginBottom: '14px', color: '#16A34A', fontSize: '12px', fontWeight: 600 }}>
+                ✓ {condonationSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleGrantCondonation}>
+              <div style={{ background: '#F4F4F6', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '12px 14px', marginBottom: '14px', fontSize: '12px' }}>
+                <div style={{ fontWeight: 800, color: '#09090B' }}>
+                  {selectedStudentForCondonation.name}
+                </div>
+                <div style={{ color: '#52525B', marginTop: '2px' }}>
+                  Subject: <strong>{selectedStudentForCondonation.subject}</strong>
+                </div>
+                <div style={{ color: selectedStudentForCondonation.currentPct < 75 ? '#DC2626' : '#16A34A', fontWeight: 700, marginTop: '2px' }}>
+                  Current Attendance: {selectedStudentForCondonation.currentPct}% {selectedStudentForCondonation.currentPct >= 65 ? '(Rule 4.2 Condonation Eligible)' : '(Severe Shortage)'}
+                </div>
+              </div>
+
+              {/* Leave Classification */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Statutory Grounds for Condonation
+                </label>
+                <select
+                  value={condonationLeaveType}
+                  onChange={(e) => setCondonationLeaveType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#09090B',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="MEDICAL">Medical Leave (Hospitalization / Certified Illness)</option>
+                  <option value="DUTY_SPORTS">Official University / Inter-Collegiate Sports Duty</option>
+                  <option value="DUTY_NSS_CULTURAL">NSS / University Youth Festival / Cultural Delegation</option>
+                  <option value="SPECIAL_DELEGATION">Academic Conference / Hackathon Institutional Representation</option>
+                </select>
+              </div>
+
+              {/* Sessions to Credit */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Number of Missed Sessions to Condone
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  required
+                  value={condonationGrantedClasses}
+                  onChange={(e) => setCondonationGrantedClasses(parseInt(e.target.value) || 1)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontFamily: '"JetBrains Mono", monospace',
+                    fontSize: '13px',
+                    color: '#09090B',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Justification */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Evidence / Sanction Order Reference
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Registered Hospital Certificate Ref: MED-2026-118"
+                  value={condonationReason}
+                  onChange={(e) => setCondonationReason(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E4E4E7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#09090B',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCondonationModal(false)}
+                  style={{ padding: '8px 16px', background: '#F4F4F6', color: '#09090B', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={grantingCondonation}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 18px',
+                    background: '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    opacity: grantingCondonation ? 0.6 : 1,
+                  }}
+                >
+                  <Award style={{ width: '14px', height: '14px' }} />
+                  <span>{grantingCondonation ? 'Processing Ordinance...' : 'Approve & Credit Attendance'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Official Form 4 Defaulter Notification Sheet Modal */}
+      {showDefaulterNoticeModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(9, 9, 11, 0.75)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '920px',
+              maxHeight: '90vh',
+              background: '#FFFFFF',
+              borderRadius: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Modal Header (Controls) */}
+            <div className="no-print" style={{ padding: '12px 20px', borderBottom: '1px solid #E4E4E7', background: '#FAFAFB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText style={{ width: '18px', height: '18px', color: '#DC2626' }} />
+                <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '14px', fontWeight: 800, color: '#09090B' }}>
+                  University Defaulter Notice (Form 4) Preview
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    background: '#18181B',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Printer style={{ width: '13px', height: '13px' }} />
+                  <span>Print Formal Notice</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDefaulterNoticeModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#71717A' }}
+                >
+                  <X style={{ width: '18px', height: '18px' }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Notice Sheet */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '36px 40px', background: '#FFFFFF' }} className="printable-sheet">
+              {/* College Letterhead */}
+              <div style={{ textAlign: 'center', borderBottom: '2px solid #000000', paddingBottom: '16px', marginBottom: '20px' }}>
+                <div style={{ fontFamily: '"Plus Jakarta Sans", serif', fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Fr. Conceicao Rodrigues College of Engineering
+                </div>
+                <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#374151', marginTop: '2px' }}>
+                  Father Agnel Ashram, Bandstand, Bandra (West), Mumbai - 400 050
+                </div>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '10.5px', fontWeight: 700, color: '#52525B', marginTop: '2px' }}>
+                  (Autonomous Scheme Affiliated to University of Mumbai • Accredited by NAAC & NBA)
+                </div>
+                <div style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '14px', fontWeight: 800, marginTop: '8px', color: '#DC2626', letterSpacing: '0.02em' }}>
+                  FORM NO. 4: ACADEMIC ATTENDANCE DEFAULTERS NOTIFICATION (TERM: {selectedTerm})
+                </div>
+              </div>
+
+              {/* Statutory Ordinance Reference */}
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '12px 14px', marginBottom: '20px', fontSize: '11.5px', lineHeight: 1.5, color: '#991B1B' }}>
+                <strong>STATUTORY ORDINANCE NOTICE (Rule 4.1 & 4.2):</strong> As per University Autonomous Scheme Ordinances, every registered student is required to secure a minimum aggregate attendance of <strong>75%</strong> in all scheduled theory lectures and practical laboratories. The following students currently stand in default of the mandatory quota and are notified to submit explanations / undertakings to the HOD office immediately.
+              </div>
+
+              {/* Defaulter Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px', marginBottom: '32px' }}>
+                <thead>
+                  <tr style={{ background: '#F4F4F5', border: '1px solid #000000' }}>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center' }}>SR</th>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'left' }}>ROLL NO</th>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'left' }}>CANDIDATE NAME</th>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center' }}>AGGREGATE %</th>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center' }}>CATEGORY</th>
+                    <th style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'left' }}>REGULATORY DIRECTIVE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {defaultersData.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ border: '1px solid #000000', padding: '24px', textAlign: 'center', color: '#16A34A', fontWeight: 700 }}>
+                        No defaulters detected in Department of Computer Engineering. All enrolled students satisfy the 75% attendance threshold.
+                      </td>
+                    </tr>
+                  ) : (
+                    defaultersData.map((d, idx) => (
+                      <tr key={d.student_id || idx} style={{ border: '1px solid #000000' }}>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center', fontFamily: '"JetBrains Mono", monospace' }}>{idx + 1}</td>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', fontFamily: '"JetBrains Mono", monospace', fontWeight: 700 }}>{d.roll_no}</td>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', fontWeight: 700 }}>{d.full_name}</td>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center', fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, color: d.overall_percentage < 50 ? '#DC2626' : '#D97706' }}>
+                          {d.overall_percentage}%
+                        </td>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', textAlign: 'center', fontWeight: 800 }}>
+                          <span style={{ fontSize: '10px', background: d.category === 'CRITICAL' ? '#FEF2F2' : '#FFFBEB', color: d.category === 'CRITICAL' ? '#DC2626' : '#B45309', padding: '2px 6px', borderRadius: '3px' }}>
+                            {d.category}
+                          </span>
+                        </td>
+                        <td style={{ border: '1px solid #000000', padding: '6px 8px', fontSize: '10.5px' }}>
+                          {d.recommended_action}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+
+              {/* Official Signatures Footer */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '48px', paddingTop: '20px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: '160px', borderBottom: '1px solid #000000', marginBottom: '6px' }}></div>
+                  <div style={{ fontSize: '11px', fontWeight: 700 }}>Class Teacher / Incharge</div>
+                  <div style={{ fontSize: '10px', color: '#6B7280' }}>Dept. of Computer Engg.</div>
+                </div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: '160px', borderBottom: '1px solid #000000', marginBottom: '6px' }}></div>
+                  <div style={{ fontSize: '11px', fontWeight: 700 }}>Dr. Kalpana Deorukhkar</div>
+                  <div style={{ fontSize: '10px', color: '#6B7280' }}>Head of Department (COMP)</div>
+                </div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: '160px', borderBottom: '1px solid #000000', marginBottom: '6px' }}></div>
+                  <div style={{ fontSize: '11px', fontWeight: 700 }}>Principal / Dean Academics</div>
+                  <div style={{ fontSize: '10px', color: '#6B7280' }}>Fr. CRCE, Mumbai</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

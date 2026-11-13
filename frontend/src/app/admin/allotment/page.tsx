@@ -618,7 +618,33 @@ export default function AdminAllotmentPage() {
   const [deallocatingHub, setDeallocatingHub] = useState(false);
   const [showResetChoicesModal, setShowResetChoicesModal] = useState(false);
   const [resettingChoices, setResettingChoices] = useState(false);
+  const [primingDemo, setPrimingDemo] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
+
+  const handlePrimeDemoBaseline = async () => {
+    setPrimingDemo(true);
+    setAutoAllotmentMsg(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/v1/electives/demo-prep-live?academic_term=${encodeURIComponent(selectedTerm)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setAutoAllotmentMsg({ error: data?.detail || 'Failed to prime demo baseline.' });
+      } else {
+        setAutoAllotmentMsg({
+          success: data.message || 'Live demo mode ready! 137 student forms submitted. 4 Testers (Palash, Manav, Shonit, Saad) are PENDING. 0 Allotted.',
+        });
+        await loadOfferings();
+        await loadElectiveProgress();
+      }
+    } catch {
+      setAutoAllotmentMsg({ error: 'Network error while priming live demo.' });
+    } finally {
+      setPrimingDemo(false);
+    }
+  };
 
   const loadFaculty = useCallback(async () => {
     try {
@@ -1151,6 +1177,25 @@ export default function AdminAllotmentPage() {
                       <>
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>De-Allocate / Reset Allotment</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrimeDemoBaseline}
+                    disabled={primingDemo}
+                    className="w-full py-2 px-3 bg-[#09090B] hover:bg-[#27272A] text-white text-xs font-bold rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {primingDemo ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Priming 137 Seeded + 4 Testers...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-[#FF5500]" />
+                        <span>Prime Demo (137 Seeded, 4 Testers Pending)</span>
                       </>
                     )}
                   </button>

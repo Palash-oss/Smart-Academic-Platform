@@ -45,9 +45,62 @@ class TimetableCell(BaseModel):
     section_name: Optional[str] = None
     batch_name: Optional[str] = None
 
+    # Real-time Linking & Faculty Class Substitution
+    slot_id: Optional[str] = None
+    is_substituted: Optional[bool] = False
+    substitute_faculty_name: Optional[str] = None
+    original_faculty_name: Optional[str] = None
+    swap_request_id: Optional[str] = None
+
     # For parallel multi-batch PRACTICAL slots (e.g., A/B/C/D running concurrently)
     is_parallel: bool = False
     parallel_items: List[ParallelBatchItem] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Peer-to-Peer Faculty Class Substitution & Mutual Exchange Schemas
+# ---------------------------------------------------------------------------
+
+class CreateSwapRequestPayload(BaseModel):
+    academic_term: str = "2026-27-SEM5"
+    source_slot_id: uuid.UUID
+    target_faculty_id: uuid.UUID
+    swap_date: str
+    swap_type: str = "SUBSTITUTION"  # 'SUBSTITUTION' or 'EXCHANGE'
+    target_slot_id: Optional[uuid.UUID] = None
+    reason: Optional[str] = None
+
+
+class RespondSwapRequestPayload(BaseModel):
+    request_id: uuid.UUID
+    action: str  # 'APPROVED', 'REJECTED', 'CANCELLED'
+
+
+class SwapRequestItem(BaseModel):
+    id: str
+    academic_term: str
+    source_slot_id: str
+    target_slot_id: Optional[str] = None
+    swap_date: str
+    swap_type: str
+    reason: Optional[str] = None
+    status: str
+    created_at: str
+    requesting_faculty_id: str
+    requesting_faculty_name: str
+    target_faculty_id: str
+    target_faculty_name: str
+    source_course_abbr: str
+    source_course_name: str
+    source_day: str
+    source_time: str
+    source_section: Optional[str] = None
+    source_room: Optional[str] = None
+
+
+class SwapRequestsListResponse(BaseModel):
+    received: List[SwapRequestItem]
+    sent: List[SwapRequestItem]
 
 
 class LegendItem(BaseModel):

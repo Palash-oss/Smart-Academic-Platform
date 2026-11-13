@@ -11,7 +11,7 @@ import {
   MasterTimetableResponse,
   TimetableStatusResponse,
 } from '@/lib/timetable';
-import { getStoredUser, User } from '@/lib/api';
+import { getStoredUser, User, fetchWithAuth } from '@/lib/api';
 import {
   Calendar,
   Clock,
@@ -28,6 +28,12 @@ import {
   Table,
   UserCheck,
   Building,
+  ArrowLeftRight,
+  CheckSquare,
+  X,
+  Send,
+  Check,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -42,14 +48,111 @@ export default function FacultyTimetablePage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Class Swap & Substitution State
+  const [swapRequests, setSwapRequests] = useState<{ received: any[]; sent: any[] }>({ received: [], sent: [] });
+  const [colleagues, setColleagues] = useState<Array<{ id: string; full_name: string; email: string }>>([]);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [activeSlotForSwap, setActiveSlotForSwap] = useState<any>(null);
+  const [activeDayForSwap, setActiveDayForSwap] = useState('');
+  const [swapDate, setSwapDate] = useState('2026-08-25');
+  const [targetFacultyId, setTargetFacultyId] = useState('');
+  const [swapReason, setSwapReason] = useState('');
+  const [swapSubmitting, setSwapSubmitting] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
   useEffect(() => {
     const u = getStoredUser();
     setUser(u);
+    loadSwaps();
+    loadColleagues();
   }, []);
 
   useEffect(() => {
     loadData(selectedTerm, activeTab, selectedDivision);
   }, [selectedTerm, activeTab, selectedDivision]);
+
+  const loadSwaps = async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/timetable/swap-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setSwapRequests(data);
+      }
+    } catch (err) {
+      console.error('Failed to load swap requests:', err);
+    }
+  };
+
+  const loadColleagues = async () => {
+    try {
+      const res = await fetchWithAuth('/api/v1/timetable/faculty/colleagues');
+      if (res.ok) {
+        const data = await res.json();
+        setColleagues(data);
+        if (data.length > 0) {
+          setTargetFacultyId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load colleagues:', err);
+    }
+  };
+
+  const handleRespondSwap = async (requestId: string, action: 'APPROVED' | 'REJECTED') => {
+    setRespondingId(requestId);
+    try {
+      const res = await fetchWithAuth('/api/v1/timetable/swap-respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId, action }),
+      });
+      if (res.ok) {
+        await loadSwaps();
+        await loadData(selectedTerm, activeTab, selectedDivision);
+      }
+    } catch (err) {
+      console.error('Error responding to swap:', err);
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
+  const handleOpenSwapModal = (cell: any, day: string) => {
+    setActiveSlotForSwap(cell);
+    setActiveDayForSwap(day);
+    setSwapModalOpen(true);
+  };
+
+  const handleSubmitSwap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSlotForSwap || !activeSlotForSwap.slot_id || !targetFacultyId) return;
+
+    setSwapSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/v1/timetable/swap-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academic_term: selectedTerm,
+          source_slot_id: activeSlotForSwap.slot_id,
+          target_faculty_id: targetFacultyId,
+          swap_date: swapDate,
+          swap_type: 'SUBSTITUTION',
+          reason: swapReason || 'Department Duty / Schedule Adjustment',
+        }),
+      });
+      if (res.ok) {
+        setSwapModalOpen(false);
+        setSwapReason('');
+        await loadSwaps();
+        await loadData(selectedTerm, activeTab, selectedDivision);
+      }
+    } catch (err) {
+      console.error('Failed to submit swap request:', err);
+    } finally {
+      setSwapSubmitting(false);
+    }
+  };
 
   const loadData = async (term: string, tab: 'personal' | 'master', div: string) => {
     setLoading(true);
@@ -144,6 +247,108 @@ export default function FacultyTimetablePage() {
             </div>
           </div>
         </div>
+
+        {/* Incoming Peer Class Swap Requests Banner */}
+        {swapRequests.received.filter((r) => r.status === 'PENDING').length > 0 && (
+          <div
+            className="no-print"
+            style={{
+              background: '#FFF7ED',
+              border: '1px solid #FFEDD5',
+              borderRadius: '8px',
+              padding: '16px 20px',
+              marginBottom: '20px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <ArrowLeftRight style={{ width: '18px', height: '18px', color: '#EA580C' }} />
+              <h3 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '14px', fontWeight: 800, color: '#9A3412' }}>
+                Incoming Class Coverage Requests ({swapRequests.received.filter((r) => r.status === 'PENDING').length})
+              </h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+              {swapRequests.received.filter((r) => r.status === 'PENDING').map((req) => (
+                <div
+                  key={req.id}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #FED7AA',
+                    borderRadius: '6px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#09090B' }}>
+                        {req.source_course_abbr} ({req.source_section || 'COMP'})
+                      </span>
+                      <span style={{ fontSize: '10.5px', fontFamily: '"JetBrains Mono", monospace', background: '#FFEDD5', color: '#9A3412', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                        {req.swap_date}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#4B5563', marginTop: '4px' }}>
+                      Requested by: <strong>{req.requesting_faculty_name}</strong> • {req.source_day} ({req.source_time})
+                    </p>
+                    {req.reason && (
+                      <p style={{ fontSize: '11px', color: '#6B7280', fontStyle: 'italic', marginTop: '2px' }}>
+                        &ldquo;{req.reason}&rdquo;
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={respondingId === req.id}
+                      onClick={() => handleRespondSwap(req.id, 'APPROVED')}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        background: '#16A34A',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Check style={{ width: '13px', height: '13px' }} />
+                      <span>{respondingId === req.id ? 'Authorizing...' : 'Accept & Cover Class'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={respondingId === req.id}
+                      onClick={() => handleRespondSwap(req.id, 'REJECTED')}
+                      style={{
+                        padding: '6px 10px',
+                        background: '#FFFFFF',
+                        color: '#DC2626',
+                        border: '1px solid #FCA5A5',
+                        borderRadius: '4px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* View Switcher Tabs: Personal Teaching Schedule vs Master Division Timetable */}
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E4E4E7', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -400,6 +605,9 @@ export default function FacultyTimetablePage() {
 
                               if (cell.slot_type === 'THEORY' || cell.slot_type === 'PRACTICAL') {
                                 const isLab = cell.slot_type === 'PRACTICAL';
+                                const divClean = cell.section_name ? cell.section_name.replace('COMP-', '').replace('Division ', '') : 'B';
+                                const markUrl = `/faculty/mark?course=${encodeURIComponent(cell.course_abbr || cell.course_name || '')}&div=${divClean}&batch=${cell.batch_name || 'ALL'}&date=2026-08-24`;
+
                                 return (
                                   <td
                                     key={cIdx}
@@ -407,10 +615,23 @@ export default function FacultyTimetablePage() {
                                     style={{
                                       border: '1px solid #000000',
                                       padding: '8px 4px',
-                                      background: isLab ? '#F0FDF4' : '#EFF6FF',
+                                      background: cell.is_substituted
+                                        ? (cell.original_faculty_name ? '#FEF9C3' : '#F3F4F6')
+                                        : (isLab ? '#F0FDF4' : '#EFF6FF'),
                                       verticalAlign: 'middle',
                                     }}
                                   >
+                                    {cell.is_substituted && cell.original_faculty_name && (
+                                      <div style={{ fontSize: '9px', fontWeight: 800, color: '#854D0E', background: '#FEF08A', padding: '1px 5px', borderRadius: '3px', marginBottom: '4px', display: 'inline-block' }}>
+                                        ⭐ COVERING ({cell.original_faculty_name.split(' ')[0]})
+                                      </div>
+                                    )}
+                                    {cell.is_substituted && cell.substitute_faculty_name && (
+                                      <div style={{ fontSize: '9px', fontWeight: 800, color: '#4B5563', background: '#E5E7EB', padding: '1px 5px', borderRadius: '3px', marginBottom: '4px', display: 'inline-block' }}>
+                                        🔄 DELEGATED ({cell.substitute_faculty_name.split(' ')[0]})
+                                      </div>
+                                    )}
+
                                     <div style={{ fontWeight: 800, fontSize: '12px', color: isLab ? '#15803D' : '#1D4ED8' }}>
                                       {cell.course_abbr} {isLab ? 'Lab' : ''}
                                     </div>
@@ -419,6 +640,53 @@ export default function FacultyTimetablePage() {
                                     </div>
                                     <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>
                                       📍 {cell.room_number || 'Room 703'}
+                                    </div>
+
+                                    {/* Action Buttons: Take Attendance & Request Swap */}
+                                    <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', justifyContent: 'center' }}>
+                                      <Link
+                                        href={markUrl}
+                                        title="Take Attendance for this lecture slot"
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          fontSize: '9.5px',
+                                          fontWeight: 700,
+                                          background: '#FF5500',
+                                          color: '#FFFFFF',
+                                          padding: '2px 6px',
+                                          borderRadius: '4px',
+                                          textDecoration: 'none',
+                                        }}
+                                      >
+                                        <CheckSquare style={{ width: '10px', height: '10px' }} />
+                                        <span>Mark</span>
+                                      </Link>
+
+                                      {!cell.is_substituted && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenSwapModal(cell, day)}
+                                          title="Request Peer Class Swap / Substitution"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px',
+                                            fontSize: '9.5px',
+                                            fontWeight: 700,
+                                            background: '#FFFFFF',
+                                            color: '#374151',
+                                            border: '1px solid #D1D5DB',
+                                            padding: '2px 5px',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          <ArrowLeftRight style={{ width: '10px', height: '10px' }} />
+                                          <span>Swap</span>
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 );
@@ -523,6 +791,184 @@ export default function FacultyTimetablePage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+        {/* Peer Class Swap & Substitution Request Modal */}
+        {swapModalOpen && activeSlotForSwap && (
+          <div
+            className="no-print"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(9, 9, 11, 0.6)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '480px',
+                background: '#FFFFFF',
+                border: '1px solid #E4E4E7',
+                borderRadius: '10px',
+                padding: '24px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ArrowLeftRight style={{ width: '18px', height: '18px', color: '#FF5500' }} />
+                  <h3 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '17px', fontWeight: 800, color: '#09090B' }}>
+                    Request Class Substitution
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSwapModalOpen(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#71717A' }}
+                >
+                  <X style={{ width: '18px', height: '18px' }} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitSwap}>
+                {/* Slot Details Summary Box */}
+                <div style={{ background: '#F4F4F6', border: '1px solid #E4E4E7', borderRadius: '6px', padding: '12px 14px', marginBottom: '16px', fontSize: '12px' }}>
+                  <div style={{ fontWeight: 800, color: '#09090B', marginBottom: '4px' }}>
+                    {activeSlotForSwap.course_abbr} — {activeSlotForSwap.course_name || 'Assigned Session'}
+                  </div>
+                  <div style={{ color: '#52525B' }}>
+                    {activeDayForSwap} • {activeSlotForSwap.start_time} - {activeSlotForSwap.end_time} • {activeSlotForSwap.section_name || 'COMP-B'} {activeSlotForSwap.batch_name ? `(${activeSlotForSwap.batch_name})` : ''}
+                  </div>
+                  <div style={{ color: '#71717A', marginTop: '2px' }}>
+                    📍 {activeSlotForSwap.room_number || 'Room 703'}
+                  </div>
+                </div>
+
+                {/* Target Date */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Date of Lecture Session
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={swapDate}
+                    onChange={(e) => setSwapDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#FFFFFF',
+                      border: '1px solid #E4E4E7',
+                      borderRadius: '6px',
+                      fontFamily: '"JetBrains Mono", monospace',
+                      fontSize: '13px',
+                      color: '#09090B',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Colleague Select */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Request Coverage From Colleague
+                  </label>
+                  <select
+                    required
+                    value={targetFacultyId}
+                    onChange={(e) => setTargetFacultyId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#FFFFFF',
+                      border: '1px solid #E4E4E7',
+                      borderRadius: '6px',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: '13px',
+                      color: '#09090B',
+                      outline: 'none',
+                    }}
+                  >
+                    {colleagues.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.full_name} ({c.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Reason */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Reason / Official Duty Description
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Attending AI Conference / Medical Consultation"
+                    value={swapReason}
+                    onChange={(e) => setSwapReason(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#FFFFFF',
+                      border: '1px solid #E4E4E7',
+                      borderRadius: '6px',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: '13px',
+                      color: '#09090B',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Modal Buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSwapModalOpen(false)}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#F4F4F6',
+                      color: '#09090B',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={swapSubmitting}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 18px',
+                      background: '#FF5500',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      opacity: swapSubmitting ? 0.6 : 1,
+                    }}
+                  >
+                    <Send style={{ width: '13px', height: '13px' }} />
+                    <span>{swapSubmitting ? 'Sending Request...' : 'Send Swap Request'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </main>

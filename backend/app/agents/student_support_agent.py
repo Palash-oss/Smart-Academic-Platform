@@ -149,6 +149,24 @@ async def run_student_support_agent(
                 f"2. Debarment Clause: Students with unexcused attendance below the 75% threshold or severe disciplinary infractions are officially debarred from taking the regular End Semester Examination.\n\n"
                 f"3. Resolution Pathway: Debarred students must complete remedial coursework, submit pending assignments, and seek clearance from the Examination Committee (EC) to become eligible for the Special Examination.{citations}"
             )
+        elif any(k in query_lower for k in ["swap", "substitution", "class exchange", "substitute"]):
+            response_text = (
+                f"Peer-to-Peer Faculty Class Substitution Protocol (Fr. CRCE Autonomous):\n\n"
+                f"1. Mutual Consent & Request: When a faculty member requires scheduled leave for institutional representation, conference attendance, or medical reasons, they initiate a formal Class Swap / Substitution request from their Faculty Timetable portal.\n\n"
+                f"2. Colleague Authorization: The peer teacher receives an instant real-time notification on their console and reviews the date, subject, division, and classroom location. Upon clicking 'Accept & Cover Class', the status updates to APPROVED.\n\n"
+                f"3. Live Schedule Synchronization: The live division timetable reflects the authorized substitute teacher, and students enrolled in that division receive synchronized timetable notices.\n\n"
+                f"4. Authorized Digital Attendance Marking: The covering teacher is officially authorized by the ERP system to conduct and log attendance for that specific slot directly into the institutional ledger.{citations}"
+            )
+        elif any(k in query_lower for k in ["form 4", "defaulter list", "defaulter notice", "defaulters"]):
+            response_text = (
+                f"Institutional Defaulter Notice Governance (Form 4 - Autonomous Scheme):\n\n"
+                f"1. Form No. 4 Generation: Issued periodically by the Head of Department (HOD) and Class Incharges to notify students with attendance below 75%.\n\n"
+                f"2. Categorization:\n"
+                f"   • Borderline Defaulter (65% to 74.99%): Eligible for Autonomous Ordinance Rule 4.2 Condonation upon submitting medical discharge records or sports duty certificates.\n"
+                f"   • Severe Defaulter (50% to 64.99%): Mandatory written parent undertaking and extra remedial sessions.\n"
+                f"   • Critical Defaulter (<50%): Immediate parent summons and examination debarment warning.\n\n"
+                f"3. Condonation Credit: When HOD approves Rule 4.2 condonation, granted sessions are digitally credited to the student's attendance ledger in real time, updating their percentage before the final End Semester Examination.{citations}"
+            )
         elif any(k in query_lower for k in ["re-evaluation", "reevaluation", "re-check", "photocopy", "recheck"]):
             response_text = (
                 f"Official Re-Evaluation & Answer Script Inspection Rules (Fr. CRCE Autonomous 2024-25):\n\n"

@@ -28,6 +28,7 @@ from app.db.models import (
     PracticalBatch,
     StudentEnrollment,
     TimetableSlot,
+    ClassSwapRequest,
 )
 from app.schemas.timetable import (
     TimeSlotDef,
@@ -931,6 +932,7 @@ class TimetableService:
 
                     row_cells.append(
                         TimetableCell(
+                            slot_id=str(single_slot.id),
                             day_of_week=day,
                             start_time=slot_def.start_time,
                             end_time=slot_def.end_time,
@@ -997,6 +999,38 @@ class TimetableService:
             .order_by(TimetableSlot.day_of_week, TimetableSlot.start_time)
         )
         faculty_slots = (await self.db.execute(stmt)).scalars().all()
+
+        # Query active substitutions
+        swap_stmt = (
+            select(ClassSwapRequest)
+            .where(
+                ClassSwapRequest.academic_term == academic_term,
+                ClassSwapRequest.status == "APPROVED",
+                (ClassSwapRequest.target_faculty_id == faculty_user.id)
+                | (ClassSwapRequest.requesting_faculty_id == faculty_user.id),
+            )
+            .options(
+                selectinload(ClassSwapRequest.source_slot)
+                .selectinload(TimetableSlot.offering)
+                .selectinload(CourseOffering.course),
+                selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.division),
+                selectinload(ClassSwapRequest.source_slot).selectinload(TimetableSlot.batch),
+                selectinload(ClassSwapRequest.requesting_faculty),
+                selectinload(ClassSwapRequest.target_faculty),
+            )
+        )
+        swap_res = await self.db.execute(swap_stmt)
+        swaps = swap_res.scalars().all()
+        covering_swaps = {
+            (s.source_slot.day_of_week, s.source_slot.start_time): s
+            for s in swaps
+            if s.target_faculty_id == faculty_user.id and s.source_slot
+        }
+        delegated_swaps = {
+            s.source_slot_id: s
+            for s in swaps
+            if s.requesting_faculty_id == faculty_user.id
+        }
 
         theory_hours = 0
         practical_hours = 0
@@ -1066,8 +1100,12 @@ class TimetableService:
                     b_label = assigned.custom_title if assigned.custom_title in ("B1", "B2", "B3", "B4") else (assigned.batch.batch_name if assigned.batch else None)
                     span = 2 if assigned.slot_type == "PRACTICAL" else 1
 
+                    is_delegated = assigned.id in delegated_swaps
+                    sub_name = delegated_swaps[assigned.id].target_faculty.full_name if is_delegated and delegated_swaps[assigned.id].target_faculty else None
+
                     row_cells.append(
                         TimetableCell(
+                            slot_id=str(assigned.id),
                             day_of_week=day,
                             start_time=assigned.start_time,
                             end_time=assigned.end_time,
@@ -1080,6 +1118,41 @@ class TimetableService:
                             room_number=assigned.room_number,
                             faculty_name=faculty_user.full_name,
                             faculty_initials=get_faculty_initials(faculty_user.full_name),
+                            is_substituted=is_delegated,
+                            substitute_faculty_name=sub_name,
+                            col_span=span,
+                        )
+                    )
+                    time_idx += span
+                elif (day, slot_def.start_time) in covering_swaps:
+                    cov = covering_swaps[(day, slot_def.start_time)]
+                    cov_slot = cov.source_slot
+                    c_name = cov_slot.offering.course.name if cov_slot and cov_slot.offering and cov_slot.offering.course else "Subject"
+                    c_code = cov_slot.offering.course.code if cov_slot and cov_slot.offering and cov_slot.offering.course else ""
+                    c_abbr = get_course_abbr(c_name, c_code)
+                    div_label = f"COMP-{cov_slot.division.name}" if cov_slot and cov_slot.division else None
+                    b_label = cov_slot.custom_title if cov_slot and cov_slot.custom_title in ("B1", "B2", "B3", "B4") else (cov_slot.batch.batch_name if cov_slot and cov_slot.batch else None)
+                    span = 2 if cov_slot and cov_slot.slot_type == "PRACTICAL" else 1
+                    orig_fac = cov.requesting_faculty.full_name if cov.requesting_faculty else "Colleague"
+
+                    row_cells.append(
+                        TimetableCell(
+                            slot_id=str(cov_slot.id) if cov_slot else str(cov.id),
+                            day_of_week=day,
+                            start_time=slot_def.start_time,
+                            end_time=cov_slot.end_time if cov_slot else slot_def.end_time,
+                            slot_type=cov_slot.slot_type if cov_slot else "THEORY",
+                            course_code=c_code,
+                            course_abbr=c_abbr,
+                            course_name=c_name,
+                            section_name=div_label,
+                            batch_name=b_label,
+                            room_number=cov_slot.room_number if cov_slot else "Room 703",
+                            faculty_name=faculty_user.full_name,
+                            faculty_initials=get_faculty_initials(faculty_user.full_name),
+                            is_substituted=True,
+                            original_faculty_name=orig_fac,
+                            swap_request_id=str(cov.id),
                             col_span=span,
                         )
                     )
@@ -1234,6 +1307,22 @@ class TimetableService:
         student_slots_by_day_time: Dict[Tuple[str, str], TimetableSlot] = {}
         today_list: List[PersonalizedSlotItem] = []
 
+        # Query active substitutions for students
+        sub_stmt = (
+            select(ClassSwapRequest)
+            .where(
+                ClassSwapRequest.academic_term == academic_term,
+                ClassSwapRequest.status == "APPROVED",
+            )
+            .options(
+                selectinload(ClassSwapRequest.source_slot),
+                selectinload(ClassSwapRequest.requesting_faculty),
+                selectinload(ClassSwapRequest.target_faculty),
+            )
+        )
+        sub_res = await self.db.execute(sub_stmt)
+        active_swaps = {s.source_slot_id: s for s in sub_res.scalars().all()}
+
         for s in student_slots:
             student_slots_by_day_time[(s.day_of_week, s.start_time)] = s
             c_name = s.offering.course.name if s.offering and s.offering.course else (s.custom_title or "Session")
@@ -1315,8 +1404,14 @@ class TimetableService:
                     fac_init = get_faculty_initials(fac_name)
                     span = 2 if assigned.slot_type == "PRACTICAL" or (assigned.slot_type == "HONORS" and assigned.start_time == "08:45") else 1
 
+                    is_sub = assigned.id in active_swaps
+                    sub_record = active_swaps.get(assigned.id)
+                    sub_name = sub_record.target_faculty.full_name if is_sub and sub_record.target_faculty else None
+                    orig_name = sub_record.requesting_faculty.full_name if is_sub and sub_record.requesting_faculty else None
+
                     row_cells.append(
                         TimetableCell(
+                            slot_id=str(assigned.id),
                             day_of_week=day,
                             start_time=assigned.start_time,
                             end_time=assigned.end_time,
@@ -1331,6 +1426,9 @@ class TimetableService:
                             batch_name=student_batch_key if assigned.slot_type == "PRACTICAL" else None,
                             col_span=span,
                             custom_title=assigned.custom_title,
+                            is_substituted=is_sub,
+                            substitute_faculty_name=sub_name,
+                            original_faculty_name=orig_name,
                         )
                     )
                     time_idx += span
