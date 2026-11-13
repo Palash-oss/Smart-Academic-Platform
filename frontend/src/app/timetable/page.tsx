@@ -11,7 +11,7 @@ import {
   MasterTimetableResponse,
   TimetableStatusResponse,
 } from '@/lib/timetable';
-import { getStoredUser, User } from '@/lib/api';
+import { getStoredUser, fetchWithAuth, User } from '@/lib/api';
 import {
   Calendar,
   Clock,
@@ -27,6 +27,9 @@ import {
   Building,
   UserCheck,
   Table,
+  CheckCircle2,
+  ShieldCheck,
+  QrCode,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -40,6 +43,63 @@ export default function StudentTimetablePage() {
   const [status, setStatus] = useState<TimetableStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Classroom Live Check-In State
+  const [activeLiveSession, setActiveLiveSession] = useState<any>(null);
+  const [checkInCode, setCheckInCode] = useState('');
+  const [checkInSubmitting, setCheckInSubmitting] = useState(false);
+  const [checkInResult, setCheckInResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const checkLiveSession = async () => {
+    try {
+      const res = await fetchWithAuth('/api/attendance/student/dynamic-session/active');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.has_active_session) {
+          setActiveLiveSession(data);
+        } else {
+          setActiveLiveSession(null);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to check active dynamic session:', e);
+    }
+  };
+
+  useEffect(() => {
+    checkLiveSession();
+    const interval = setInterval(checkLiveSession, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStudentCheckIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkInCode.trim()) return;
+    setCheckInSubmitting(true);
+    setCheckInResult(null);
+    try {
+      const res = await fetchWithAuth('/api/attendance/student/dynamic-session/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: activeLiveSession?.session_id,
+          code: checkInCode.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCheckInResult({ success: true, message: data.message });
+        setActiveLiveSession((prev: any) => ({ ...prev, already_checked_in: true }));
+        setCheckInCode('');
+      } else {
+        setCheckInResult({ success: false, message: data.detail || 'Failed to verify token.' });
+      }
+    } catch (e) {
+      setCheckInResult({ success: false, message: 'Network error submitting attendance token.' });
+    } finally {
+      setCheckInSubmitting(false);
+    }
+  };
 
   const hasSubstitutions = useMemo(() => {
     if (!studentData?.schedule) return false;
@@ -250,6 +310,94 @@ export default function StudentTimetablePage() {
         {/* ------------------------------------------------------------------- */}
         {activeTab === 'personal' && (
           <>
+            {/* Live Classroom Check-In Banner */}
+            {activeLiveSession && (
+              <div
+                style={{
+                  background: '#09090B',
+                  border: '1.5px solid #22C55E',
+                  borderRadius: '8px',
+                  padding: '18px 22px',
+                  marginBottom: '20px',
+                  color: '#FFFFFF',
+                  boxShadow: '0 4px 20px rgba(34, 197, 94, 0.15)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block', boxShadow: '0 0 10px #22C55E' }} />
+                      <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 800, color: '#22C55E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        CLASSROOM ATTENDANCE SESSION IN PROGRESS
+                      </span>
+                    </div>
+                    <h3 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '16px', fontWeight: 800 }}>
+                      {activeLiveSession.subject}
+                    </h3>
+                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>
+                      Instructor: {activeLiveSession.faculty_name || 'Class Faculty'} • Look at the classroom projector screen for the live 6-digit rolling token.
+                    </p>
+                  </div>
+
+                  {activeLiveSession.already_checked_in ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22C55E', borderRadius: '6px', padding: '8px 16px', color: '#22C55E', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', fontWeight: 700 }}>
+                      <CheckCircle2 style={{ width: '16px', height: '16px' }} />
+                      <span>ATTENDANCE RECORDED: PRESENT</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleStudentCheckIn} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        placeholder="6-DIGIT CODE"
+                        value={checkInCode}
+                        onChange={(e) => setCheckInCode(e.target.value)}
+                        style={{
+                          padding: '9px 14px',
+                          background: '#18181B',
+                          border: '1.5px solid #3F3F46',
+                          borderRadius: '6px',
+                          color: '#FFFFFF',
+                          fontFamily: '"JetBrains Mono", monospace',
+                          fontSize: '15px',
+                          fontWeight: 800,
+                          letterSpacing: '0.15em',
+                          textAlign: 'center',
+                          width: '140px',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={checkInSubmitting}
+                        style={{
+                          padding: '9px 18px',
+                          background: '#22C55E',
+                          color: '#09090B',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontFamily: '"Plus Jakarta Sans", sans-serif',
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          cursor: checkInSubmitting ? 'not-allowed' : 'pointer',
+                          opacity: checkInSubmitting ? 0.6 : 1,
+                        }}
+                      >
+                        {checkInSubmitting ? 'Verifying...' : 'Check In'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                {/* Result Message */}
+                {checkInResult && (
+                  <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '4px', background: checkInResult.success ? '#14532D' : '#7F1D1D', color: '#FFFFFF', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>
+                    {checkInResult.success ? '✓ ' : '✕ '} {checkInResult.message}
+                  </div>
+                )}
+              </div>
+            )}
             {hasSubstitutions && (
               <div
                 style={{

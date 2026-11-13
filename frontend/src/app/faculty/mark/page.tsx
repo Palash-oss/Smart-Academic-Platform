@@ -4,7 +4,7 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { fetchWithAuth } from '@/lib/api';
-import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock, Copy, Sparkles } from 'lucide-react';
+import { Calendar, CheckSquare, Square, Save, CheckCircle2, ArrowLeft, Users, Search, Building2, BookOpen, AlertTriangle, RotateCcw, Clock, Copy, Sparkles, QrCode, Maximize2, X, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 interface Department {
@@ -82,6 +82,105 @@ function MarkAttendanceContent() {
   } | null>(null);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Software-based Dynamic Rolling TOTP Projector State
+  const [dynamicModalOpen, setDynamicModalOpen] = useState(false);
+  const [dynamicSessionId, setDynamicSessionId] = useState<string | null>(null);
+  const [dynamicCode, setDynamicCode] = useState<string>('------');
+  const [dynamicRemainingSeconds, setDynamicRemainingSeconds] = useState<number>(10);
+  const [dynamicCheckedInCount, setDynamicCheckedInCount] = useState<number>(0);
+  const [dynamicCheckedInList, setDynamicCheckedInList] = useState<any[]>([]);
+  const [dynamicStarting, setDynamicStarting] = useState(false);
+  const [dynamicFinalizing, setDynamicFinalizing] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (dynamicModalOpen && dynamicSessionId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetchWithAuth(`/api/attendance/faculty/dynamic-session/${dynamicSessionId}/poll`);
+          if (res.ok) {
+            const data = await res.json();
+            setDynamicCode(data.current_code || '------');
+            setDynamicRemainingSeconds(data.remaining_seconds || 10);
+            setDynamicCheckedInCount(data.checked_in_count || 0);
+            setDynamicCheckedInList(data.checked_in_students || []);
+          }
+        } catch (e) {
+          console.error('Polling error:', e);
+        }
+      }, 1500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [dynamicModalOpen, dynamicSessionId]);
+
+  const handleStartDynamicSession = async () => {
+    if (!selectedCourseName || students.length === 0) return;
+    setDynamicStarting(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetchWithAuth('/api/attendance/faculty/dynamic-session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: selectedCourseName,
+          session_date: sessionDate,
+          division_name: selectedDivName,
+          batch_name: selectedBatch,
+          all_enrolled_student_ids: students.map((s) => s.student_id),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDynamicSessionId(data.session_id);
+        setDynamicCode(data.current_code);
+        setDynamicRemainingSeconds(data.remaining_seconds);
+        setDynamicCheckedInCount(0);
+        setDynamicCheckedInList([]);
+        setDynamicModalOpen(true);
+      } else {
+        const err = await res.json();
+        setErrorMessage(err.detail || 'Failed to start dynamic attendance session.');
+      }
+    } catch (e) {
+      console.error('Failed to start dynamic session:', e);
+      setErrorMessage('Network error while starting projector session.');
+    } finally {
+      setDynamicStarting(false);
+    }
+  };
+
+  const handleFinalizeDynamicSession = async () => {
+    if (!dynamicSessionId) return;
+    setDynamicFinalizing(true);
+    try {
+      const res = await fetchWithAuth(`/api/attendance/faculty/dynamic-session/${dynamicSessionId}/finalize`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDynamicModalOpen(false);
+        setDynamicSessionId(null);
+        loadMarkedSessions(selectedCourseName, sessionDate);
+        setResultBanner({
+          subject: selectedCourseName,
+          total: data.details.total_marked || students.length,
+          present: data.details.present_count || dynamicCheckedInCount,
+          absent: data.details.absent_count || (students.length - dynamicCheckedInCount),
+          sessionNumber: data.details.session_number || 1,
+        });
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Failed to finalize attendance session.');
+      }
+    } catch (e) {
+      console.error('Failed to finalize dynamic session:', e);
+    } finally {
+      setDynamicFinalizing(false);
+    }
+  };
 
   // 1. Fetch Departments & Divisions on Mount
   useEffect(() => {
@@ -664,6 +763,30 @@ function MarkAttendanceContent() {
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   <button
                     type="button"
+                    onClick={handleStartDynamicSession}
+                    disabled={isMaxDailyReached || loadingStudents || dynamicStarting || students.length === 0 || !selectedCourseName}
+                    style={{
+                      padding: '6px 14px',
+                      background: '#18181B',
+                      border: '1px solid #27272A',
+                      borderRadius: '4px',
+                      fontFamily: '"Plus Jakarta Sans", sans-serif',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#FFFFFF',
+                      cursor: isMaxDailyReached || loadingStudents || dynamicStarting || students.length === 0 || !selectedCourseName ? 'not-allowed' : 'pointer',
+                      opacity: isMaxDailyReached || loadingStudents || dynamicStarting || students.length === 0 || !selectedCourseName ? 0.6 : 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                    }}
+                  >
+                    <QrCode style={{ width: '13px', height: '13px', color: '#FF5500' }} />
+                    <span>{dynamicStarting ? 'Initializing...' : '⚡ Projector Mode (Rolling TOTP)'}</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleCopyPreviousLecture}
                     disabled={isMaxDailyReached || loadingStudents || copyingPrevious || students.length === 0 || !selectedCourseName}
                     style={{
@@ -807,6 +930,214 @@ function MarkAttendanceContent() {
             </button>
           </div>
         </form>
+
+        {/* Projector Mode Modal (Software-Based Rolling TOTP) */}
+        {dynamicModalOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.92)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 9999,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px',
+              color: '#FFFFFF',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '720px',
+                background: '#111113',
+                border: '1.5px solid #27272A',
+                borderRadius: '12px',
+                padding: '32px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '24px',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #27272A', paddingBottom: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block', boxShadow: '0 0 10px #22C55E' }} />
+                    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 800, color: '#22C55E', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                      LIVE TOTP PROJECTOR MODE ACTIVE
+                    </span>
+                  </div>
+                  <h2 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '18px', fontWeight: 800, marginTop: '4px' }}>
+                    {selectedCourseName}
+                  </h2>
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>
+                    Division {selectedDivName} {selectedBatch !== 'ALL' ? `(Batch ${selectedBatch})` : ''} • Date: {sessionDate}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDynamicModalOpen(false)}
+                  style={{ background: '#27272A', border: 'none', color: '#A1A1AA', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  <X style={{ width: '16px', height: '16px' }} />
+                </button>
+              </div>
+
+              {/* Central Rolling Token Display */}
+              <div
+                style={{
+                  background: '#09090B',
+                  border: '2px solid #FF5500',
+                  borderRadius: '10px',
+                  padding: '32px 20px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '14px',
+                  boxShadow: '0 0 30px rgba(255, 85, 0, 0.2)',
+                }}
+              >
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  CLASSROOM CHECK-IN CODE (REFRESHES EVERY 10 SECONDS)
+                </div>
+                <div
+                  style={{
+                    fontFamily: '"JetBrains Mono", monospace',
+                    fontSize: '64px',
+                    fontWeight: 900,
+                    letterSpacing: '0.25em',
+                    color: '#FF5500',
+                    textShadow: '0 0 20px rgba(255, 85, 0, 0.4)',
+                    padding: '8px 0',
+                  }}
+                >
+                  {dynamicCode.slice(0, 3)} {dynamicCode.slice(3)}
+                </div>
+
+                {/* Progress bar countdown */}
+                <div style={{ width: '100%', maxWidth: '320px', height: '6px', background: '#27272A', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${(dynamicRemainingSeconds / 10) * 100}%`,
+                      background: dynamicRemainingSeconds <= 3 ? '#EF4444' : '#FF5500',
+                      transition: 'width 1s linear',
+                    }}
+                  />
+                </div>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#A1A1AA' }}>
+                  Next token rotating in: <strong style={{ color: '#FFFFFF' }}>{dynamicRemainingSeconds}s</strong>
+                </div>
+              </div>
+
+              {/* Live Attendee Stats */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Users style={{ width: '14px', height: '14px', color: '#22C55E' }} />
+                    <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 700 }}>
+                      Live Check-Ins: {dynamicCheckedInCount} / {students.length} Enrolled
+                    </span>
+                  </div>
+                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A' }}>
+                    Auto-updating roster
+                  </span>
+                </div>
+
+                {/* Scrollable live chips */}
+                <div
+                  style={{
+                    maxHeight: '130px',
+                    overflowY: 'auto',
+                    background: '#09090B',
+                    border: '1px solid #27272A',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                  }}
+                >
+                  {dynamicCheckedInList.length === 0 ? (
+                    <div style={{ width: '100%', textAlign: 'center', padding: '16px', color: '#71717A', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>
+                      Waiting for students to enter code on their portal...
+                    </div>
+                  ) : (
+                    dynamicCheckedInList.map((stu) => (
+                      <span
+                        key={stu.student_id}
+                        style={{
+                          background: '#18181B',
+                          border: '1px solid #22C55E',
+                          borderRadius: '4px',
+                          padding: '3px 8px',
+                          fontSize: '11px',
+                          fontFamily: '"JetBrains Mono", monospace',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          color: '#FFFFFF',
+                        }}
+                      >
+                        <span style={{ color: '#22C55E' }}>✓</span>
+                        <strong>{stu.name}</strong> ({stu.roll_no})
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #27272A', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDynamicModalOpen(false)}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#27272A',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close Projector
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinalizeDynamicSession}
+                  disabled={dynamicFinalizing}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 22px',
+                    background: '#16A34A',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSize: '13.5px',
+                    fontWeight: 800,
+                    cursor: dynamicFinalizing ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)',
+                    opacity: dynamicFinalizing ? 0.6 : 1,
+                  }}
+                >
+                  <ShieldCheck style={{ width: '15px', height: '15px' }} />
+                  <span>{dynamicFinalizing ? 'Saving to Database...' : `Lock & Finalize Attendance (${dynamicCheckedInCount} Present)`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </main>
     </div>

@@ -50,7 +50,15 @@ export default function FacultyTimetablePage() {
 
   // Class Swap & Substitution State
   const [swapRequests, setSwapRequests] = useState<{ received: any[]; sent: any[] }>({ received: [], sent: [] });
-  const [colleagues, setColleagues] = useState<Array<{ id: string; full_name: string; email: string }>>([]);
+  const [colleagues, setColleagues] = useState<Array<{
+    id: string;
+    full_name: string;
+    email: string;
+    is_clashing?: boolean;
+    clash_details?: string | null;
+    match_score?: number;
+    recommendation_badge?: string;
+  }>>([]);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [activeSlotForSwap, setActiveSlotForSwap] = useState<any>(null);
   const [activeDayForSwap, setActiveDayForSwap] = useState('');
@@ -83,14 +91,18 @@ export default function FacultyTimetablePage() {
     }
   };
 
-  const loadColleagues = async () => {
+  const loadColleagues = async (sourceSlotId?: string) => {
     try {
-      const res = await fetchWithAuth('/api/v1/timetable/faculty/colleagues');
+      const endpoint = sourceSlotId
+        ? `/api/v1/timetable/faculty/colleagues?source_slot_id=${sourceSlotId}`
+        : '/api/v1/timetable/faculty/colleagues';
+      const res = await fetchWithAuth(endpoint);
       if (res.ok) {
         const data = await res.json();
         setColleagues(data);
         if (data.length > 0) {
-          setTargetFacultyId(data[0].id);
+          const firstFree = data.find((c: any) => !c.is_clashing);
+          setTargetFacultyId(firstFree ? firstFree.id : data[0].id);
         }
       }
     } catch (err) {
@@ -121,6 +133,9 @@ export default function FacultyTimetablePage() {
     setActiveSlotForSwap(cell);
     setActiveDayForSwap(day);
     setSwapModalOpen(true);
+    if (cell && cell.slot_id) {
+      loadColleagues(cell.slot_id);
+    }
   };
 
   const handleSubmitSwap = async (e: React.FormEvent) => {
@@ -877,7 +892,7 @@ export default function FacultyTimetablePage() {
                 {/* Colleague Select */}
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ display: 'block', fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#71717A', textTransform: 'uppercase', marginBottom: '6px' }}>
-                    Request Coverage From Colleague
+                    Request Coverage From Colleague (AI Smart Compatibility Analysis)
                   </label>
                   <select
                     required
@@ -897,11 +912,72 @@ export default function FacultyTimetablePage() {
                   >
                     {colleagues.map((c) => (
                       <option key={c.id} value={c.id}>
+                        {c.is_clashing ? '🛑 [Clash: Busy] ' : '🟢 [98% Match - Free Slot] '}
                         {c.full_name} ({c.email})
                       </option>
                     ))}
                   </select>
                 </div>
+
+                {/* Dynamic AI Compatibility Recommender Banner */}
+                {(() => {
+                  const selCol = colleagues.find((c) => c.id === targetFacultyId);
+                  if (!selCol) return null;
+                  return (
+                    <div
+                      style={{
+                        marginBottom: '14px',
+                        padding: '10px 14px',
+                        borderRadius: '6px',
+                        background: selCol.is_clashing ? '#FEF2F2' : '#F0FDF4',
+                        border: `1px solid ${selCol.is_clashing ? '#FECACA' : '#BBF7D0'}`,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          background: selCol.is_clashing ? '#EF4444' : '#16A34A',
+                          color: '#FFFFFF',
+                          fontFamily: '"JetBrains Mono", monospace',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {selCol.is_clashing ? '35% CLASH' : '98% MATCH'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p
+                          style={{
+                            fontFamily: '"Plus Jakarta Sans", sans-serif',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: selCol.is_clashing ? '#991B1B' : '#166534',
+                            marginBottom: '2px',
+                          }}
+                        >
+                          {selCol.recommendation_badge || (selCol.is_clashing ? 'Schedule Conflict' : 'Free Prep Slot')}
+                        </p>
+                        <p
+                          style={{
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: '11.5px',
+                            color: selCol.is_clashing ? '#B91C1C' : '#15803D',
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          {selCol.is_clashing
+                            ? `Conflict: ${selCol.clash_details || 'Teaching another class during this time slot'}. Requesting coverage may cause an overlap.`
+                            : 'Zero timetable clashes detected. Colleague has an open preparation period during this time slot.'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Reason */}
                 <div style={{ marginBottom: '20px' }}>

@@ -3,19 +3,93 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getStoredUser, clearAuthSession, User } from '@/lib/api';
-import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar } from 'lucide-react';
+import { getStoredUser, clearAuthSession, fetchWithAuth, User } from '@/lib/api';
+import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar, Bell, Sparkles, AlertTriangle, ShieldCheck, ChevronRight } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    message: string;
+    href?: string;
+    type: 'warning' | 'info' | 'success';
+    badge?: string;
+  }>>([]);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     setUser(getStoredUser());
     setMobileMenuOpen(false);
+    setNotificationsOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadNotifications = async () => {
+      const items: any[] = [];
+      try {
+        if (user.role === 'FACULTY' || user.role === 'ADMIN') {
+          const res = await fetchWithAuth('/api/v1/timetable/swap-requests');
+          if (res.ok) {
+            const data = await res.json();
+            const pending = (data.received || []).filter((r: any) => r.status === 'PENDING');
+            if (pending.length > 0) {
+              items.push({
+                id: 'swap-pending',
+                title: 'Peer Class Coverage Request',
+                message: `${pending[0].requesting_faculty_name || 'A colleague'} requested class coverage for ${pending[0].course_abbr || 'lecture'} on ${pending[0].swap_date}.`,
+                href: '/faculty/timetable',
+                type: 'warning',
+                badge: 'ACTION NEEDED',
+              });
+            }
+          }
+        } else if (user.role === 'STUDENT') {
+          // Check dynamic live session
+          const activeRes = await fetchWithAuth('/api/attendance/student/dynamic-session/active');
+          if (activeRes.ok) {
+            const actData = await activeRes.json();
+            if (actData.has_active_session && !actData.already_checked_in) {
+              items.push({
+                id: 'dynamic-active',
+                title: 'Classroom Live Attendance Open',
+                message: `Instructor opened rolling token session for ${actData.subject}. Enter code on timetable to check in!`,
+                href: '/timetable',
+                type: 'success',
+                badge: 'LIVE TOKEN',
+              });
+            }
+          }
+          // Check student attendance threshold
+          const attRes = await fetchWithAuth('/api/attendance/my');
+          if (attRes.ok) {
+            const attData = await attRes.json();
+            if (attData.overall_percentage !== undefined && attData.overall_percentage < 75) {
+              items.push({
+                id: 'attendance-low',
+                title: 'Attendance Warning (<75%)',
+                message: `Current overall attendance is ${attData.overall_percentage}%, below the mandatory 75% autonomous threshold.`,
+                href: '/chat',
+                type: 'warning',
+                badge: 'ORDINANCE 4.2',
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // Silent
+      }
+      setNotifications(items);
+    };
+
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 7000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleLogout = () => {
     clearAuthSession();
@@ -138,6 +212,69 @@ export const Navbar: React.FC = () => {
         {/* Desktop User Info + Logout */}
         {user && (
           <div className="hidden md:flex items-center gap-3 pl-4 border-l border-[#E4E4E7]">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative p-1.5 rounded-md border border-[#E4E4E7] bg-white text-[#71717A] hover:bg-[#F4F4F6] hover:text-[#09090B] transition-all cursor-pointer"
+                title="System Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF5500] text-white text-[9.5px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-[#E4E4E7] rounded-lg shadow-xl z-50 p-3 animate-in fade-in-50 zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#E4E4E7] mb-2">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#71717A]">
+                      Institutional Broadcasts
+                    </span>
+                    <span className="font-mono text-[10px] font-bold text-[#FF5500] bg-[#FFF4ED] px-1.5 py-0.5 rounded">
+                      {notifications.length} Active
+                    </span>
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-[#71717A] font-sans">
+                      <ShieldCheck className="w-6 h-6 text-[#16A34A] mx-auto mb-1.5 opacity-80" />
+                      All systems synchronized. No pending alerts.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {notifications.map((n) => (
+                        <Link
+                          key={n.id}
+                          href={n.href || '#'}
+                          onClick={() => setNotificationsOpen(false)}
+                          className="block p-2.5 rounded-md border border-[#E4E4E7] bg-[#FAFAFB] hover:bg-white hover:border-[#FF5500] transition-all no-underline text-left group"
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="font-bold text-xs text-[#09090B] group-hover:text-[#FF5500] transition-colors">
+                              {n.title}
+                            </span>
+                            {n.badge && (
+                              <span className="font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]">
+                                {n.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#52525B] leading-snug">
+                            {n.message}
+                          </p>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="text-right">
               <p className="font-bold text-xs text-[#09090B] leading-tight">
                 {user.full_name}
@@ -159,6 +296,16 @@ export const Navbar: React.FC = () => {
         {/* Mobile Hamburger Toggle Button */}
         {user && (
           <div className="flex md:hidden items-center gap-2">
+            {/* Mobile notification pill */}
+            {notifications.length > 0 && (
+              <Link
+                href={notifications[0].href || '/timetable'}
+                className="flex items-center gap-1 font-mono text-[10px] font-bold text-[#DC2626] bg-[#FEF2F2] border border-[#FECACA] px-2 py-0.5 rounded animate-pulse"
+              >
+                <Bell className="w-3 h-3" />
+                <span>{notifications.length}</span>
+              </Link>
+            )}
             <span className="font-mono text-[10px] font-bold text-[#FF5500] bg-[#FFF4ED] px-2 py-0.5 rounded uppercase">
               {user.role}
             </span>

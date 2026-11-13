@@ -74,3 +74,16 @@ class CondonationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class StartDynamicSessionRequest(BaseModel):
+    subject: str
+    session_date: str = "2026-08-25"
+    division_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    all_enrolled_student_ids: List[uuid.UUID]
+
+
+class StudentCheckInRequest(BaseModel):
+    session_id: Optional[str] = None
+    code: str
+
