@@ -49,7 +49,25 @@ ACTIVE_DYNAMIC_SESSIONS: Dict[str, Dict[str, Any]] = {}
 # Fr. Conceicao Rodrigues College of Engineering (Fr. CRCE), Bandra Campus Geofence Coordinates
 CAMPUS_LATITUDE = 19.04433
 CAMPUS_LONGITUDE = 72.82037
-CAMPUS_MAX_RADIUS_METERS = 450.0  # Covers all academic blocks, lecture halls, workshop buildings and campus grounds
+CAMPUS_MAX_RADIUS_METERS = 650.0  # Generous radius covering all campus blocks & accounting for indoor multi-story GPS drift
+SESSION_MAX_LIFETIME_SECONDS = 1800  # Auto-expire idle sessions after 30 minutes
+
+
+def cleanup_expired_sessions() -> None:
+    """Marks sessions older than 30 minutes as inactive and purges ancient sessions."""
+    now = datetime.utcnow()
+    for sid, sess in list(ACTIVE_DYNAMIC_SESSIONS.items()):
+        started_str = sess.get("started_at")
+        if started_str:
+            try:
+                started_dt = datetime.fromisoformat(started_str)
+                age = (now - started_dt).total_seconds()
+                if age > SESSION_MAX_LIFETIME_SECONDS:
+                    sess["is_active"] = False
+                if age > 7200:
+                    del ACTIVE_DYNAMIC_SESSIONS[sid]
+            except Exception:
+                pass
 
 
 def calculate_haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -103,6 +121,20 @@ async def start_dynamic_attendance_session(
     current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
 ):
     """Initializes a live TOTP dynamic check-in session for classroom projector display."""
+    cleanup_expired_sessions()
+
+    # Fault-tolerance: Deactivate prior active sessions started by this faculty or for the same subject/division
+    faculty_id_str = str(current_user.id)
+    for prev_id, prev_sess in list(ACTIVE_DYNAMIC_SESSIONS.items()):
+        if prev_sess.get("is_active"):
+            is_same_faculty = prev_sess.get("faculty_id") == faculty_id_str
+            is_same_class = (
+                prev_sess.get("subject") == payload.subject
+                and prev_sess.get("division_name") == payload.division_name
+            )
+            if is_same_faculty or is_same_class:
+                prev_sess["is_active"] = False
+
     session_id = str(uuid.uuid4())
     secret = secrets.token_bytes(20)
 
@@ -190,23 +222,78 @@ async def finalize_dynamic_attendance_session(
         raise HTTPException(status_code=400, detail=str(val_err))
 
 
+@router.post("/faculty/dynamic-session/{session_id}/cancel", summary="Cancel/Close dynamic attendance session")
+async def cancel_dynamic_attendance_session(
+    session_id: str,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+):
+    """Closes and deactivates an active dynamic session without recording attendance to the ledger."""
+    sess = ACTIVE_DYNAMIC_SESSIONS.get(session_id)
+    if not sess:
+        return {"status": "success", "message": "Session already closed or expired."}
+
+    sess["is_active"] = False
+    return {
+        "status": "success",
+        "message": f"Dynamic session for '{sess.get('subject')}' has been closed.",
+        "session_id": session_id,
+    }
+
+
 @router.get("/student/dynamic-session/active", summary="Check if there is an active classroom session for current student")
 async def get_active_dynamic_session_for_student(
     current_user: User = Depends(get_current_user),
 ):
     """Detects if an instructor has opened a live rolling TOTP session for this student's class."""
+    cleanup_expired_sessions()
     u_id_str = str(current_user.id)
+
+    # Collect all currently active sessions where this student is enrolled
+    matching = []
     for sess in ACTIVE_DYNAMIC_SESSIONS.values():
         if sess.get("is_active") and u_id_str in sess.get("all_enrolled_student_ids", []):
-            return {
-                "has_active_session": True,
-                "session_id": sess["session_id"],
-                "subject": sess["subject"],
-                "faculty_name": sess["faculty_name"],
-                "division_name": sess.get("division_name"),
-                "already_checked_in": u_id_str in sess.get("checked_in_students", {}),
+            already_checked = u_id_str in sess.get("checked_in_students", {})
+            matching.append({
+                "session": sess,
+                "already_checked_in": already_checked,
+                "started_at": sess.get("started_at", ""),
+            })
+
+    if not matching:
+        return {"has_active_session": False}
+
+    # Sort matching sessions:
+    # 1. Unchecked sessions come first (already_checked_in == False)
+    # 2. Most recently started session comes first (started_at DESC)
+    matching.sort(
+        key=lambda m: (
+            1 if m["already_checked_in"] else 0,
+            -datetime.fromisoformat(m["started_at"]).timestamp() if m["started_at"] else 0,
+        )
+    )
+
+    primary = matching[0]["session"]
+    primary_checked = matching[0]["already_checked_in"]
+
+    return {
+        "has_active_session": True,
+        "session_id": primary["session_id"],
+        "subject": primary["subject"],
+        "faculty_name": primary["faculty_name"],
+        "division_name": primary.get("division_name"),
+        "batch_name": primary.get("batch_name"),
+        "already_checked_in": primary_checked,
+        "total_active_sessions_for_student": len(matching),
+        "available_sessions": [
+            {
+                "session_id": m["session"]["session_id"],
+                "subject": m["session"]["subject"],
+                "faculty_name": m["session"]["faculty_name"],
+                "already_checked_in": m["already_checked_in"],
             }
-    return {"has_active_session": False}
+            for m in matching
+        ],
+    }
 
 
 @router.post("/student/dynamic-session/checkin", summary="Student live token check-in from projector display")
@@ -215,38 +302,65 @@ async def checkin_student_dynamic_token(
     current_user: User = Depends(get_current_user),
 ):
     """Validates student token against the rolling TOTP secret and registers real-time presence."""
+    cleanup_expired_sessions()
     u_id_str = str(current_user.id)
+
+    # Gather all candidate active sessions where student is enrolled
+    candidates = [
+        s for s in ACTIVE_DYNAMIC_SESSIONS.values()
+        if s.get("is_active") and u_id_str in s.get("all_enrolled_student_ids", [])
+    ]
 
     target_sess = None
     if payload.session_id and payload.session_id in ACTIVE_DYNAMIC_SESSIONS:
-        target_sess = ACTIVE_DYNAMIC_SESSIONS[payload.session_id]
-    else:
-        # Auto-match active session where this student is enrolled
-        for sess in ACTIVE_DYNAMIC_SESSIONS.values():
-            if sess.get("is_active") and u_id_str in sess.get("all_enrolled_student_ids", []):
-                target_sess = sess
-                break
+        req_sess = ACTIVE_DYNAMIC_SESSIONS[payload.session_id]
+        if req_sess.get("is_active"):
+            target_sess = req_sess
+
+    # If requested session not active or not provided, pick best candidate (unchecked first, newest first)
+    if not target_sess and candidates:
+        candidates.sort(
+            key=lambda s: (
+                1 if u_id_str in s.get("checked_in_students", {}) else 0,
+                -datetime.fromisoformat(s.get("started_at", datetime.utcnow().isoformat())).timestamp()
+            )
+        )
+        target_sess = candidates[0]
 
     if not target_sess or not target_sess.get("is_active"):
-        raise HTTPException(status_code=404, detail="No active live attendance session currently running for your courses.")
+        raise HTTPException(
+            status_code=404,
+            detail="No active classroom attendance session is currently running for your courses. If the instructor just closed or restarted projector mode, wait a few seconds and try again."
+        )
 
     if u_id_str not in target_sess.get("all_enrolled_student_ids", []):
         raise HTTPException(status_code=403, detail="You are not enrolled in this lecture roster.")
 
-    if u_id_str in target_sess.get("checked_in_students", {}):
-        return {
-            "status": "already_recorded",
-            "message": "You are already recorded as PRESENT for this lecture session.",
-            "subject": target_sess["subject"],
-        }
-
-    # Verify rolling code with 10s step and 10s grace
+    # Fault-tolerant rolling code verification:
+    # First, verify with target session
     is_valid = verify_dynamic_totp(target_sess["secret"], payload.code, step=10)
+
+    # If code doesn't match target session, check if student entered the code for another active session they belong to
+    if not is_valid:
+        for alt_sess in candidates:
+            if alt_sess["session_id"] != target_sess["session_id"] and alt_sess.get("is_active"):
+                if verify_dynamic_totp(alt_sess["secret"], payload.code, step=10):
+                    target_sess = alt_sess
+                    is_valid = True
+                    break
+
     if not is_valid:
         raise HTTPException(
             status_code=400,
             detail="Invalid or expired 6-digit rolling code. Look up at the classroom projector screen for the latest code."
         )
+
+    if u_id_str in target_sess.get("checked_in_students", {}):
+        return {
+            "status": "already_recorded",
+            "message": f"You are already recorded as PRESENT for '{target_sess['subject']}'.",
+            "subject": target_sess["subject"],
+        }
 
     # 1. Anti-Proxy Defense: Device Fingerprint Collision Check
     clean_device = (payload.device_fingerprint or "").strip()

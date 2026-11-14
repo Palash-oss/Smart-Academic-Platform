@@ -163,6 +163,8 @@ function MarkAttendanceContent() {
         const data = await res.json();
         setDynamicModalOpen(false);
         setDynamicSessionId(null);
+        setDynamicCheckedInList([]);
+        setDynamicCheckedInCount(0);
         loadMarkedSessions(selectedCourseName, sessionDate);
         setResultBanner({
           subject: selectedCourseName,
@@ -180,6 +182,39 @@ function MarkAttendanceContent() {
     } finally {
       setDynamicFinalizing(false);
     }
+  };
+
+  const handleCloseProjector = async () => {
+    if (!dynamicSessionId) {
+      setDynamicModalOpen(false);
+      return;
+    }
+
+    if (dynamicCheckedInCount > 0) {
+      const confirmFinalize = window.confirm(
+        `You have ${dynamicCheckedInCount} student(s) checked in.\n\n` +
+        `• Click OK to Lock & Finalize this attendance into the database ledger.\n` +
+        `• Click Cancel to discard and close projector mode (students will no longer see this session).`
+      );
+      if (confirmFinalize) {
+        await handleFinalizeDynamicSession();
+        return;
+      }
+    }
+
+    // Call backend cancel endpoint so students stop seeing this session
+    try {
+      await fetchWithAuth(`/api/attendance/faculty/dynamic-session/${dynamicSessionId}/cancel`, {
+        method: 'POST',
+      });
+    } catch (e) {
+      console.error('Failed to cancel dynamic session:', e);
+    }
+
+    setDynamicModalOpen(false);
+    setDynamicSessionId(null);
+    setDynamicCheckedInList([]);
+    setDynamicCheckedInCount(0);
   };
 
   const handleRevokeDynamicStudent = async (studentId: string) => {
@@ -997,7 +1032,7 @@ function MarkAttendanceContent() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDynamicModalOpen(false)}
+                  onClick={handleCloseProjector}
                   style={{ background: '#27272A', border: 'none', color: '#A1A1AA', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}
                 >
                   <X style={{ width: '16px', height: '16px' }} />
@@ -1178,7 +1213,7 @@ function MarkAttendanceContent() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #27272A', paddingTop: '16px' }}>
                 <button
                   type="button"
-                  onClick={() => setDynamicModalOpen(false)}
+                  onClick={handleCloseProjector}
                   style={{
                     padding: '9px 16px',
                     background: '#27272A',

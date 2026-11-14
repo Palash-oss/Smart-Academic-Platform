@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   QrCode,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -46,9 +47,16 @@ export default function StudentTimetablePage() {
 
   // Classroom Live Check-In State
   const [activeLiveSession, setActiveLiveSession] = useState<any>(null);
+  const [dismissedSessionIds, setDismissedSessionIds] = useState<string[]>([]);
   const [checkInCode, setCheckInCode] = useState('');
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkInResult, setCheckInResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Automatically reset input and result message when the active lecture changes
+  useEffect(() => {
+    setCheckInResult(null);
+    setCheckInCode('');
+  }, [activeLiveSession?.session_id]);
 
   const getOrCreateDeviceFingerprint = (): string => {
     if (typeof window === 'undefined') return '';
@@ -97,7 +105,13 @@ export default function StudentTimetablePage() {
       if (res.ok) {
         const data = await res.json();
         if (data.has_active_session) {
-          setActiveLiveSession(data);
+          setActiveLiveSession((prev: any) => {
+            // If it's a new session, or details updated, update state
+            if (!prev || prev.session_id !== data.session_id || prev.already_checked_in !== data.already_checked_in) {
+              return data;
+            }
+            return prev;
+          });
         } else {
           setActiveLiveSession(null);
         }
@@ -109,7 +123,7 @@ export default function StudentTimetablePage() {
 
   useEffect(() => {
     checkLiveSession();
-    const interval = setInterval(checkLiveSession, 4000);
+    const interval = setInterval(checkLiveSession, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -358,7 +372,7 @@ export default function StudentTimetablePage() {
         {activeTab === 'personal' && (
           <>
             {/* Live Classroom Check-In Banner */}
-            {activeLiveSession && (
+            {activeLiveSession && !dismissedSessionIds.includes(activeLiveSession.session_id) && (
               <div
                 style={{
                   background: '#09090B',
@@ -370,6 +384,48 @@ export default function StudentTimetablePage() {
                   boxShadow: '0 4px 20px rgba(34, 197, 94, 0.15)',
                 }}
               >
+                {/* Multi-Session Switcher if student is enrolled in 2 concurrent sessions */}
+                {activeLiveSession.available_sessions && activeLiveSession.available_sessions.length > 1 && (
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontFamily: '"JetBrains Mono", monospace', color: '#94A3B8', fontWeight: 700 }}>
+                      ACTIVE LECTURES:
+                    </span>
+                    {activeLiveSession.available_sessions.map((sess: any) => {
+                      const isSel = activeLiveSession.session_id === sess.session_id;
+                      return (
+                        <button
+                          key={sess.session_id}
+                          type="button"
+                          onClick={() => {
+                            setActiveLiveSession((prev: any) => ({
+                              ...prev,
+                              session_id: sess.session_id,
+                              subject: sess.subject,
+                              faculty_name: sess.faculty_name,
+                              already_checked_in: sess.already_checked_in,
+                            }));
+                            setCheckInResult(null);
+                            setCheckInCode('');
+                          }}
+                          style={{
+                            background: isSel ? '#22C55E' : '#18181B',
+                            color: isSel ? '#09090B' : '#FFFFFF',
+                            border: `1px solid ${isSel ? '#22C55E' : '#3F3F46'}`,
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontFamily: '"JetBrains Mono", monospace',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {sess.subject.split('(')[0].trim()} {sess.already_checked_in ? '(Present)' : '(Pending Check-In)'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -387,9 +443,32 @@ export default function StudentTimetablePage() {
                   </div>
 
                   {activeLiveSession.already_checked_in ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22C55E', borderRadius: '6px', padding: '8px 16px', color: '#22C55E', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', fontWeight: 700 }}>
-                      <CheckCircle2 style={{ width: '16px', height: '16px' }} />
-                      <span>ATTENDANCE RECORDED: PRESENT</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(34, 197, 94, 0.15)', border: '1px solid #22C55E', borderRadius: '6px', padding: '8px 16px', color: '#22C55E', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', fontWeight: 700 }}>
+                        <CheckCircle2 style={{ width: '16px', height: '16px' }} />
+                        <span>ATTENDANCE RECORDED: PRESENT</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDismissedSessionIds((prev) => [...prev, activeLiveSession.session_id])}
+                        title="Dismiss Notice"
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #3F3F46',
+                          borderRadius: '6px',
+                          color: '#A1A1AA',
+                          padding: '7px 12px',
+                          fontSize: '11.5px',
+                          fontFamily: '"JetBrains Mono", monospace',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <X style={{ width: '13px', height: '13px' }} />
+                        <span>Dismiss</span>
+                      </button>
                     </div>
                   ) : (
                     <form onSubmit={handleStudentCheckIn} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
