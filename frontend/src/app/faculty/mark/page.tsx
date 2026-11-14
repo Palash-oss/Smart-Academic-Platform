@@ -525,7 +525,7 @@ function MarkAttendanceContent() {
               </span>
             </div>
             <span style={{ background: '#FDE68A', color: '#78350F', padding: '3px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 800 }}>
-              ⚡ TIMETABLE DIRECT LINK
+              TIMETABLE DIRECT LINK
             </span>
           </div>
         )}
@@ -783,7 +783,7 @@ function MarkAttendanceContent() {
                     }}
                   >
                     <QrCode style={{ width: '13px', height: '13px', color: '#FF5500' }} />
-                    <span>{dynamicStarting ? 'Initializing...' : '⚡ Projector Mode (Rolling TOTP)'}</span>
+                    <span>{dynamicStarting ? 'Initializing...' : 'Projector Mode (Rolling TOTP)'}</span>
                   </button>
                   <button
                     type="button"
@@ -971,10 +971,10 @@ function MarkAttendanceContent() {
                       LIVE TOTP PROJECTOR MODE ACTIVE
                     </span>
                   </div>
-                  <h2 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '18px', fontWeight: 800, marginTop: '4px' }}>
+                  <h2 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginTop: '6px', letterSpacing: '-0.02em' }}>
                     {selectedCourseName}
                   </h2>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#D4D4D8', marginTop: '3px' }}>
                     Division {selectedDivName} {selectedBatch !== 'ALL' ? `(Batch ${selectedBatch})` : ''} • Date: {sessionDate}
                   </p>
                 </div>
@@ -990,48 +990,89 @@ function MarkAttendanceContent() {
               {/* Central Rolling Token Display */}
               <div
                 style={{
-                  background: '#09090B',
-                  border: '2px solid #FF5500',
-                  borderRadius: '10px',
-                  padding: '32px 20px',
+                  background: 'linear-gradient(180deg, #131722 0%, #0B0E14 100%)',
+                  border: '1.5px solid #2A3342',
+                  borderRadius: '12px',
+                  padding: '28px 24px',
                   textAlign: 'center',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '14px',
-                  boxShadow: '0 0 30px rgba(255, 85, 0, 0.2)',
+                  gap: '16px',
+                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
                 }}
               >
-                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                   CLASSROOM CHECK-IN CODE (REFRESHES EVERY 10 SECONDS)
                 </div>
-                <div
-                  style={{
-                    fontFamily: '"JetBrains Mono", monospace',
-                    fontSize: '64px',
-                    fontWeight: 900,
-                    letterSpacing: '0.25em',
-                    color: '#FF5500',
-                    textShadow: '0 0 20px rgba(255, 85, 0, 0.4)',
-                    padding: '8px 0',
-                  }}
-                >
-                  {dynamicCode.slice(0, 3)} {dynamicCode.slice(3)}
+
+                {/* Split Segmented High-Contrast Dual Pods */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', margin: '4px 0' }}>
+                  <div
+                    style={{
+                      background: '#090D16',
+                      border: '1.5px solid #0EA5E9',
+                      borderRadius: '10px',
+                      padding: '12px 26px',
+                      boxShadow: '0 0 24px rgba(14, 165, 233, 0.22), inset 0 2px 6px rgba(0, 0, 0, 0.6)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: '"JetBrains Mono", monospace',
+                        fontSize: '56px',
+                        fontWeight: 900,
+                        letterSpacing: '0.22em',
+                        color: '#38BDF8',
+                        textShadow: '0 0 20px rgba(56, 189, 248, 0.5)',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {dynamicCode.slice(0, 3)}
+                    </span>
+                  </div>
+
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: '#64748B' }}>-</span>
+
+                  <div
+                    style={{
+                      background: '#090D16',
+                      border: '1.5px solid #0EA5E9',
+                      borderRadius: '10px',
+                      padding: '12px 26px',
+                      boxShadow: '0 0 24px rgba(14, 165, 233, 0.22), inset 0 2px 6px rgba(0, 0, 0, 0.6)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: '"JetBrains Mono", monospace',
+                        fontSize: '56px',
+                        fontWeight: 900,
+                        letterSpacing: '0.22em',
+                        color: '#38BDF8',
+                        textShadow: '0 0 20px rgba(56, 189, 248, 0.5)',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {dynamicCode.slice(3)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Progress bar countdown */}
-                <div style={{ width: '100%', maxWidth: '320px', height: '6px', background: '#27272A', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: '100%', maxWidth: '340px', height: '6px', background: '#1E293B', borderRadius: '3px', overflow: 'hidden' }}>
                   <div
                     style={{
                       height: '100%',
                       width: `${(dynamicRemainingSeconds / 10) * 100}%`,
-                      background: dynamicRemainingSeconds <= 3 ? '#EF4444' : '#FF5500',
+                      background: dynamicRemainingSeconds <= 3 ? '#EF4444' : 'linear-gradient(90deg, #0EA5E9, #22D3EE)',
+                      boxShadow: dynamicRemainingSeconds <= 3 ? '0 0 8px #EF4444' : '0 0 10px #0EA5E9',
                       transition: 'width 1s linear',
                     }}
                   />
                 </div>
-                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#A1A1AA' }}>
-                  Next token rotating in: <strong style={{ color: '#FFFFFF' }}>{dynamicRemainingSeconds}s</strong>
+                <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#CBD5E1' }}>
+                  Next token rotating in: <strong style={{ color: '#FFFFFF', fontWeight: 800 }}>{dynamicRemainingSeconds}s</strong>
                 </div>
               </div>
 
@@ -1040,11 +1081,11 @@ function MarkAttendanceContent() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Users style={{ width: '14px', height: '14px', color: '#22C55E' }} />
-                    <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 700 }}>
+                    <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>
                       Live Check-Ins: {dynamicCheckedInCount} / {students.length} Enrolled
                     </span>
                   </div>
-                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#71717A' }}>
+                  <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '11px', color: '#94A3B8' }}>
                     Auto-updating roster
                   </span>
                 </div>
@@ -1064,7 +1105,7 @@ function MarkAttendanceContent() {
                   }}
                 >
                   {dynamicCheckedInList.length === 0 ? (
-                    <div style={{ width: '100%', textAlign: 'center', padding: '16px', color: '#71717A', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>
+                    <div style={{ width: '100%', textAlign: 'center', padding: '16px', color: '#94A3B8', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>
                       Waiting for students to enter code on their portal...
                     </div>
                   ) : (
@@ -1084,7 +1125,7 @@ function MarkAttendanceContent() {
                           color: '#FFFFFF',
                         }}
                       >
-                        <span style={{ color: '#22C55E' }}>✓</span>
+                        <CheckCircle2 style={{ width: '12px', height: '12px', color: '#22C55E' }} />
                         <strong>{stu.name}</strong> ({stu.roll_no})
                       </span>
                     ))
