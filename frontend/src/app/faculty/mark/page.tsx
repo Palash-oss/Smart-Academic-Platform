@@ -293,12 +293,32 @@ function MarkAttendanceContent() {
         setCourses(data);
         if (data.length > 0) {
           if (queryCourse) {
-            const cleanQuery = queryCourse.toLowerCase();
+            const cleanQuery = queryCourse.toLowerCase().trim();
+            const cleanAbbr = cleanQuery.replace(' lab', '').replace(' practical', '').trim();
+            const ABBR_MAP: Record<string, string[]> = {
+              'tcs': ['theory of computer science', '25pcc13ce21'],
+              'ccl': ['cloud computing', '25vse13ce04'],
+              'cn': ['computer networks', '25pcc13ce22'],
+              'dwm': ['data warehousing', '25pcc13ce14'],
+              'css': ['cryptography', '25pcc13ce19'],
+              'bct': ['blockchain', '25pec13ce11'],
+              'dl': ['deep learning', '25pec13ce12'],
+              'cys': ['cyber security', '25pec13ce13'],
+              'bda': ['big data', '25pec13ce14'],
+              'ip': ['image processing', '25pecl13ce11'],
+              'nlp': ['natural language', '25pecl13ce12'],
+              'eh': ['ethical hacking', '25pecl13ce15'],
+              'iiot': ['industrial iot', '25pecl13ce13'],
+            };
+            const targets = ABBR_MAP[cleanAbbr] || [];
+
             const matched = data.find((c) =>
               c.full_label.toLowerCase().includes(cleanQuery) ||
               c.name.toLowerCase().includes(cleanQuery) ||
-              c.code.toLowerCase().includes(cleanQuery)
+              c.code.toLowerCase().includes(cleanQuery) ||
+              targets.some((t) => c.name.toLowerCase().includes(t) || c.code.toLowerCase().includes(t))
             );
+
             if (matched) {
               setSelectedCourseName(matched.full_label);
             } else {

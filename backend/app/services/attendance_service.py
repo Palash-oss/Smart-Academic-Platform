@@ -400,12 +400,23 @@ async def fetch_courses_by_department(
     semester: Optional[int] = 5,
     faculty_id: Optional[uuid.UUID] = None
 ) -> List[Dict[str, Any]]:
-    """Returns list of courses belonging to a specific department code for ongoing semester."""
+    """Returns list of courses belonging to a specific department code for ongoing semester.
+    Prioritizes faculty-assigned courses at the top, while including all department courses
+    so instructors covering substituted lectures/labs can seamlessly record attendance.
+    """
+    from app.db.models import ClassSection, PracticalBatch
+
+    stmt = select(Course).join(Department).where(Department.code == dept_code)
+    if semester:
+        stmt = stmt.where(Course.semester == semester)
+    stmt = stmt.order_by(Course.code)
+    res = await db.execute(stmt)
+    all_courses = res.scalars().all()
+
+    assigned_ids = set()
     if faculty_id:
-        # Check courses assigned to this faculty in the ongoing semester
-        from app.db.models import ClassSection, PracticalBatch
         assigned_stmt = (
-            select(Course)
+            select(Course.id)
             .join(CourseOffering, CourseOffering.course_id == Course.id)
             .join(Department, Course.department_id == Department.id)
             .outerjoin(ClassSection, ClassSection.offering_id == CourseOffering.id)
@@ -413,27 +424,18 @@ async def fetch_courses_by_department(
             .where(
                 Department.code == dept_code,
                 Course.semester == (semester or 5),
-                CourseOffering.academic_term == "2026-27-SEM5",
                 (ClassSection.faculty_id == faculty_id) | (PracticalBatch.faculty_id == faculty_id)
             )
             .distinct()
         )
-        res = await db.execute(assigned_stmt)
-        assigned_courses = res.scalars().all()
-        if assigned_courses:
-            return [{
-                "id": str(c.id),
-                "code": c.code,
-                "name": c.name,
-                "full_label": f"{c.name} ({c.code})",
-                "semester": c.semester
-            } for c in assigned_courses]
+        a_res = await db.execute(assigned_stmt)
+        assigned_ids = set(a_res.scalars().all())
 
-    stmt = select(Course).join(Department).where(Department.code == dept_code)
-    if semester:
-        stmt = stmt.where(Course.semester == semester)
-    res = await db.execute(stmt)
-    courses = res.scalars().all()
+    # Sort: Faculty assigned courses first, then all remaining department courses
+    sorted_courses = sorted(
+        all_courses,
+        key=lambda c: (0 if c.id in assigned_ids else 1, c.name)
+    )
 
     return [{
         "id": str(c.id),
@@ -441,7 +443,7 @@ async def fetch_courses_by_department(
         "name": c.name,
         "full_label": f"{c.name} ({c.code})",
         "semester": c.semester
-    } for c in courses]
+    } for c in sorted_courses]
 
 
 async def fetch_students_by_division(
@@ -451,33 +453,78 @@ async def fetch_students_by_division(
     batch_name: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Fetches exact student roster for a selected Department + Division, optionally filtered by batch."""
-    stmt = (
+    base_stmt = (
         select(User)
         .join(Department, User.department_id == Department.id)
         .join(Division, User.division_id == Division.id)
         .where(User.role == "STUDENT", Department.code == dept_code, Division.name == div_name)
+        .order_by(User.roll_no, User.full_name)
     )
+    res_all = await db.execute(base_stmt)
+    all_div_students = res_all.scalars().all()
 
-    if batch_name and batch_name != "ALL":
-        target_b = batch_name.split("-")[-1]
-        exact_batch = f"{dept_code}-{div_name}-{target_b}"
-        stmt = (
-            stmt.join(StudentEnrollment, StudentEnrollment.student_id == User.id)
-            .join(PracticalBatch, StudentEnrollment.batch_id == PracticalBatch.id)
-            .where(PracticalBatch.batch_name == exact_batch)
-            .distinct()
+    if not batch_name or batch_name == "ALL":
+        return [{
+            "student_id": str(st.id),
+            "student_name": st.full_name,
+            "student_email": st.email,
+            "roll_no": st.roll_no or ""
+        } for st in all_div_students]
+
+    target_b = batch_name.split("-")[-1]
+    exact_batch = f"{dept_code}-{div_name}-{target_b}"
+
+    # Try explicit PracticalBatch enrollment join first
+    enr_stmt = (
+        select(User)
+        .join(Department, User.department_id == Department.id)
+        .join(Division, User.division_id == Division.id)
+        .join(StudentEnrollment, StudentEnrollment.student_id == User.id)
+        .join(PracticalBatch, StudentEnrollment.batch_id == PracticalBatch.id)
+        .where(
+            User.role == "STUDENT",
+            Department.code == dept_code,
+            Division.name == div_name,
+            PracticalBatch.batch_name == exact_batch
         )
+        .order_by(User.roll_no, User.full_name)
+        .distinct()
+    )
+    enr_res = await db.execute(enr_stmt)
+    students = enr_res.scalars().all()
 
-    stmt = stmt.order_by(User.roll_no, User.full_name)
-    res = await db.execute(stmt)
-    students = res.scalars().all()
+    if students:
+        return [{
+            "student_id": str(st.id),
+            "student_name": st.full_name,
+            "student_email": st.email,
+            "roll_no": st.roll_no or ""
+        } for st in students]
 
-    return [{
-        "student_id": str(st.id),
-        "student_name": st.full_name,
-        "student_email": st.email,
-        "roll_no": st.roll_no or ""
-    } for st in students]
+    # Robust fallback: Partition division roster into 4 academic quartiles (B1, B2, B3, B4)
+    n = len(all_div_students)
+    if n > 0:
+        q1 = n // 4
+        q2 = 2 * n // 4
+        q3 = 3 * n // 4
+        if target_b == "B1":
+            batch_slice = all_div_students[:q1]
+        elif target_b == "B2":
+            batch_slice = all_div_students[q1:q2]
+        elif target_b == "B3":
+            batch_slice = all_div_students[q2:q3]
+        elif target_b == "B4":
+            batch_slice = all_div_students[q3:]
+        else:
+            batch_slice = all_div_students
+        return [{
+            "student_id": str(st.id),
+            "student_name": st.full_name,
+            "student_email": st.email,
+            "roll_no": st.roll_no or ""
+        } for st in batch_slice]
+
+    return []
 
 
 async def mark_session_attendance(
