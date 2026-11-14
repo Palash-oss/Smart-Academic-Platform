@@ -86,4 +86,11 @@ class StartDynamicSessionRequest(BaseModel):
 class StudentCheckInRequest(BaseModel):
     session_id: Optional[str] = None
     code: str
+    device_fingerprint: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class RevokeDynamicStudentRequest(BaseModel):
+    student_id: uuid.UUID
 

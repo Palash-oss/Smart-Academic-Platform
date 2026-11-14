@@ -8,6 +8,7 @@ import hmac
 import hashlib
 import struct
 import secrets
+import math
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional
 
@@ -22,6 +23,7 @@ from app.schemas.attendance import (
     CondonationResponse,
     StartDynamicSessionRequest,
     StudentCheckInRequest,
+    RevokeDynamicStudentRequest,
 )
 from app.services.attendance_service import (
     fetch_student_attendance_records,
@@ -43,6 +45,24 @@ router = APIRouter(prefix="/attendance", tags=["Attendance"])
 # ===========================================================================
 
 ACTIVE_DYNAMIC_SESSIONS: Dict[str, Dict[str, Any]] = {}
+
+# Fr. Conceicao Rodrigues College of Engineering (Fr. CRCE), Bandra Campus Geofence Coordinates
+CAMPUS_LATITUDE = 19.04433
+CAMPUS_LONGITUDE = 72.82037
+CAMPUS_MAX_RADIUS_METERS = 450.0  # Covers all academic blocks, lecture halls, workshop buildings and campus grounds
+
+
+def calculate_haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates great-circle distance between two GPS coordinates in meters using Haversine formula."""
+    r = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * (math.sin(delta_lambda / 2.0) ** 2)
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r * c
 
 
 def generate_dynamic_totp(secret_bytes: bytes, step: int = 10) -> tuple[str, int]:
@@ -97,6 +117,7 @@ async def start_dynamic_attendance_session(
         "secret": secret,
         "all_enrolled_student_ids": [str(sid) for sid in payload.all_enrolled_student_ids],
         "checked_in_students": {},
+        "device_to_student": {},
         "is_active": True,
         "started_at": datetime.utcnow().isoformat(),
     }
@@ -227,6 +248,37 @@ async def checkin_student_dynamic_token(
             detail="Invalid or expired 6-digit rolling code. Look up at the classroom projector screen for the latest code."
         )
 
+    # 1. Anti-Proxy Defense: Device Fingerprint Collision Check
+    clean_device = (payload.device_fingerprint or "").strip()
+    if clean_device:
+        if "device_to_student" not in target_sess:
+            target_sess["device_to_student"] = {}
+        prior_student_id = target_sess["device_to_student"].get(clean_device)
+        if prior_student_id and prior_student_id != u_id_str:
+            raise HTTPException(
+                status_code=403,
+                detail="Device Lock Violation: This device has already registered attendance for another student in this session. Proxy attendance from a shared phone or laptop is strictly blocked."
+            )
+
+    # 2. Anti-Proxy Defense: Campus Geofence Verification
+    distance_meters: Optional[float] = None
+    geofence_status = "NOT_PROVIDED"
+    if payload.latitude is not None and payload.longitude is not None:
+        try:
+            distance_meters = calculate_haversine_meters(
+                payload.latitude, payload.longitude, CAMPUS_LATITUDE, CAMPUS_LONGITUDE
+            )
+            if distance_meters > CAMPUS_MAX_RADIUS_METERS:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Campus Geofence Alert: You are {int(distance_meters)}m away from Fr. CRCE campus (allowed radius: {int(CAMPUS_MAX_RADIUS_METERS)}m). You must be physically inside campus to submit attendance."
+                )
+            geofence_status = f"VERIFIED ({int(distance_meters)}m from center)"
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
     # Register presence
     now_str = datetime.utcnow().strftime("%H:%M:%S UTC")
     roll = current_user.roll_no or current_user.email.split("@")[0].split(".")[-1]
@@ -236,13 +288,52 @@ async def checkin_student_dynamic_token(
         "roll_no": roll,
         "email": current_user.email,
         "checked_in_at": now_str,
+        "device_fingerprint": clean_device if clean_device else None,
+        "distance_meters": round(distance_meters, 1) if distance_meters is not None else None,
+        "geofence_status": geofence_status,
     }
+
+    if clean_device:
+        target_sess["device_to_student"][clean_device] = u_id_str
 
     return {
         "status": "success",
         "message": f"Verified! You have been marked PRESENT for {target_sess['subject']}.",
         "subject": target_sess["subject"],
         "timestamp": now_str,
+        "geofence": geofence_status,
+    }
+
+
+@router.post("/faculty/dynamic-session/{session_id}/revoke-student", summary="Faculty 1-click disqualify/revoke student from live session")
+async def revoke_student_from_dynamic_session(
+    session_id: str,
+    payload: RevokeDynamicStudentRequest,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+):
+    """Allows instructors to disqualify any student from the live dynamic roster in real time before finalizing."""
+    sess = ACTIVE_DYNAMIC_SESSIONS.get(session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Active dynamic attendance session not found.")
+
+    sid_str = str(payload.student_id)
+    if sid_str in sess.get("checked_in_students", {}):
+        removed_student = sess["checked_in_students"].pop(sid_str)
+        dev = removed_student.get("device_fingerprint")
+        if dev and dev in sess.get("device_to_student", {}):
+            del sess["device_to_student"][dev]
+
+        return {
+            "status": "success",
+            "message": f"Revoked {removed_student.get('name', 'student')} from live attendance.",
+            "revoked_student_id": sid_str,
+            "checked_in_count": len(sess["checked_in_students"]),
+        }
+
+    return {
+        "status": "not_found",
+        "message": "Student was not in the active check-in roster.",
+        "checked_in_count": len(sess.get("checked_in_students", {})),
     }
 
 

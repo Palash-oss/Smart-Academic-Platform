@@ -50,6 +50,47 @@ export default function StudentTimetablePage() {
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [checkInResult, setCheckInResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const getOrCreateDeviceFingerprint = (): string => {
+    if (typeof window === 'undefined') return '';
+    let fp = localStorage.getItem('sap_device_fp');
+    if (!fp) {
+      const screenData = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+      const navData = `${navigator.userAgent || ''}-${navigator.language || ''}`;
+      const randomHex = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+      let hash = 0;
+      const raw = `${screenData}|${navData}|${randomHex}`;
+      for (let i = 0; i < raw.length; i++) {
+        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+        hash |= 0;
+      }
+      fp = `DEV-${Math.abs(hash).toString(16)}-${randomHex.slice(0, 8)}`;
+      localStorage.setItem('sap_device_fp', fp);
+    }
+    return fp;
+  };
+
+  const getCoordinates = (): Promise<{ latitude: number | null; longitude: number | null }> => {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+        resolve({ latitude: null, longitude: null });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        },
+        (err) => {
+          console.warn('Campus Geolocation verification optional / unavailable:', err);
+          resolve({ latitude: null, longitude: null });
+        },
+        { timeout: 4000, enableHighAccuracy: true }
+      );
+    });
+  };
+
   const checkLiveSession = async () => {
     try {
       const res = await fetchWithAuth('/api/attendance/student/dynamic-session/active');
@@ -78,12 +119,18 @@ export default function StudentTimetablePage() {
     setCheckInSubmitting(true);
     setCheckInResult(null);
     try {
+      const fp = getOrCreateDeviceFingerprint();
+      const coords = await getCoordinates();
+
       const res = await fetchWithAuth('/api/attendance/student/dynamic-session/checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: activeLiveSession?.session_id,
           code: checkInCode.trim(),
+          device_fingerprint: fp,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
         }),
       });
       const data = await res.json();
@@ -392,8 +439,27 @@ export default function StudentTimetablePage() {
 
                 {/* Result Message */}
                 {checkInResult && (
-                  <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '4px', background: checkInResult.success ? '#14532D' : '#7F1D1D', color: '#FFFFFF', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>
-                    {checkInResult.success ? '✓ ' : '✕ '} {checkInResult.message}
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '10px 14px',
+                      borderRadius: '6px',
+                      background: checkInResult.success ? '#14532D' : '#7F1D1D',
+                      border: `1px solid ${checkInResult.success ? '#22C55E' : '#EF4444'}`,
+                      color: '#FFFFFF',
+                      fontSize: '12px',
+                      fontFamily: '"JetBrains Mono", monospace',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    {checkInResult.success ? (
+                      <CheckCircle2 style={{ width: '15px', height: '15px', color: '#86EFAC', flexShrink: 0 }} />
+                    ) : (
+                      <AlertCircle style={{ width: '15px', height: '15px', color: '#FCA5A5', flexShrink: 0 }} />
+                    )}
+                    <span>{checkInResult.message}</span>
                   </div>
                 )}
               </div>
@@ -414,7 +480,7 @@ export default function StudentTimetablePage() {
                   color: '#92400E',
                 }}
               >
-                <span style={{ fontSize: '15px' }}>📢</span>
+                <AlertCircle style={{ width: '16px', height: '16px', color: '#B45309', flexShrink: 0 }} />
                 <div>
                   <strong>Official Timetable Notice:</strong> Class substitution / peer faculty coverage is active for your division. See highlighted cells below for covering professor details.
                 </div>
@@ -635,8 +701,9 @@ export default function StudentTimetablePage() {
                                         ? cell.substitute_faculty_name
                                         : cell.faculty_initials || ''}
                                     </div>
-                                    <div style={{ fontSize: '9.5px', color: '#6B7280', marginTop: '2px' }}>
-                                      📍 {cell.room_number || 'Room 703'}
+                                    <div style={{ fontSize: '9.5px', color: '#6B7280', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                      <MapPin style={{ width: '10px', height: '10px', color: '#9CA3AF' }} />
+                                      <span>{cell.room_number || 'Room 703'}</span>
                                     </div>
                                   </td>
                                 );

@@ -182,6 +182,23 @@ function MarkAttendanceContent() {
     }
   };
 
+  const handleRevokeDynamicStudent = async (studentId: string) => {
+    if (!dynamicSessionId) return;
+    try {
+      const res = await fetchWithAuth(`/api/attendance/faculty/dynamic-session/${dynamicSessionId}/revoke-student`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
+      });
+      if (res.ok) {
+        setDynamicCheckedInList((prev) => prev.filter((s) => s.student_id !== studentId));
+        setDynamicCheckedInCount((prev) => Math.max(0, prev - 1));
+      }
+    } catch (e) {
+      console.error('Failed to revoke student from dynamic session:', e);
+    }
+  };
+
   // 1. Fetch Departments & Divisions on Mount
   useEffect(() => {
     loadDepartments();
@@ -1121,12 +1138,36 @@ function MarkAttendanceContent() {
                           fontFamily: '"JetBrains Mono", monospace',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '5px',
+                          gap: '6px',
                           color: '#FFFFFF',
                         }}
                       >
-                        <CheckCircle2 style={{ width: '12px', height: '12px', color: '#22C55E' }} />
-                        <strong>{stu.name}</strong> ({stu.roll_no})
+                        <CheckCircle2 style={{ width: '12px', height: '12px', color: '#22C55E', flexShrink: 0 }} />
+                        <span><strong>{stu.name}</strong> ({stu.roll_no})</span>
+                        <button
+                          type="button"
+                          title="Revoke / Disqualify Student"
+                          onClick={() => handleRevokeDynamicStudent(stu.student_id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94A3B8',
+                            cursor: 'pointer',
+                            padding: '2px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            marginLeft: '2px',
+                            borderRadius: '3px',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color = '#EF4444';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                          }}
+                        >
+                          <X style={{ width: '11px', height: '11px' }} />
+                        </button>
                       </span>
                     ))
                   )}
