@@ -64,6 +64,22 @@ export const Navbar: React.FC = () => {
               });
             }
           }
+          // Extra Lecture added / cancelled notices (derived server-side, gone once the date passes)
+          const extraRes = await fetchWithAuth('/api/v1/timetable/extra-lectures/notices');
+          if (extraRes.ok) {
+            const notices: Array<{ type: 'ADDED' | 'CANCELLED'; extra_lecture_id: string; subject_name: string; date: string; start_time: string }> = await extraRes.json();
+            for (const n of notices) {
+              const cancelled = n.type === 'CANCELLED';
+              items.push({
+                id: `extra-${n.type}-${n.extra_lecture_id}`,
+                title: cancelled ? 'Extra Lecture Cancelled' : 'Extra Lecture Added',
+                message: `${cancelled ? 'Extra lecture cancelled' : 'Extra lecture added'}: ${n.subject_name}, ${n.date} ${n.start_time}`,
+                href: '/timetable',
+                type: cancelled ? 'warning' : 'info',
+                badge: cancelled ? 'CANCELLED' : 'EXTRA',
+              });
+            }
+          }
           // Check student attendance threshold
           const attRes = await fetchWithAuth('/api/attendance/my');
           if (attRes.ok) {

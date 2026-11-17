@@ -4,11 +4,11 @@
 
 **Blocked by:** 03 (A faculty member cancels an Extra Lecture)
 
-**Status:** ready-for-agent
+**Status:** done (manual UI check pending)
 
-- [ ] A student-only notices endpoint returns one notice per Extra Lecture for the student's Division whose date is today or later. Each notice has type ADDED (scheduled) or CANCELLED, subject, date, start time and the Extra Lecture id.
-- [ ] Nothing is returned for other Divisions' Extra Lectures or for lectures whose date has passed.
-- [ ] Non-students are rejected.
-- [ ] The Navbar polls the endpoint for students, alongside its existing checks, and shows each notice with a link to the timetable.
-- [ ] API tests cover ADDED, CANCELLED, other-Division exclusion and past-date exclusion, using the overridable "today". Tests live in their own file and use the Extra Lecture factory.
+- [x] A student-only notices endpoint returns one notice per Extra Lecture for the student's Division whose date is today or later. Each notice has type ADDED (scheduled) or CANCELLED, subject, date, start time and the Extra Lecture id.
+- [x] Nothing is returned for other Divisions' Extra Lectures or for lectures whose date has passed.
+- [x] Non-students are rejected.
+- [x] The Navbar polls the endpoint for students, alongside its existing checks, and shows each notice with a link to the timetable.
+- [x] API tests cover ADDED, CANCELLED, other-Division exclusion and past-date exclusion, using the overridable "today". Tests live in their own file and use the Extra Lecture factory.
 - [ ] Manually verified in the running app.

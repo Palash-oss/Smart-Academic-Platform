@@ -20,6 +20,7 @@ from app.schemas.extra_lecture import (
     ExtraLectureCreate,
     ExtraLectureDivisionOption,
     ExtraLectureFormOptions,
+    ExtraLectureNotice,
     ExtraLectureOut,
     ExtraLectureSubjectOption,
 )
@@ -285,3 +286,28 @@ class ExtraLectureService:
             .order_by(ExtraLecture.lecture_date, ExtraLecture.start_time)
         )
         return [to_out(el) for el in (await self.db.execute(stmt)).scalars().all()]
+
+    async def notices_for_student(self, student: User, term: str, from_date: date) -> List[ExtraLectureNotice]:
+        """One notice per Extra Lecture of the student's Division dated ``from_date`` or later."""
+        if student.division_id is None:
+            return []
+        stmt = (
+            select(ExtraLecture)
+            .where(
+                ExtraLecture.academic_term == term,
+                ExtraLecture.division_id == student.division_id,
+                ExtraLecture.lecture_date >= from_date,
+            )
+            .options(*_load_options())
+            .order_by(ExtraLecture.lecture_date, ExtraLecture.start_time)
+        )
+        return [
+            ExtraLectureNotice(
+                type="ADDED" if el.status == "SCHEDULED" else "CANCELLED",
+                extra_lecture_id=str(el.id),
+                subject_name=el.offering.course.name,
+                date=el.lecture_date,
+                start_time=el.start_time,
+            )
+            for el in (await self.db.execute(stmt)).scalars().all()
+        ]
