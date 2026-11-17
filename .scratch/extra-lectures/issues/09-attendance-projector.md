@@ -4,11 +4,11 @@
 
 **Blocked by:** 08 (Taking attendance for an Extra Lecture (manual marking))
 
-**Status:** done (manual verification in running app pending)
+**Status:** done
 
-- [ ] Starting a projector session can carry an Extra Lecture id. Starting is rejected when the Extra Lecture is cancelled, already marked, or not dated today.
-- [ ] Finalizing a projector session that has an Extra Lecture id records attendance through the Extra Lecture marking path. Totals rise by N for an N-hour lecture, and attendance_marked becomes true.
-- [ ] Projector sessions without an Extra Lecture id behave exactly as before.
-- [ ] From the Extra Lecture card, the faculty member can choose the projector flow, which opens prefilled with the Extra Lecture context.
-- [ ] API tests: start, check in a student, finalize, then assert the student's totals rose by N. Starting for a cancelled Extra Lecture is rejected.
-- [ ] Manually verified in the running app.
+- [x] Starting a projector session can carry an Extra Lecture id. Starting is rejected when the Extra Lecture is cancelled, already marked, or not dated today.
+- [x] Finalizing a projector session that has an Extra Lecture id records attendance through the Extra Lecture marking path. Totals rise by N for an N-hour lecture, and attendance_marked becomes true.
+- [x] Projector sessions without an Extra Lecture id behave exactly as before.
+- [x] From the Extra Lecture card, the faculty member can choose the projector flow, which opens prefilled with the Extra Lecture context.
+- [x] API tests: start, check in a student, finalize, then assert the student's totals rose by N. Starting for a cancelled Extra Lecture is rejected.
+- [x] Manually verified in the running app.
