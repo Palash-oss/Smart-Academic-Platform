@@ -31,7 +31,7 @@ from app.schemas.timetable import (
     SwapRequestsListResponse,
 )
 from app.core.clock import today
-from app.schemas.extra_lecture import ExtraLectureCreate, ExtraLectureFormOptions, ExtraLectureOut
+from app.schemas.extra_lecture import ExtraLectureCreate, ExtraLectureFormOptions, ExtraLectureNotice, ExtraLectureOut
 from app.services.extra_lecture_service import ExtraLectureError, ExtraLectureService, week_start
 from app.services.timetable_service import TimetableService
 
@@ -261,6 +261,19 @@ async def get_my_extra_lectures(
     db: AsyncSession = Depends(get_db),
 ):
     return await ExtraLectureService(db).list_for_faculty(current_user.id, academic_term, today())
+
+
+@router.get(
+    "/v1/timetable/extra-lectures/notices",
+    response_model=List[ExtraLectureNotice],
+    summary="Student: Extra Lecture notices for my Division (today or later)",
+)
+async def get_extra_lecture_notices(
+    academic_term: str = Query("2026-27-SEM5"),
+    current_user: User = Depends(require_role(["STUDENT"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ExtraLectureService(db).notices_for_student(current_user, academic_term, today())
 
 
 # ===========================================================================

@@ -23,6 +23,16 @@ class ExtraLectureOut(BaseModel):
     hours: int
 
 
+class ExtraLectureNotice(BaseModel):
+    """A bell notice for a student, derived from an Extra Lecture (nothing is stored)."""
+
+    type: str  # "ADDED" | "CANCELLED"
+    extra_lecture_id: str
+    subject_name: str
+    date: date_type
+    start_time: str
+
+
 class ExtraLectureCreate(BaseModel):
     academic_term: str = "2026-27-SEM5"
     division_id: uuid.UUID
