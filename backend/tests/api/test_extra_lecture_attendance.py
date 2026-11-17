@@ -137,3 +137,43 @@ async def test_unknown_extra_lecture_404(faculty_client, db_session, seed):
     )
 
     assert resp.status_code == 404
+
+
+async def test_extra_lecture_does_not_use_up_normal_daily_cap(faculty_client, db_session, seed):
+    el = await make_extra_lecture(db_session, seed)
+    assert (await faculty_client.post(MARK, json=body(seed, el))).status_code == 200
+
+    for _ in range(2):
+        resp = await faculty_client.post(MARK, json=body(seed, el, with_id=False))
+        assert resp.status_code == 200, resp.text
+
+    # ...and the cap still bites on the third normal session
+    assert (await faculty_client.post(MARK, json=body(seed, el, with_id=False))).status_code == 400
+
+
+async def test_students_from_another_division_rejected(faculty_client, db_session, seed):
+    el = await make_extra_lecture(db_session, seed)  # Division A
+    outsider = str(seed.students["B"][0].id)
+
+    resp = await faculty_client.post(
+        MARK, json=body(seed, el, all_enrolled_student_ids=[outsider], present_student_ids=[outsider])
+    )
+
+    assert resp.status_code == 400
+    assert (await db_session.get(type(el), el.id)).attendance_marked is False
+
+
+async def test_present_students_must_be_enrolled(faculty_client, db_session, seed):
+    el = await make_extra_lecture(db_session, seed)
+    students = seed.students["A"]
+
+    resp = await faculty_client.post(
+        MARK,
+        json=body(
+            seed, el,
+            all_enrolled_student_ids=[str(students[0].id)],
+            present_student_ids=[str(seed.students["B"][0].id)],
+        ),
+    )
+
+    assert resp.status_code == 400

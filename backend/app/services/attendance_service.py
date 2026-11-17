@@ -527,6 +527,10 @@ async def fetch_students_by_division(
     return []
 
 
+# Extra Lecture sessions are numbered from here so they never count toward the 2-per-day cap of normal lectures.
+EXTRA_LECTURE_SESSION_BASE = 100
+
+
 async def mark_session_attendance(
     db: AsyncSession,
     faculty_id: uuid.UUID,
@@ -552,12 +556,18 @@ async def mark_session_attendance(
     sess_res = await db.execute(sess_stmt)
     existing_sessions = sess_res.scalars().all()
 
-    if enforce_daily_cap and len(existing_sessions) >= 2:
+    normal_sessions = [s for s in existing_sessions if s.session_number < EXTRA_LECTURE_SESSION_BASE]
+
+    if enforce_daily_cap and len(normal_sessions) >= 2:
         raise ValueError(
             f"Maximum daily limit reached! You have already marked 2 lecture sessions for '{subject}' on {session_date}. No additional sessions are allowed for this date."
         )
 
-    session_number = len(existing_sessions) + 1
+    if enforce_daily_cap:
+        session_number = len(normal_sessions) + 1
+    else:
+        extra_sessions = len(existing_sessions) - len(normal_sessions)
+        session_number = EXTRA_LECTURE_SESSION_BASE + extra_sessions + 1
     present_set = set(present_student_ids)
 
     # 2. Record one LectureSession row per hour

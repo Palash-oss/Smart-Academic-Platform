@@ -295,6 +295,8 @@ class ExtraLectureService:
         if el.lecture_date != today():
             raise ExtraLectureError("Attendance can only be taken on the day of the Extra Lecture.", 409)
 
+        await self._require_division_students(el.division_id, present_student_ids, all_enrolled_student_ids)
+
         out = to_out(await self._get(el.id))
         result = await mark_session_attendance(
             db=self.db,
@@ -310,6 +312,17 @@ class ExtraLectureService:
         el.attendance_marked = True
         await self.db.commit()
         return result
+
+    async def _require_division_students(
+        self, division_id: uuid.UUID, present_ids: List[uuid.UUID], enrolled_ids: List[uuid.UUID]
+    ) -> None:
+        """Only students of the lecture's Division can be marked, and present students must be among those marked."""
+        stmt = select(User.id).where(User.role == "STUDENT", User.division_id == division_id, User.id.in_(enrolled_ids))
+        in_division = set((await self.db.execute(stmt)).scalars().all())
+        if not set(enrolled_ids) <= in_division:
+            raise ExtraLectureError("Some students are not in this Extra Lecture's Division.", 400)
+        if not set(present_ids) <= set(enrolled_ids):
+            raise ExtraLectureError("Present students must be among the enrolled students.", 400)
 
     async def _get(self, extra_lecture_id: uuid.UUID) -> ExtraLecture:
         stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id).options(*_load_options())
