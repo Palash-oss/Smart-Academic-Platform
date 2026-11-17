@@ -10,7 +10,8 @@ Endpoints for:
 """
 from __future__ import annotations
 
-from typing import Optional
+import uuid
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
@@ -29,6 +30,9 @@ from app.schemas.timetable import (
     RespondSwapRequestPayload,
     SwapRequestsListResponse,
 )
+from app.core.clock import today
+from app.schemas.extra_lecture import ExtraLectureCreate, ExtraLectureFormOptions, ExtraLectureOut
+from app.services.extra_lecture_service import ExtraLectureError, ExtraLectureService, week_start
 from app.services.timetable_service import TimetableService
 
 router = APIRouter(tags=["Timetable Engine"])
@@ -194,6 +198,53 @@ async def clear_timetable(
         "slots_deleted": deleted_count,
         "message": f"Successfully dissolved timetable for {term}. Removed scheduled slots.",
     }
+
+
+# ===========================================================================
+# Extra Lectures
+# ===========================================================================
+
+@router.get(
+    "/v1/timetable/extra-lectures/options",
+    response_model=ExtraLectureFormOptions,
+    summary="Faculty: what the Add Extra Lecture form can offer",
+)
+async def get_extra_lecture_options(
+    academic_term: str = Query("2026-27-SEM5"),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ExtraLectureService(db).form_options(current_user, academic_term)
+
+
+@router.post(
+    "/v1/timetable/extra-lectures",
+    response_model=ExtraLectureOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Faculty: create an Extra Lecture",
+)
+async def create_extra_lecture(
+    payload: ExtraLectureCreate,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await ExtraLectureService(db).create(current_user, payload)
+    except ExtraLectureError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail)
+
+
+@router.get(
+    "/v1/timetable/extra-lectures/me",
+    response_model=List[ExtraLectureOut],
+    summary="Faculty: my Extra Lectures from today onward",
+)
+async def get_my_extra_lectures(
+    academic_term: str = Query("2026-27-SEM5"),
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ExtraLectureService(db).list_for_faculty(current_user.id, academic_term, today())
 
 
 # ===========================================================================

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import TimetableGrid from '@/components/TimetableGrid';
+import { AddExtraLectureButton, AddExtraLectureModal, UpcomingExtraLectures, formatExtraDate } from '@/components/ExtraLectures';
 import {
   fetchFacultyTimetable,
   fetchMasterTimetable,
@@ -37,6 +38,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+function localIsoDate(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function FacultyTimetablePage() {
   const [user, setUser] = useState<User | null>(null);
   const [selectedTerm, setSelectedTerm] = useState('2026-27-SEM5');
@@ -47,6 +54,8 @@ export default function FacultyTimetablePage() {
   const [status, setStatus] = useState<TimetableStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [extraModalOpen, setExtraModalOpen] = useState(false);
+  const [extraNotice, setExtraNotice] = useState('');
 
   // Class Swap & Substitution State
   const [swapRequests, setSwapRequests] = useState<{ received: any[]; sent: any[] }>({ received: [], sent: [] });
@@ -238,6 +247,8 @@ export default function FacultyTimetablePage() {
                 <option value="2026-27-SEM5">Semester 5 (2026-27-SEM5) [Ongoing]</option>
                 <option value="2026-27-SEM6">Semester 6 (2026-27-SEM6) [Upcoming]</option>
               </select>
+
+              <AddExtraLectureButton onClick={() => setExtraModalOpen(true)} />
 
               <button
                 onClick={handlePrint}
@@ -515,6 +526,12 @@ export default function FacultyTimetablePage() {
               </div>
             )}
 
+            {extraNotice && (
+              <div role="status" className="no-print" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534', borderRadius: '6px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', fontWeight: 600 }}>
+                {extraNotice}
+              </div>
+            )}
+
             {/* Weekly Matrix Table */}
             {loading ? (
               <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '8px', padding: '60px', textAlign: 'center' }}>
@@ -614,6 +631,28 @@ export default function FacultyTimetablePage() {
                                     }}
                                   >
                                     {cell.custom_title}
+                                  </td>
+                                );
+                              }
+
+                              if (cell.is_extra) {
+                                const cancelled = cell.extra_status === 'CANCELLED';
+                                return (
+                                  <td
+                                    key={cIdx}
+                                    colSpan={cell.col_span}
+                                    style={{ border: '1px solid #000000', padding: '8px 4px', background: '#FFF7ED', verticalAlign: 'middle', opacity: cancelled ? 0.6 : 1 }}
+                                  >
+                                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#C2410C', background: '#FFEDD5', padding: '1px 5px', borderRadius: '3px', marginBottom: '4px', display: 'inline-block' }}>
+                                      EXTRA · {cell.extra_date ? formatExtraDate(cell.extra_date) : ''}
+                                    </div>
+                                    <div style={{ fontWeight: 800, fontSize: '12px', color: '#C2410C', textDecoration: cancelled ? 'line-through' : 'none' }}>
+                                      {cell.course_code} {cell.course_name}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#374151', fontWeight: 600, marginTop: '2px' }}>
+                                      {cell.section_name || ''} {cancelled ? '• CANCELLED' : ''}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>📍 {cell.room_number}</div>
                                   </td>
                                 );
                               }
@@ -808,6 +847,24 @@ export default function FacultyTimetablePage() {
             )}
           </div>
         )}
+        {activeTab === 'personal' && personalData && (
+          <UpcomingExtraLectures
+            lectures={(personalData.extra_lectures || []).filter((el) => el.date >= localIsoDate())}
+          />
+        )}
+
+        {extraModalOpen && (
+          <AddExtraLectureModal
+            term={selectedTerm}
+            onClose={() => setExtraModalOpen(false)}
+            onCreated={async (el) => {
+              setExtraModalOpen(false);
+              setExtraNotice(`Extra Lecture added: ${el.subject_name}, ${formatExtraDate(el.date)} ${el.start_time}–${el.end_time}.`);
+              await loadData(selectedTerm, activeTab, selectedDivision);
+            }}
+          />
+        )}
+
         {/* Peer Class Swap & Substitution Request Modal */}
         {swapModalOpen && activeSlotForSwap && (
           <div

@@ -1,11 +1,13 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from sqlalchemy import (
     String,
     Integer,
     ForeignKey,
+    Boolean,
+    Date,
     DateTime,
     Text,
     JSON,
@@ -400,6 +402,39 @@ class TimetableSlot(Base):
     section = relationship("ClassSection")
     batch = relationship("PracticalBatch")
     faculty = relationship("User", foreign_keys=[faculty_id])
+
+
+# ---------------------------------------------------------------------------
+# Extra Lecture (one-off lecture on a calendar date, outside the weekly timetable)
+# ---------------------------------------------------------------------------
+
+class ExtraLecture(Base):
+    __tablename__ = "extra_lectures"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    academic_term: Mapped[str] = mapped_column(String(50), nullable=False)
+    faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    division_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("divisions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False
+    )
+    lecture_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_time: Mapped[str] = mapped_column(String(10), nullable=False)    # e.g. '13:30'
+    end_time: Mapped[str] = mapped_column(String(10), nullable=False)      # e.g. '15:30'
+    room_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="SCHEDULED")  # SCHEDULED | CANCELLED
+    attendance_marked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    faculty = relationship("User", foreign_keys=[faculty_id])
+    division = relationship("Division")
+    offering = relationship("CourseOffering")
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ from app.db.models import (
     TimetableSlot,
     ClassSwapRequest,
 )
+from app.services.extra_lecture_service import ExtraLectureService, place_extra_lectures, week_start
 from app.schemas.timetable import (
     TimeSlotDef,
     ParallelBatchItem,
@@ -1172,6 +1173,11 @@ class TimetableService:
 
             weekly_schedule[day] = row_cells
 
+        extra_lectures = await ExtraLectureService(self.db).list_for_faculty(
+            faculty_user.id, academic_term, week_start()
+        )
+        place_extra_lectures(weekly_schedule, extra_lectures, week_start())
+
         fac_initials = get_faculty_initials(faculty_user.full_name)
 
         return FacultyTimetableResponse(
@@ -1188,6 +1194,7 @@ class TimetableService:
             days=DAYS_OF_WEEK,
             schedule=weekly_schedule,
             upcoming_lectures=upcoming_list,
+            extra_lectures=extra_lectures,
         )
 
     # =========================================================================
