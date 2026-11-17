@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.db.session import get_db
+from app.core.clock import today as clock_today
 from app.db.models import User, AttendanceCondonation, AttendanceLog
 from app.api.auth import get_current_user, require_role
 from app.schemas.attendance import (
@@ -579,7 +580,7 @@ async def mark_attendance_endpoint(
             detail="Enrolled student IDs list cannot be empty."
         )
 
-    sess_date = req.session_date if req.session_date else date.today().strftime("%Y-%m-%d")
+    sess_date = req.session_date if req.session_date else clock_today().strftime("%Y-%m-%d")
 
     try:
         return await mark_session_attendance(
@@ -808,7 +809,7 @@ async def get_defaulters_registry(
 
     # Cryptographic Institutional Tamper-Proof Seal Generation (SHA-256 + Ed25519)
     canonical_payload = (
-        f"FRCRCE-AUTONOMOUS:{dept_code}:{date.today().isoformat()}:{len(defaulters)}:"
+        f"FRCRCE-AUTONOMOUS:{dept_code}:{clock_today().isoformat()}:{len(defaulters)}:"
         + ",".join([d["roll_no"] for d in defaulters])
     )
     digest_sha256 = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest().upper()

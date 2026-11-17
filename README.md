@@ -139,6 +139,15 @@ npm run dev
 ```
 Navigate to **`http://localhost:3000`** in your browser.
 
+### 4. Running the Backend Tests
+```bash
+docker compose up -d db          # API tests need the docker-compose Postgres running
+cd backend
+pip install -r requirements.txt
+pytest                           # everything; or: pytest tests/api
+```
+API tests (`backend/tests/api/`) call the FastAPI app in-process through httpx. Each run creates uniquely named throwaway databases on the compose Postgres (seeded from `backend/tests/seed.py`) and drops them afterwards, so parallel runs never collide and your `DATABASE_URL` is never touched. Fixtures live in `backend/tests/conftest.py`; use `pin_today(date(...))` to control "today". Override the connection with `TEST_POSTGRES_HOST/PORT/USER/PASSWORD` if needed.
+
 ---
 
 ## 🔑 Demo Quick Login Credentials
