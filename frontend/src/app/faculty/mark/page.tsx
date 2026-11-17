@@ -362,8 +362,8 @@ function MarkAttendanceContent() {
     try {
       const res = await fetchWithAuth(`/api/attendance/faculty/sessions?subject=${encodeURIComponent(subject)}&session_date=${date}`);
       if (res.ok) {
-        const data: MarkedSession[] = await res.json();
-        setMarkedSessions(data);
+        const data: { sessions: MarkedSession[] } = await res.json();
+        setMarkedSessions(data.sessions ?? []);
       }
     } catch (err) {
       console.error('Failed to load marked sessions history:', err);
