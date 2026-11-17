@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, CalendarPlus } from 'lucide-react';
 import {
+  cancelExtraLecture,
   createExtraLecture,
   fetchExtraLectureOptions,
   ExtraLecture,
@@ -27,6 +28,12 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '4px',
   fontFamily: '"JetBrains Mono", monospace',
 };
+
+export function localIsoDate(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 export function formatExtraDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -246,12 +253,42 @@ export function AddExtraLectureButton({ onClick }: { onClick: () => void }) {
 }
 
 /** The "Upcoming Extra Lectures" list (this week and later). */
-export function UpcomingExtraLectures({ lectures }: { lectures: ExtraLecture[] }) {
+export function UpcomingExtraLectures({
+  lectures,
+  onCancelled,
+}: {
+  lectures: ExtraLecture[];
+  onCancelled?: (lecture: ExtraLecture) => void;
+}) {
+  const [busyId, setBusyId] = useState('');
+  const [error, setError] = useState('');
+
+  async function cancel(el: ExtraLecture) {
+    const ok = window.confirm(
+      `Cancel the Extra Lecture for ${el.subject_name} on ${formatExtraDate(el.date)} (${el.start_time}–${el.end_time})? Students will be told it is cancelled.`
+    );
+    if (!ok) return;
+    setError('');
+    setBusyId(el.id);
+    try {
+      onCancelled?.(await cancelExtraLecture(el.id));
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
   return (
     <section className="no-print" style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '8px', padding: '16px 20px', marginTop: '20px' }}>
       <h3 style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '16px', fontWeight: 800, marginBottom: '10px' }}>
         Upcoming Extra Lectures
       </h3>
+      {error && (
+        <p role="alert" style={{ color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', padding: '8px 10px', fontSize: '13px', marginBottom: '10px' }}>
+          {error}
+        </p>
+      )}
       {lectures.length === 0 ? (
         <p style={{ fontSize: '13px', color: '#71717A' }}>No Extra Lectures scheduled.</p>
       ) : (
@@ -269,7 +306,17 @@ export function UpcomingExtraLectures({ lectures }: { lectures: ExtraLecture[] }
                   {formatExtraDate(el.date)} · {el.start_time}–{el.end_time} ({el.hours}h)
                 </span>
                 <span style={{ fontSize: '12px', color: '#6B7280' }}>📍 {el.room_number}</span>
-                {cancelled && <span style={{ fontSize: '11px', fontWeight: 700, color: '#B91C1C' }}>CANCELLED</span>}
+                {cancelled && <span style={{ fontSize: '11px', fontWeight: 700, color: '#B91C1C' }}>Cancelled</span>}
+                {!cancelled && el.status === 'SCHEDULED' && el.date >= localIsoDate() && (
+                  <button
+                    type="button"
+                    onClick={() => cancel(el)}
+                    disabled={busyId === el.id}
+                    style={{ marginLeft: 'auto', padding: '5px 10px', background: '#FFFFFF', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', opacity: busyId === el.id ? 0.6 : 1 }}
+                  >
+                    {busyId === el.id ? 'Cancelling…' : 'Cancel'}
+                  </button>
+                )}
               </li>
             );
           })}

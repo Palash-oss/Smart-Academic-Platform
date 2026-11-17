@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy import select
@@ -209,6 +209,25 @@ class ExtraLectureService:
             attendance_marked=False,
         )
         self.db.add(el)
+        await self.db.commit()
+        return to_out(await self._get(el.id))
+
+    # ------------------------------------------------------------------- cancel
+    async def cancel(self, user: User, extra_lecture_id: uuid.UUID) -> ExtraLectureOut:
+        if user.role not in ("FACULTY", "ADMIN"):
+            raise ExtraLectureError("Only faculty can cancel an Extra Lecture.", 403)
+        stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id).with_for_update()
+        el = (await self.db.execute(stmt)).scalar_one_or_none()
+        if el is None:
+            raise ExtraLectureError("Extra Lecture not found.", 404)
+        if user.role != "ADMIN" and el.faculty_id != user.id:
+            raise ExtraLectureError("Only the faculty member who created this Extra Lecture can cancel it.", 403)
+        if el.status == "CANCELLED":
+            raise ExtraLectureError("This Extra Lecture is already cancelled.", 409)
+        if el.lecture_date < today():
+            raise ExtraLectureError("This Extra Lecture's date has passed, so it can no longer be cancelled.", 409)
+        el.status = "CANCELLED"
+        el.cancelled_at = datetime.now(timezone.utc)
         await self.db.commit()
         return to_out(await self._get(el.id))
 

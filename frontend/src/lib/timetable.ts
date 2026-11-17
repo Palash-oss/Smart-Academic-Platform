@@ -258,3 +258,12 @@ export async function createExtraLecture(payload: ExtraLectureCreatePayload): Pr
   }
   return res.json();
 }
+
+export async function cancelExtraLecture(id: string): Promise<ExtraLecture> {
+  const res = await fetchWithAuth(`/api/v1/timetable/extra-lectures/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to cancel Extra Lecture');
+  }
+  return res.json();
+}

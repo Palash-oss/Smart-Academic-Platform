@@ -234,6 +234,22 @@ async def create_extra_lecture(
         raise HTTPException(status_code=err.status_code, detail=err.detail)
 
 
+@router.post(
+    "/v1/timetable/extra-lectures/{extra_lecture_id}/cancel",
+    response_model=ExtraLectureOut,
+    summary="Faculty: cancel an Extra Lecture (owner or admin)",
+)
+async def cancel_extra_lecture(
+    extra_lecture_id: uuid.UUID,
+    current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await ExtraLectureService(db).cancel(current_user, extra_lecture_id)
+    except ExtraLectureError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail)
+
+
 @router.get(
     "/v1/timetable/extra-lectures/me",
     response_model=List[ExtraLectureOut],

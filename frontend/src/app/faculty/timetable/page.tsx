@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import TimetableGrid from '@/components/TimetableGrid';
-import { AddExtraLectureButton, AddExtraLectureModal, UpcomingExtraLectures, formatExtraDate } from '@/components/ExtraLectures';
+import { AddExtraLectureButton, AddExtraLectureModal, UpcomingExtraLectures, formatExtraDate, localIsoDate } from '@/components/ExtraLectures';
 import {
   fetchFacultyTimetable,
   fetchMasterTimetable,
@@ -37,12 +37,6 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-
-function localIsoDate(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 export default function FacultyTimetablePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -650,7 +644,7 @@ export default function FacultyTimetablePage() {
                                       {cell.course_code} {cell.course_name}
                                     </div>
                                     <div style={{ fontSize: '10px', color: '#374151', fontWeight: 600, marginTop: '2px' }}>
-                                      {cell.section_name || ''} {cancelled ? '• CANCELLED' : ''}
+                                      {cell.section_name || ''} {cancelled ? '• Cancelled' : ''}
                                     </div>
                                     <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>📍 {cell.room_number}</div>
                                   </td>
@@ -850,6 +844,10 @@ export default function FacultyTimetablePage() {
         {activeTab === 'personal' && personalData && (
           <UpcomingExtraLectures
             lectures={(personalData.extra_lectures || []).filter((el) => el.date >= localIsoDate())}
+            onCancelled={async (el) => {
+              setExtraNotice(`Extra Lecture cancelled: ${el.subject_name}, ${formatExtraDate(el.date)} ${el.start_time}–${el.end_time}.`);
+              await loadData(selectedTerm, activeTab, selectedDivision);
+            }}
           />
         )}
 
