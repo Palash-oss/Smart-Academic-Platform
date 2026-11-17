@@ -12,4 +12,4 @@
 - [x] The "my Extra Lectures" endpoint and the faculty timetable response still include cancelled lectures, with their status.
 - [x] The UI shows a **Cancel** button (with confirmation) on scheduled, future Extra Lectures. Cancelled lectures are struck through and labelled "Cancelled" in both the grid and the list.
 - [x] API tests cover a successful cancel and each rejection.
-- [ ] Manually verified in the running app.
+- [x] Manually verified in the running app.
