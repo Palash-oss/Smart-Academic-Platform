@@ -45,6 +45,7 @@ function MarkAttendanceContent() {
   const queryDiv = searchParams.get('div') || searchParams.get('division') || '';
   const queryBatch = searchParams.get('batch') || '';
   const queryDate = searchParams.get('date') || '';
+  const queryExtraLectureId = searchParams.get('extra_lecture') || '';
   const isSyncedFromTimetable = Boolean(queryCourse || queryDiv || queryBatch || queryDate);
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -443,7 +444,8 @@ function MarkAttendanceContent() {
   const availableDivisions = currentDept?.divisions || [];
 
   const sessionsTodayCount = markedSessions.length;
-  const isMaxDailyReached = sessionsTodayCount >= 2;
+  // Extra Lectures are exempt from the 2-sessions-per-day cap that applies to normal lectures.
+  const isMaxDailyReached = !queryExtraLectureId && sessionsTodayCount >= 2;
 
   const filteredStudents = students.filter((st) =>
     st.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -470,7 +472,8 @@ function MarkAttendanceContent() {
           subject: selectedCourseName,
           session_date: sessionDate,
           present_student_ids: presentIds,
-          all_enrolled_student_ids: allIds
+          all_enrolled_student_ids: allIds,
+          ...(queryExtraLectureId ? { extra_lecture_id: queryExtraLectureId } : {})
         })
       });
 
@@ -593,7 +596,7 @@ function MarkAttendanceContent() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles style={{ width: '15px', height: '15px', color: '#D97706', flexShrink: 0 }} />
               <span>
-                <strong>Timetable-Linked Session:</strong> Pre-populated for Division {selectedDivName} {selectedBatch !== 'ALL' ? `(Batch ${selectedBatch})` : '(Full Division)'} • Scheduled Date: {sessionDate}
+                <strong>{queryExtraLectureId ? 'Extra Lecture:' : 'Timetable-Linked Session:'}</strong> Pre-populated for Division {selectedDivName} {selectedBatch !== 'ALL' ? `(Batch ${selectedBatch})` : '(Full Division)'} • Scheduled Date: {sessionDate}
               </span>
             </div>
             <span style={{ background: '#FDE68A', color: '#78350F', padding: '3px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 800 }}>

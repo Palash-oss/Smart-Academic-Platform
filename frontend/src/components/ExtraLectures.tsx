@@ -40,6 +40,12 @@ export function formatExtraDate(iso: string): string {
   return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+/** Link to the marking page, prefilled with this Extra Lecture's subject, Division and date. */
+export function attendanceUrl(el: ExtraLecture): string {
+  const div = el.division_name.replace('COMP-', '').replace('Division ', '');
+  return `/faculty/mark?course=${encodeURIComponent(el.subject_name)}&div=${encodeURIComponent(div)}&batch=ALL&date=${el.date}&extra_lecture=${el.id}`;
+}
+
 interface FormProps {
   term: string;
   onClose: () => void;
@@ -307,7 +313,16 @@ export function UpcomingExtraLectures({
                 </span>
                 <span style={{ fontSize: '12px', color: '#6B7280' }}>📍 {el.room_number}</span>
                 {cancelled && <span style={{ fontSize: '11px', fontWeight: 700, color: '#B91C1C' }}>Cancelled</span>}
-                {!cancelled && el.status === 'SCHEDULED' && el.date >= localIsoDate() && (
+                {!cancelled && el.status === 'SCHEDULED' && el.date === localIsoDate() && !el.attendance_marked && (
+                  <a
+                    href={attendanceUrl(el)}
+                    style={{ marginLeft: 'auto', padding: '5px 10px', background: '#FF5500', color: '#FFFFFF', borderRadius: '6px', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}
+                  >
+                    Take attendance
+                  </a>
+                )}
+                {el.attendance_marked && <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803D' }}>Attendance taken</span>}
+                {!cancelled && el.status === 'SCHEDULED' && el.date >= localIsoDate() && !el.attendance_marked && (
                   <button
                     type="button"
                     onClick={() => cancel(el)}

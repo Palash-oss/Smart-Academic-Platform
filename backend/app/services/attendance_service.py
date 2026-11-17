@@ -533,9 +533,16 @@ async def mark_session_attendance(
     subject: str,
     session_date: str,
     present_student_ids: List[uuid.UUID],
-    all_enrolled_student_ids: List[uuid.UUID]
+    all_enrolled_student_ids: List[uuid.UUID],
+    hours: int = 1,
+    enforce_daily_cap: bool = True,
+    commit: bool = True,
 ) -> Dict[str, Any]:
-    """Marks a live lecture session with STRICT Daily Limit (Max 2 lectures per day per subject)."""
+    """Marks a live lecture session with STRICT Daily Limit (Max 2 lectures per day per subject).
+
+    ``hours`` records that many lecture sessions (each hour counts as one class). Extra Lectures pass
+    ``enforce_daily_cap=False`` to be exempt from the daily limit, and ``commit=False`` to commit with their own changes.
+    """
     # 1. Check existing sessions marked for this subject + faculty on this date
     sess_stmt = select(LectureSession).where(
         LectureSession.faculty_id == faculty_id,
@@ -545,7 +552,7 @@ async def mark_session_attendance(
     sess_res = await db.execute(sess_stmt)
     existing_sessions = sess_res.scalars().all()
 
-    if len(existing_sessions) >= 2:
+    if enforce_daily_cap and len(existing_sessions) >= 2:
         raise ValueError(
             f"Maximum daily limit reached! You have already marked 2 lecture sessions for '{subject}' on {session_date}. No additional sessions are allowed for this date."
         )
@@ -553,16 +560,17 @@ async def mark_session_attendance(
     session_number = len(existing_sessions) + 1
     present_set = set(present_student_ids)
 
-    # 2. Record LectureSession row
-    lecture_sess = LectureSession(
-        faculty_id=faculty_id,
-        subject=subject,
-        session_date=session_date,
-        session_number=session_number,
-        present_student_ids=[str(pid) for pid in present_student_ids],
-        all_enrolled_student_ids=[str(aid) for aid in all_enrolled_student_ids]
-    )
-    db.add(lecture_sess)
+    # 2. Record one LectureSession row per hour
+    for offset in range(hours):
+        lecture_sess = LectureSession(
+            faculty_id=faculty_id,
+            subject=subject,
+            session_date=session_date,
+            session_number=session_number + offset,
+            present_student_ids=[str(pid) for pid in present_student_ids],
+            all_enrolled_student_ids=[str(aid) for aid in all_enrolled_student_ids]
+        )
+        db.add(lecture_sess)
 
     # 3. Update AttendanceLog rows for enrolled students (+1 total, +1 attended if present)
     updated_count = 0
@@ -575,21 +583,24 @@ async def mark_session_attendance(
         log = res.scalar_one_or_none()
 
         if log:
-            log.total_classes += 1
+            log.total_classes += hours
             if student_id in present_set:
-                log.attended_classes += 1
+                log.attended_classes += hours
         else:
             is_present = student_id in present_set
             log = AttendanceLog(
                 student_id=student_id,
                 subject=subject,
-                total_classes=1,
-                attended_classes=1 if is_present else 0
+                total_classes=hours,
+                attended_classes=hours if is_present else 0
             )
             db.add(log)
         updated_count += 1
 
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
 
     present_count = len(present_set)
     absent_count = len(all_enrolled_student_ids) - present_count

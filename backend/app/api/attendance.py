@@ -18,6 +18,7 @@ from app.db.session import get_db
 from app.core.clock import today as clock_today
 from app.db.models import User, AttendanceCondonation, AttendanceLog
 from app.api.auth import get_current_user, require_role
+from app.services.extra_lecture_service import ExtraLectureError, ExtraLectureService
 from app.schemas.attendance import (
     MarkAttendanceRequest,
     CreateCondonationRequest,
@@ -579,6 +580,14 @@ async def mark_attendance_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Enrolled student IDs list cannot be empty."
         )
+
+    if req.extra_lecture_id is not None:
+        try:
+            return await ExtraLectureService(db).mark_attendance(
+                current_user, req.extra_lecture_id, req.present_student_ids, req.all_enrolled_student_ids
+            )
+        except ExtraLectureError as err:
+            raise HTTPException(status_code=err.status_code, detail=err.detail)
 
     sess_date = req.session_date if req.session_date else clock_today().strftime("%Y-%m-%d")
 

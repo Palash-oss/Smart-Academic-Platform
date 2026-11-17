@@ -268,6 +268,48 @@ class ExtraLectureService:
         await self.db.commit()
         return to_out(await self._get(el.id))
 
+    # --------------------------------------------------------------- attendance
+    async def mark_attendance(
+        self,
+        user: User,
+        extra_lecture_id: uuid.UUID,
+        present_student_ids: List[uuid.UUID],
+        all_enrolled_student_ids: List[uuid.UUID],
+    ) -> dict:
+        """Record attendance for an Extra Lecture: one class per hour, exempt from the daily session cap."""
+        from app.services.attendance_service import mark_session_attendance
+
+        if user.role not in ("FACULTY", "ADMIN"):
+            raise ExtraLectureError("Only faculty can take attendance for an Extra Lecture.", 403)
+        stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id).with_for_update()
+        el = (await self.db.execute(stmt)).scalar_one_or_none()
+        if el is None:
+            raise ExtraLectureError("Extra Lecture not found.", 404)
+        if user.role != "ADMIN" and el.faculty_id != user.id:
+            raise ExtraLectureError("Only the faculty member who created this Extra Lecture can take its attendance.", 403)
+        if el.status == "CANCELLED":
+            raise ExtraLectureError("This Extra Lecture is cancelled, so attendance cannot be taken.", 409)
+        if el.attendance_marked:
+            raise ExtraLectureError("Attendance has already been taken for this Extra Lecture.", 409)
+        if el.lecture_date != today():
+            raise ExtraLectureError("Attendance can only be taken on the day of the Extra Lecture.", 409)
+
+        out = to_out(await self._get(el.id))
+        result = await mark_session_attendance(
+            db=self.db,
+            faculty_id=el.faculty_id,
+            subject=out.subject_name,
+            session_date=el.lecture_date.isoformat(),
+            present_student_ids=present_student_ids,
+            all_enrolled_student_ids=all_enrolled_student_ids,
+            hours=out.hours,
+            enforce_daily_cap=False,
+            commit=False,
+        )
+        el.attendance_marked = True
+        await self.db.commit()
+        return result
+
     async def _get(self, extra_lecture_id: uuid.UUID) -> ExtraLecture:
         stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id).options(*_load_options())
         return (await self.db.execute(stmt)).scalar_one()

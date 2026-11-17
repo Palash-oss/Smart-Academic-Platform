@@ -39,6 +39,7 @@ class MarkAttendanceRequest(BaseModel):
     session_date: str = "2026-08-19"
     present_student_ids: List[uuid.UUID]
     all_enrolled_student_ids: List[uuid.UUID]
+    extra_lecture_id: Optional[uuid.UUID] = None
 
 
 class RosterStudentRow(BaseModel):
