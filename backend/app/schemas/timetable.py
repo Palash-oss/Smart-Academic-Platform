@@ -138,6 +138,7 @@ class MasterTimetableResponse(BaseModel):
     grid: Dict[str, List[TimetableCell]]
     subject_legend: List[LegendItem]
     faculty_legend: List[LegendItem]
+    extra_lectures: List[ExtraLectureOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

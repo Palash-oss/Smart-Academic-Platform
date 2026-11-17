@@ -968,6 +968,11 @@ class TimetableService:
         subj_legend_list = sorted(list(subject_legend_dict.values()), key=lambda x: x.abbr)
         fac_legend_list = sorted(list(faculty_legend_dict.values()), key=lambda x: x.abbr)
 
+        extra_lectures = await ExtraLectureService(self.db).list_for_division(
+            div.id, academic_term, week_start()
+        )
+        place_extra_lectures(grid, extra_lectures, week_start())
+
         return MasterTimetableResponse(
             header=header,
             time_slots=TIME_SLOT_DEFS,
@@ -975,6 +980,7 @@ class TimetableService:
             grid=grid,
             subject_legend=subj_legend_list,
             faculty_legend=fac_legend_list,
+            extra_lectures=extra_lectures,
         )
 
     # =========================================================================

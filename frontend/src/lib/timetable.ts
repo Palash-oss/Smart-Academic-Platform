@@ -68,6 +68,7 @@ export interface MasterTimetableResponse {
   grid: Record<string, TimetableCell[]>;
   subject_legend: LegendItem[];
   faculty_legend: LegendItem[];
+  extra_lectures?: ExtraLecture[];
 }
 
 export interface PersonalizedSlotItem {

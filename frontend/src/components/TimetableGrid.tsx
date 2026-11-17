@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { MasterTimetableResponse, TimetableCell, ParallelBatchItem } from '@/lib/timetable';
+import { formatExtraDate } from '@/components/ExtraLectures';
 import { Printer, Info, Calendar, Clock, MapPin, User, BookOpen } from 'lucide-react';
 
 interface TimetableGridProps {
@@ -174,6 +175,29 @@ export default function TimetableGrid({ data, titleOverride, showPrintButton = t
                             }}
                           >
                             {cell.custom_title}
+                          </td>
+                        );
+                      }
+
+                      // Extra Lecture (one-off, dated)
+                      if (cell.is_extra) {
+                        const cancelled = cell.extra_status === 'CANCELLED';
+                        return (
+                          <td
+                            key={cIdx}
+                            colSpan={cell.col_span}
+                            style={{ border: '1px solid #000000', padding: '8px 4px', background: '#FFF7ED', verticalAlign: 'middle', textAlign: 'center', opacity: cancelled ? 0.6 : 1 }}
+                          >
+                            <div style={{ fontSize: '9px', fontWeight: 800, color: '#C2410C', background: '#FFEDD5', padding: '1px 5px', borderRadius: '3px', marginBottom: '4px', display: 'inline-block' }}>
+                              EXTRA · {cell.extra_date ? formatExtraDate(cell.extra_date) : ''}
+                            </div>
+                            <div style={{ fontWeight: 800, fontSize: '12px', color: '#C2410C', textDecoration: cancelled ? 'line-through' : 'none' }}>
+                              {cell.course_code} {cell.course_name}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#374151', fontWeight: 600, marginTop: '2px' }}>
+                              {cell.faculty_name || ''} {cancelled ? '• Cancelled' : ''}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>📍 {cell.room_number}</div>
                           </td>
                         );
                       }

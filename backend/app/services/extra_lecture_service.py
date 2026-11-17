@@ -273,6 +273,19 @@ class ExtraLectureService:
         return (await self.db.execute(stmt)).scalar_one()
 
     # ------------------------------------------------------------------ queries
+    async def list_for_division(self, division_id: uuid.UUID, term: str, from_date: date) -> List[ExtraLectureOut]:
+        stmt = (
+            select(ExtraLecture)
+            .where(
+                ExtraLecture.academic_term == term,
+                ExtraLecture.division_id == division_id,
+                ExtraLecture.lecture_date >= from_date,
+            )
+            .options(*_load_options())
+            .order_by(ExtraLecture.lecture_date, ExtraLecture.start_time)
+        )
+        return [to_out(el) for el in (await self.db.execute(stmt)).scalars().all()]
+
     async def list_for_faculty(self, faculty_id: uuid.UUID, term: str, from_date: date) -> List[ExtraLectureOut]:
         stmt = (
             select(ExtraLecture)
