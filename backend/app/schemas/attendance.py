@@ -82,6 +82,7 @@ class StartDynamicSessionRequest(BaseModel):
     division_name: Optional[str] = None
     batch_name: Optional[str] = None
     all_enrolled_student_ids: List[uuid.UUID]
+    extra_lecture_id: Optional[uuid.UUID] = None
 
 
 class StudentCheckInRequest(BaseModel):

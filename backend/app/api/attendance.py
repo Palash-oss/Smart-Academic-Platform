@@ -121,9 +121,16 @@ def verify_dynamic_totp(secret_bytes: bytes, user_code: str, step: int = 10) -> 
 async def start_dynamic_attendance_session(
     payload: StartDynamicSessionRequest,
     current_user: User = Depends(require_role(["FACULTY", "ADMIN"])),
+    db: AsyncSession = Depends(get_db),
 ):
     """Initializes a live TOTP dynamic check-in session for classroom projector display."""
     cleanup_expired_sessions()
+
+    if payload.extra_lecture_id is not None:
+        try:
+            await ExtraLectureService(db).require_markable(current_user, payload.extra_lecture_id)
+        except ExtraLectureError as err:
+            raise HTTPException(status_code=err.status_code, detail=err.detail)
 
     # Fault-tolerance: Deactivate prior active sessions started by this faculty or for the same subject/division
     faculty_id_str = str(current_user.id)
@@ -148,6 +155,7 @@ async def start_dynamic_attendance_session(
         "session_date": payload.session_date,
         "division_name": payload.division_name,
         "batch_name": payload.batch_name,
+        "extra_lecture_id": str(payload.extra_lecture_id) if payload.extra_lecture_id else None,
         "secret": secret,
         "all_enrolled_student_ids": [str(sid) for sid in payload.all_enrolled_student_ids],
         "checked_in_students": {},
@@ -206,14 +214,22 @@ async def finalize_dynamic_attendance_session(
     all_enrolled = [uuid.UUID(sid) for sid in sess["all_enrolled_student_ids"]]
 
     try:
-        res = await mark_session_attendance(
-            db=db,
-            faculty_id=uuid.UUID(sess["faculty_id"]),
-            subject=sess["subject"],
-            session_date=sess["session_date"],
-            present_student_ids=present_ids,
-            all_enrolled_student_ids=all_enrolled,
-        )
+        if sess.get("extra_lecture_id"):
+            try:
+                res = await ExtraLectureService(db).mark_attendance(
+                    current_user, uuid.UUID(sess["extra_lecture_id"]), present_ids, all_enrolled
+                )
+            except ExtraLectureError as err:
+                raise HTTPException(status_code=err.status_code, detail=err.detail)
+        else:
+            res = await mark_session_attendance(
+                db=db,
+                faculty_id=uuid.UUID(sess["faculty_id"]),
+                subject=sess["subject"],
+                session_date=sess["session_date"],
+                present_student_ids=present_ids,
+                all_enrolled_student_ids=all_enrolled,
+            )
         sess["is_active"] = False
         return {
             "status": "success",

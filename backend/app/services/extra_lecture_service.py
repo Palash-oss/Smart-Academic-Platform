@@ -270,19 +270,13 @@ class ExtraLectureService:
         return to_out(await self._get(el.id))
 
     # --------------------------------------------------------------- attendance
-    async def mark_attendance(
-        self,
-        user: User,
-        extra_lecture_id: uuid.UUID,
-        present_student_ids: List[uuid.UUID],
-        all_enrolled_student_ids: List[uuid.UUID],
-    ) -> dict:
-        """Record attendance for an Extra Lecture: one class per hour, exempt from the daily session cap."""
-        from app.services.attendance_service import mark_session_attendance
-
+    async def require_markable(self, user: User, extra_lecture_id: uuid.UUID, lock: bool = False) -> ExtraLecture:
+        """Load an Extra Lecture and check that ``user`` may take its attendance right now."""
         if user.role not in ("FACULTY", "ADMIN"):
             raise ExtraLectureError("Only faculty can take attendance for an Extra Lecture.", 403)
-        stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id).with_for_update()
+        stmt = select(ExtraLecture).where(ExtraLecture.id == extra_lecture_id)
+        if lock:
+            stmt = stmt.with_for_update()
         el = (await self.db.execute(stmt)).scalar_one_or_none()
         if el is None:
             raise ExtraLectureError("Extra Lecture not found.", 404)
@@ -294,6 +288,19 @@ class ExtraLectureService:
             raise ExtraLectureError("Attendance has already been taken for this Extra Lecture.", 409)
         if el.lecture_date != today():
             raise ExtraLectureError("Attendance can only be taken on the day of the Extra Lecture.", 409)
+        return el
+
+    async def mark_attendance(
+        self,
+        user: User,
+        extra_lecture_id: uuid.UUID,
+        present_student_ids: List[uuid.UUID],
+        all_enrolled_student_ids: List[uuid.UUID],
+    ) -> dict:
+        """Record attendance for an Extra Lecture: one class per hour, exempt from the daily session cap."""
+        from app.services.attendance_service import mark_session_attendance
+
+        el = await self.require_markable(user, extra_lecture_id, lock=True)
 
         await self._require_division_students(el.division_id, present_student_ids, all_enrolled_student_ids)
 

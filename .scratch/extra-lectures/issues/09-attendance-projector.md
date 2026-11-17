@@ -4,7 +4,7 @@
 
 **Blocked by:** 08 (Taking attendance for an Extra Lecture (manual marking))
 
-**Status:** ready-for-agent
+**Status:** done (manual verification in running app pending)
 
 - [ ] Starting a projector session can carry an Extra Lecture id. Starting is rejected when the Extra Lecture is cancelled, already marked, or not dated today.
 - [ ] Finalizing a projector session that has an Extra Lecture id records attendance through the Extra Lecture marking path. Totals rise by N for an N-hour lecture, and attendance_marked becomes true.

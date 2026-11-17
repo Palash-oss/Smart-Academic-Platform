@@ -131,6 +131,7 @@ function MarkAttendanceContent() {
           division_name: selectedDivName,
           batch_name: selectedBatch,
           all_enrolled_student_ids: students.map((s) => s.student_id),
+          ...(queryExtraLectureId ? { extra_lecture_id: queryExtraLectureId } : {}),
         }),
       });
       if (res.ok) {
@@ -836,8 +837,6 @@ function MarkAttendanceContent() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {/* Projector (TOTP) marking doesn't carry the Extra Lecture id yet, so it's hidden for Extra Lectures. */}
-                  {!queryExtraLectureId && (
                   <button
                     type="button"
                     onClick={handleStartDynamicSession}
@@ -862,7 +861,6 @@ function MarkAttendanceContent() {
                     <QrCode style={{ width: '13px', height: '13px', color: '#FF5500' }} />
                     <span>{dynamicStarting ? 'Initializing...' : 'Projector Mode (Rolling TOTP)'}</span>
                   </button>
-                  )}
                   <button
                     type="button"
                     onClick={handleCopyPreviousLecture}
