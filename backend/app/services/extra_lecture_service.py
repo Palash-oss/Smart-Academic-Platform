@@ -10,7 +10,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -196,6 +196,8 @@ class ExtraLectureService:
         if data.end_time not in ends or HOUR_BOUNDARIES.index(data.end_time) <= HOUR_BOUNDARIES.index(data.start_time):
             raise ExtraLectureError("The end time must be a later hour boundary, no later than 17:30.")
 
+        await self._reject_clashes(faculty, data)
+
         el = ExtraLecture(
             academic_term=data.academic_term,
             faculty_id=faculty.id,
@@ -211,6 +213,41 @@ class ExtraLectureService:
         self.db.add(el)
         await self.db.commit()
         return to_out(await self._get(el.id))
+
+    async def _reject_clashes(self, faculty: User, data: ExtraLectureCreate) -> None:
+        """Block creation when a SCHEDULED Extra Lecture on that date overlaps the requested hours.
+
+        Touching ranges (one ends when the other starts) don't overlap. CANCELLED lectures are ignored.
+        The teacher clash is reported before the Division clash.
+        """
+        stmt = (
+            select(ExtraLecture)
+            .where(
+                ExtraLecture.academic_term == data.academic_term,
+                ExtraLecture.lecture_date == data.lecture_date,
+                ExtraLecture.status == "SCHEDULED",
+                ExtraLecture.start_time < data.end_time,
+                ExtraLecture.end_time > data.start_time,
+                or_(ExtraLecture.faculty_id == faculty.id, ExtraLecture.division_id == data.division_id),
+            )
+            .options(*_load_options())
+            .order_by(ExtraLecture.start_time)
+        )
+        clashes = list((await self.db.execute(stmt)).scalars().all())
+        mine = next((c for c in clashes if c.faculty_id == faculty.id), None)
+        if mine:
+            raise ExtraLectureError(
+                f"You already have an Extra Lecture for {mine.offering.course.name} "
+                f"({mine.start_time}–{mine.end_time}) for COMP-{mine.division.name} on that date.",
+                409,
+            )
+        if clashes:
+            other = clashes[0]
+            raise ExtraLectureError(
+                f"COMP-{other.division.name} already has an Extra Lecture for {other.offering.course.name} "
+                f"({other.start_time}–{other.end_time}) with {other.faculty.full_name} on that date.",
+                409,
+            )
 
     # ------------------------------------------------------------------- cancel
     async def cancel(self, user: User, extra_lecture_id: uuid.UUID) -> ExtraLectureOut:

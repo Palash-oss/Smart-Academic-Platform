@@ -4,11 +4,11 @@
 
 **Blocked by:** 03 (A faculty member cancels an Extra Lecture)
 
-**Status:** ready-for-agent
+**Status:** done (manual UI check pending)
 
-- [ ] Create is rejected when the same faculty member has a SCHEDULED Extra Lecture on that date whose time range overlaps. The message names the conflicting subject, time and Division.
-- [ ] Create is rejected when the same Division has a SCHEDULED Extra Lecture (by any faculty member) on that date whose time range overlaps. The message names the conflicting subject, time and faculty member.
-- [ ] Lectures that touch but don't overlap (e.g. 13:30–14:30 and 14:30–15:30) are allowed.
-- [ ] CANCELLED Extra Lectures are ignored, so creating over a cancelled lecture's time succeeds.
-- [ ] The form shows the clash message inline.
-- [ ] API tests cover the teacher clash, the Division clash, touching ranges, and creating over a cancelled lecture. Tests live in their own file and use the Extra Lecture factory.
+- [x] Create is rejected when the same faculty member has a SCHEDULED Extra Lecture on that date whose time range overlaps. The message names the conflicting subject, time and Division.
+- [x] Create is rejected when the same Division has a SCHEDULED Extra Lecture (by any faculty member) on that date whose time range overlaps. The message names the conflicting subject, time and faculty member.
+- [x] Lectures that touch but don't overlap (e.g. 13:30–14:30 and 14:30–15:30) are allowed.
+- [x] CANCELLED Extra Lectures are ignored, so creating over a cancelled lecture's time succeeds.
+- [x] The form shows the clash message inline.
+- [x] API tests cover the teacher clash, the Division clash, touching ranges, and creating over a cancelled lecture. Tests live in their own file and use the Extra Lecture factory.
