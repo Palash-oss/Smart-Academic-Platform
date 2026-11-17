@@ -4,11 +4,11 @@
 
 **Blocked by:** 03 (A faculty member cancels an Extra Lecture)
 
-**Status:** ready-for-agent
+**Status:** done (manual UI check pending)
 
-- [ ] The student timetable response includes an `extra_lectures` list for the student's own Division only, from the start of the current week onward, using the shared Extra Lecture response type.
-- [ ] Extra Lectures in the current week are placed in the grid through the shared grid-placement helper from ticket 02. Only the student timetable builder changes, not the helper.
-- [ ] Cancelled Extra Lectures are included, with their status.
-- [ ] The UI shows Extra Lectures in the grid labelled "Extra" with the date, plus an Upcoming list. Cancelled ones are struck through and labelled "Cancelled".
-- [ ] API tests: a student in Division A sees A's Extra Lectures and not B's, and a cancelled lecture appears with CANCELLED status. Tests live in their own file and use the Extra Lecture factory.
+- [x] The student timetable response includes an `extra_lectures` list for the student's own Division only, from the start of the current week onward, using the shared Extra Lecture response type.
+- [x] Extra Lectures in the current week are placed in the grid through the shared grid-placement helper from ticket 02. Only the student timetable builder changes, not the helper.
+- [x] Cancelled Extra Lectures are included, with their status.
+- [x] The UI shows Extra Lectures in the grid labelled "Extra" with the date, plus an Upcoming list. Cancelled ones are struck through and labelled "Cancelled".
+- [x] API tests: a student in Division A sees A's Extra Lectures and not B's, and a cancelled lecture appears with CANCELLED status. Tests live in their own file and use the Extra Lecture factory.
 - [ ] Manually verified in the running app.

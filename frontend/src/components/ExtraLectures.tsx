@@ -256,9 +256,12 @@ export function AddExtraLectureButton({ onClick }: { onClick: () => void }) {
 export function UpcomingExtraLectures({
   lectures,
   onCancelled,
+  readOnly = false,
 }: {
   lectures: ExtraLecture[];
   onCancelled?: (lecture: ExtraLecture) => void;
+  /** Student view: no actions, and the faculty member is shown. */
+  readOnly?: boolean;
 }) {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -301,13 +304,13 @@ export function UpcomingExtraLectures({
                 <strong style={{ fontSize: '13px', textDecoration: cancelled ? 'line-through' : 'none' }}>
                   {el.subject_name} ({el.subject_code})
                 </strong>
-                <span style={{ fontSize: '12px', color: '#374151' }}>{el.division_name}</span>
+                <span style={{ fontSize: '12px', color: '#374151' }}>{readOnly ? el.faculty_name : el.division_name}</span>
                 <span style={{ fontSize: '12px', color: '#374151' }}>
                   {formatExtraDate(el.date)} · {el.start_time}–{el.end_time} ({el.hours}h)
                 </span>
                 <span style={{ fontSize: '12px', color: '#6B7280' }}>📍 {el.room_number}</span>
                 {cancelled && <span style={{ fontSize: '11px', fontWeight: 700, color: '#B91C1C' }}>Cancelled</span>}
-                {!cancelled && el.status === 'SCHEDULED' && el.date >= localIsoDate() && (
+                {!readOnly && !cancelled && el.status === 'SCHEDULED' && el.date >= localIsoDate() && (
                   <button
                     type="button"
                     onClick={() => cancel(el)}

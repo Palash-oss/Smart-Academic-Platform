@@ -192,6 +192,7 @@ class StudentTimetableResponse(BaseModel):
     days: List[str]
     schedule: Dict[str, List[TimetableCell]]
     today_schedule: List[PersonalizedSlotItem] = Field(default_factory=list)
+    extra_lectures: List[ExtraLectureOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

@@ -1453,6 +1453,13 @@ class TimetableService:
 
             weekly_schedule[day] = row_cells
 
+        extra_lectures = []
+        if div_id:
+            extra_lectures = await ExtraLectureService(self.db).list_for_division(
+                div_id, academic_term, week_start()
+            )
+            place_extra_lectures(weekly_schedule, extra_lectures, week_start())
+
         return StudentTimetableResponse(
             student_id=str(student_user.id),
             student_name=student_user.full_name,
@@ -1468,4 +1475,5 @@ class TimetableService:
             days=DAYS_OF_WEEK,
             schedule=weekly_schedule,
             today_schedule=today_list,
+            extra_lectures=extra_lectures,
         )

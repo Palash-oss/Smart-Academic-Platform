@@ -153,6 +153,7 @@ export interface StudentTimetableResponse {
   days: string[];
   schedule: Record<string, TimetableCell[]>;
   today_schedule: PersonalizedSlotItem[];
+  extra_lectures: ExtraLecture[];
 }
 
 export interface TimetableStatusResponse {
