@@ -101,6 +101,13 @@ export interface ExtraLecture {
   hours: number;
 }
 
+export interface ExtraLectureSlotPreset {
+  start_time: string;
+  end_time: string;
+  label: string;
+  period: 'MORNING' | 'AFTERNOON';
+}
+
 export interface ExtraLectureFormOptions {
   divisions: Array<{
     division_id: string;
@@ -110,6 +117,7 @@ export interface ExtraLectureFormOptions {
   }>;
   hour_boundaries: string[];
   upcoming_saturdays: string[];
+  slot_presets?: ExtraLectureSlotPreset[];
 }
 
 export interface ExtraLectureCreatePayload {

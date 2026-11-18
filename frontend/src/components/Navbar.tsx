@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getStoredUser, clearAuthSession, fetchWithAuth, User } from '@/lib/api';
-import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar, Bell, Sparkles, AlertTriangle, ShieldCheck, ChevronRight } from 'lucide-react';
+import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar, Bell, Sparkles, AlertTriangle, ShieldCheck, ChevronRight, Award } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -182,6 +182,10 @@ export const Navbar: React.FC = () => {
                   <Calendar className="w-3.5 h-3.5" />
                   <span>My Timetable</span>
                 </Link>
+                <Link href="/grades" className={navLinkClass('/grades')}>
+                  <Award className="w-3.5 h-3.5" />
+                  <span>My Grades</span>
+                </Link>
               </>
             )}
 
@@ -205,6 +209,11 @@ export const Navbar: React.FC = () => {
                 <Link href="/faculty/timetable" className={navLinkClass('/faculty/timetable')}>
                   <Calendar className="w-3.5 h-3.5" />
                   <span>My Timetable</span>
+                </Link>
+
+                <Link href="/faculty/exams" className={navLinkClass('/faculty/exams')}>
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Gradebook & OBE</span>
                 </Link>
               </>
             )}
@@ -372,6 +381,10 @@ export const Navbar: React.FC = () => {
                   <Calendar className="w-4 h-4 text-[#FF5500]" />
                   <span>My Timetable</span>
                 </Link>
+                <Link href="/grades" className={mobileNavLinkClass('/grades')}>
+                  <Award className="w-4 h-4 text-[#FF5500]" />
+                  <span>My Grades</span>
+                </Link>
               </>
             )}
 
@@ -395,6 +408,11 @@ export const Navbar: React.FC = () => {
                 <Link href="/faculty/timetable" className={mobileNavLinkClass('/faculty/timetable')}>
                   <Calendar className="w-4 h-4 text-[#FF5500]" />
                   <span>My Timetable</span>
+                </Link>
+
+                <Link href="/faculty/exams" className={mobileNavLinkClass('/faculty/exams')}>
+                  <Award className="w-4 h-4 text-[#FF5500]" />
+                  <span>Gradebook & OBE</span>
                 </Link>
               </>
             )}

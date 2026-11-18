@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Text,
     JSON,
+    Float,
     CheckConstraint,
     UniqueConstraint,
 )
@@ -532,3 +533,226 @@ class AttendanceCondonation(Base):
 
     student = relationship("User", foreign_keys=[student_id])
     approver = relationship("User", foreign_keys=[approved_by])
+
+
+# ---------------------------------------------------------------------------
+# Exam Cell & Continuous Assessment (Autonomous Scheme FRCRCE-3-26)
+# ---------------------------------------------------------------------------
+
+class CourseOutcome(Base):
+    """
+    Syllabus Course Outcome (CO1 to CO6) defined in curriculum.
+    """
+    __tablename__ = "course_outcomes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    co_code: Mapped[str] = mapped_column(String(20), nullable=False)   # e.g., 'CO1', 'CO2'
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    bloom_level: Mapped[str] = mapped_column(String(50), default="Apply")  # 'Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create'
+
+    course = relationship("Course", backref="outcomes")
+
+    __table_args__ = (
+        UniqueConstraint("course_id", "co_code", name="uq_course_outcome_code"),
+    )
+
+
+class CourseCOPOMapping(Base):
+    """
+    CO to PO / PSO Articulation Matrix entry (weights: 3-High, 2-Medium, 1-Low).
+    """
+    __tablename__ = "course_co_po_mappings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    co_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    po_code: Mapped[str] = mapped_column(String(20), nullable=False)   # 'PO1'..'PO12', 'PSO1', 'PSO2'
+    weight: Mapped[int] = mapped_column(Integer, nullable=False, default=2)  # 1, 2, or 3
+
+    course = relationship("Course", backref="co_po_mappings")
+
+    __table_args__ = (
+        UniqueConstraint("course_id", "co_code", "po_code", name="uq_course_co_po"),
+    )
+
+
+class ExamEvaluationTemplate(Base):
+    """
+    Assessment blueprint for a course offering created by the teaching faculty.
+    """
+    __tablename__ = "exam_evaluation_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    academic_term: Mapped[str] = mapped_column(String(30), nullable=False)
+    title: Mapped[str] = mapped_column(String(150), default="Standard Course Evaluation Scheme")
+    status: Mapped[str] = mapped_column(String(20), default="ACTIVE")  # 'DRAFT', 'ACTIVE', 'LOCKED'
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    offering = relationship("CourseOffering")
+    faculty = relationship("User")
+    components = relationship("ExamComponent", back_populates="template", cascade="all, delete-orphan", order_by="ExamComponent.order_index")
+
+
+class ExamComponent(Base):
+    """
+    Top-level evaluation component: THEORY_ISE (20), THEORY_MSE (30), THEORY_ESE (50), LAB_ISE (50/100), TUT_ISE (50).
+    """
+    __tablename__ = "exam_components"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("exam_evaluation_templates.id", ondelete="CASCADE"), nullable=False
+    )
+    component_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'THEORY_ISE', 'THEORY_MSE', 'THEORY_ESE', 'LAB_ISE', 'TUT_ISE'
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    max_marks: Mapped[float] = mapped_column(Float, nullable=False, default=20.0)
+    passing_marks: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
+    weight_percentage: Mapped[float] = mapped_column(Float, nullable=False, default=20.0)
+    formula_type: Mapped[str] = mapped_column(String(30), default="SUM")    # 'SUM', 'SCALED', 'BEST_OF_N'
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    template = relationship("ExamEvaluationTemplate", back_populates="components")
+    sub_components = relationship("ExamSubComponent", back_populates="component", cascade="all, delete-orphan", order_by="ExamSubComponent.order_index")
+
+
+class ExamSubComponent(Base):
+    """
+    Individual question or sub-activity within an evaluation component (e.g. 'Class Test 1', 'Activity / Presentation', 'Q1a').
+    """
+    __tablename__ = "exam_sub_components"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("exam_components.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
+    sub_type: Mapped[str] = mapped_column(String(50), default="TEST")       # 'TEST', 'ACTIVITY', 'ASSIGNMENT', 'QUIZ', 'PRESENTATION', 'EXPERIMENT', 'TUTORIAL'
+    max_marks: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)
+    mapped_cos: Mapped[Optional[list]] = mapped_column(JSON, default=list)  # list of CO codes, e.g. ["CO1", "CO2"]
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    component = relationship("ExamComponent", back_populates="sub_components")
+    student_marks = relationship("StudentMarksRecord", back_populates="sub_component", cascade="all, delete-orphan")
+
+
+class StudentMarksRecord(Base):
+    """
+    Student score on an individual question / sub-component.
+    """
+    __tablename__ = "student_marks_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False
+    )
+    sub_component_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("exam_sub_components.id", ondelete="CASCADE"), nullable=False
+    )
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    marks_obtained: Mapped[float] = mapped_column(Float, default=0.0)
+    is_absent: Mapped[bool] = mapped_column(Boolean, default=False)
+    remarks: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    entered_by_faculty_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    offering = relationship("CourseOffering")
+    sub_component = relationship("ExamSubComponent", back_populates="student_marks")
+    student = relationship("User", foreign_keys=[student_id])
+    entered_by = relationship("User", foreign_keys=[entered_by_faculty_id])
+
+    __table_args__ = (
+        UniqueConstraint("sub_component_id", "student_id", name="uq_student_sub_component_marks"),
+    )
+
+
+class ExamLockPeriod(Base):
+    """
+    Lock & Deadline governance per offering component.
+    """
+    __tablename__ = "exam_lock_periods"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False
+    )
+    component_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'THEORY_ISE', 'THEORY_MSE', 'THEORY_ESE', 'LAB_ISE', 'TUT_ISE', 'ALL'
+    submission_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    offering = relationship("CourseOffering")
+    locked_by = relationship("User", foreign_keys=[locked_by_user_id])
+
+    __table_args__ = (
+        UniqueConstraint("offering_id", "component_type", name="uq_offering_component_lock"),
+    )
+
+
+class ExamUnlockRequest(Base):
+    """
+    Formal faculty request to unlock marks after a deadline for corrections with audit trail.
+    """
+    __tablename__ = "exam_unlock_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False
+    )
+    component_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    requested_by_faculty_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")   # 'PENDING', 'APPROVED', 'REJECTED'
+    approved_by_admin_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    unlock_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    offering = relationship("CourseOffering")
+    requested_by = relationship("User", foreign_keys=[requested_by_faculty_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_admin_id])
+
+
+class MarksAuditLog(Base):
+    """
+    Immutable audit log for every change made to student marks.
+    """
+    __tablename__ = "marks_audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_marks_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("student_marks_records.id", ondelete="CASCADE"), nullable=False
+    )
+    old_marks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    new_marks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    old_is_absent: Mapped[bool] = mapped_column(Boolean, default=False)
+    new_is_absent: Mapped[bool] = mapped_column(Boolean, default=False)
+    changed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    changed_by = relationship("User", foreign_keys=[changed_by_user_id])

@@ -823,22 +823,19 @@ class TimetableService:
                     time_idx += 1
                     continue
 
-                # 2. Check for Saturday Mini-Project (spans entire morning)
-                if day == "Saturday" and slot_def.start_time == "08:45":
+                # 2. Check for Saturday Mini-Project (spans morning)
+                if day == "Saturday" and time_idx < 6:
                     row_cells.append(
                         TimetableCell(
                             day_of_week=day,
-                            start_time="08:45",
-                            end_time="13:00",
+                            start_time=slot_def.start_time,
+                            end_time=slot_def.end_time,
                             slot_type="PROJECT",
                             custom_title="Mini Project / Project-Based Learning",
-                            col_span=5,
+                            col_span=1,
                             room_number=div_room,
                         )
                     )
-                    time_idx = 6  # skip to 13:30
-                    continue
-                elif day == "Saturday" and time_idx < 6:
                     time_idx += 1
                     continue
 
@@ -1387,21 +1384,19 @@ class TimetableService:
                     time_idx += 1
                     continue
 
-                if day == "Saturday" and slot_def.start_time == "08:45":
+                # Saturday morning slots
+                if day == "Saturday" and time_idx < 6:
                     row_cells.append(
                         TimetableCell(
                             day_of_week=day,
-                            start_time="08:45",
-                            end_time="13:00",
+                            start_time=slot_def.start_time,
+                            end_time=slot_def.end_time,
                             slot_type="PROJECT",
                             custom_title="Mini Project / Project-Based Learning",
-                            col_span=5,
+                            col_span=1,
                             room_number=f"Room {div_name}",
                         )
                     )
-                    time_idx = 6
-                    continue
-                elif day == "Saturday" and time_idx < 6:
                     time_idx += 1
                     continue
 

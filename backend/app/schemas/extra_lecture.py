@@ -56,7 +56,15 @@ class ExtraLectureDivisionOption(BaseModel):
     subjects: List[ExtraLectureSubjectOption]
 
 
+class ExtraLectureSlotPreset(BaseModel):
+    start_time: str
+    end_time: str
+    label: str
+    period: str  # "MORNING" | "AFTERNOON"
+
+
 class ExtraLectureFormOptions(BaseModel):
     divisions: List[ExtraLectureDivisionOption]
     hour_boundaries: List[str]
     upcoming_saturdays: List[date_type]
+    slot_presets: List[ExtraLectureSlotPreset] = Field(default_factory=list)

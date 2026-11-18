@@ -23,10 +23,23 @@ from app.schemas.extra_lecture import (
     ExtraLectureNotice,
     ExtraLectureOut,
     ExtraLectureSubjectOption,
+    ExtraLectureSlotPreset,
 )
 from app.schemas.timetable import TimetableCell
 
 HOUR_BOUNDARIES = ["13:30", "14:30", "15:30", "16:30", "17:30"]
+
+PRESET_SLOTS: List[ExtraLectureSlotPreset] = [
+    ExtraLectureSlotPreset(start_time="08:45", end_time="09:45", label="08:45–09:45", period="MORNING"),
+    ExtraLectureSlotPreset(start_time="09:45", end_time="10:45", label="09:45–10:45", period="MORNING"),
+    ExtraLectureSlotPreset(start_time="11:00", end_time="12:00", label="11:00–12:00", period="MORNING"),
+    ExtraLectureSlotPreset(start_time="12:00", end_time="13:00", label="12:00–13:00", period="MORNING"),
+    ExtraLectureSlotPreset(start_time="13:30", end_time="14:30", label="13:30–14:30", period="AFTERNOON"),
+    ExtraLectureSlotPreset(start_time="14:30", end_time="15:30", label="14:30–15:30", period="AFTERNOON"),
+    ExtraLectureSlotPreset(start_time="15:30", end_time="16:30", label="15:30–16:30", period="AFTERNOON"),
+    ExtraLectureSlotPreset(start_time="16:30", end_time="17:30", label="16:30–17:30", period="AFTERNOON"),
+]
+
 SATURDAY = 5
 DEFAULT_ROOM = "703"
 UPCOMING_SATURDAYS = 12
@@ -55,6 +68,16 @@ def _load_options():
     )
 
 
+def _calculate_hours(start_time: str, end_time: str) -> int:
+    try:
+        sh, sm = map(int, start_time.split(":"))
+        eh, em = map(int, end_time.split(":"))
+        diff_mins = (eh * 60 + em) - (sh * 60 + sm)
+        return max(1, round(diff_mins / 60.0))
+    except Exception:
+        return 1
+
+
 def to_out(el: ExtraLecture) -> ExtraLectureOut:
     course = el.offering.course
     return ExtraLectureOut(
@@ -69,7 +92,7 @@ def to_out(el: ExtraLecture) -> ExtraLectureOut:
         room_number=el.room_number,
         status=el.status,
         attendance_marked=el.attendance_marked,
-        hours=HOUR_BOUNDARIES.index(el.end_time) - HOUR_BOUNDARIES.index(el.start_time),
+        hours=_calculate_hours(el.start_time, el.end_time),
     )
 
 
@@ -78,7 +101,7 @@ def place_extra_lectures(
     extra_lectures: List[ExtraLectureOut],
     current_week_start: Optional[date] = None,
 ) -> Dict[str, List[TimetableCell]]:
-    """Place Extra Lectures that fall in the current week into the Saturday-afternoon cells of ``schedule``.
+    """Place Extra Lectures that fall in the current week into the Saturday cells of ``schedule``.
 
     Each Extra Lecture replaces the cells covering its hours with one cell spanning them. Lectures outside the
     current week are left out (they belong in the Upcoming list). Mutates and returns ``schedule``.
@@ -93,17 +116,22 @@ def place_extra_lectures(
             continue
         first = next((i for i, c in enumerate(row) if c.start_time == el.start_time), None)
         if first is None:
+            first = next((i for i, c in enumerate(row) if c.end_time > el.start_time), None)
+        if first is None:
             continue
         last = next((i for i, c in enumerate(row) if c.end_time == el.end_time), None)
+        if last is None:
+            last = next((i for i, c in enumerate(row) if c.start_time < el.end_time), None)
         if last is None or last < first:
             continue
+        span = sum(c.col_span for c in row[first : last + 1])
         row[first : last + 1] = [
             TimetableCell(
                 day_of_week="Saturday",
                 start_time=el.start_time,
                 end_time=el.end_time,
                 slot_type="EXTRA",
-                col_span=el.hours,
+                col_span=span,
                 room_number=el.room_number,
                 course_code=el.subject_code,
                 course_name=el.subject_name,
@@ -172,6 +200,7 @@ class ExtraLectureService:
             divisions=list(divisions.values()),
             hour_boundaries=HOUR_BOUNDARIES,
             upcoming_saturdays=[first + timedelta(weeks=i) for i in range(UPCOMING_SATURDAYS)],
+            slot_presets=PRESET_SLOTS,
         )
 
     # ------------------------------------------------------------------- create
@@ -191,11 +220,16 @@ class ExtraLectureService:
         if data.lecture_date <= today():
             raise ExtraLectureError("The date must be after today.")
 
-        starts, ends = HOUR_BOUNDARIES[:-1], HOUR_BOUNDARIES[1:]
-        if data.start_time not in starts:
-            raise ExtraLectureError(f"The start time must be one of {', '.join(starts)}.")
-        if data.end_time not in ends or HOUR_BOUNDARIES.index(data.end_time) <= HOUR_BOUNDARIES.index(data.start_time):
-            raise ExtraLectureError("The end time must be a later hour boundary, no later than 17:30.")
+        import re
+        time_regex = re.compile(r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
+        if not time_regex.match(data.start_time) or not time_regex.match(data.end_time):
+            raise ExtraLectureError("Start time and end time must be in HH:MM format.")
+
+        if data.start_time >= data.end_time:
+            raise ExtraLectureError("The end time must be later than the start time.")
+
+        if data.start_time < "08:00" or data.end_time > "18:30":
+            raise ExtraLectureError("Extra lectures must be scheduled between 08:00 and 18:30.")
 
         await self._reject_clashes(faculty, data)
 
