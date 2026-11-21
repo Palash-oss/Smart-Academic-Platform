@@ -291,11 +291,23 @@ function ElectiveSelectionContent() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to submit elective choices');
+        let errDetail = 'Failed to submit elective choices';
+        try {
+          const errData = await res.json();
+          errDetail = errData.detail || errDetail;
+        } catch {
+          const rawText = await res.text().catch(() => '');
+          errDetail = rawText || `Server error (${res.status})`;
+        }
+        throw new Error(errDetail);
       }
 
-      const resData = await res.json();
+      let resData: any = {};
+      try {
+        resData = await res.json();
+      } catch {
+        // Fallback if response is empty
+      }
       setSubmitSuccess(resData.message || 'Your elective preferences have been successfully submitted!');
       await fetchData();
     } catch (err: any) {

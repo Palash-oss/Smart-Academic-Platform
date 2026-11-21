@@ -546,8 +546,6 @@ async def submit_elective_choices(
 
     await db.commit()
     invalidate_student_cache(str(current_user.id))
-
-    invalidate_student_cache(student_id)
     return {
         "status": "success",
         "student_id": str(current_user.id),
@@ -750,8 +748,6 @@ async def reset_student_choices(
 
     del_res = await db.execute(stmt)
     await db.commit()
-    invalidate_student_cache(str(current_user.id))
-
     invalidate_student_cache(student_id)
     return {
         "status": "success",
