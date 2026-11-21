@@ -1,4 +1,5 @@
 import uuid
+import re
 from typing import Dict, Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -112,7 +113,7 @@ async def run_attendance_agent(
         if HAS_GEMINI and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
             try:
                 model = genai.GenerativeModel(settings.GEMINI_MODEL)
-                res = model.generate_content(full_prompt)
+                res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
                 response_text = res.text
             except Exception as e:
                 print(f"[AttendanceAgent] Gemini call failed: {e}")
@@ -193,13 +194,36 @@ async def run_attendance_agent(
         if HAS_GEMINI and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
             try:
                 model = genai.GenerativeModel(settings.GEMINI_MODEL)
-                res = model.generate_content(full_prompt)
+                res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
                 response_text = res.text
             except Exception as e:
                 print(f"[AttendanceAgent] Gemini call failed: {e}")
 
         if not response_text:
-            if "which" in query_lower or "sit" in query_lower or "more" in query_lower or "need" in query_lower:
+            matched_subject = None
+            stop_words = {"what", "is", "my", "attendance", "status", "in", "for", "the", "subject", "course", "classes", "percentage", "of"}
+            query_words = [w for w in re.sub(r'[^a-zA-Z0-9\s]', '', query_lower).split() if w not in stop_words and len(w) > 2]
+            if query_words:
+                for s in subjects:
+                    s_name_lower = s["subject"].lower()
+                    if any(w in s_name_lower for w in query_words):
+                        matched_subject = s
+                        break
+
+            if matched_subject:
+                status_desc = "[!] AT RISK (<75%)" if matched_subject["is_at_risk"] else "[OK] GOOD STANDING"
+                action_text = ""
+                if matched_subject["is_at_risk"]:
+                    action_text = f"\n\n[!] Action Required:\nYou need to attend the next {matched_subject['classes_needed_to_clear_risk']} consecutive classes to reach the required 75% attendance threshold."
+                response_text = (
+                    f"Here is your attendance status for {matched_subject['subject']}, {attendance_data['student_name']}:\n\n"
+                    f"• Attended: {matched_subject['attended_classes']} out of {matched_subject['total_classes']} classes\n"
+                    f"• Attendance Percentage: {matched_subject['percentage']}%\n"
+                    f"• Current Standing: {status_desc}"
+                    f"{action_text}\n\n"
+                    f"Overall Semester Attendance: {overall_pct}% ({'[!] At Risk' if overall_risk else '[OK] Good Standing'})."
+                )
+            elif "which" in query_lower or "sit" in query_lower or "more" in query_lower or "need" in query_lower:
                 if at_risk_subjects:
                     risk_lines = "\n\n".join([
                         f"• {s['subject']}:\n"

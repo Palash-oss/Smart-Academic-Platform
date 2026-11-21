@@ -67,7 +67,7 @@ class Settings(BaseSettings):
 
     # LLMs (Primary: Gemini, Backup: Grok)
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     GROK_API_KEY: Optional[str] = None
     GROK_MODEL: str = "grok-2"
 

@@ -21,6 +21,7 @@ class RoutingEvent(BaseModel):
 class TokenEvent(BaseModel):
     type: Literal["token"] = "token"
     content: str
+    token: Optional[str] = None
 
 
 class DoneEvent(BaseModel):
