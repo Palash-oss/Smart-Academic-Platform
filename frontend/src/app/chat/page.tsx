@@ -97,7 +97,12 @@ export default function ChatPage() {
       const response = await fetch(getApiUrl('/api/chat/stream'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
-        body: JSON.stringify({ message: query }),
+        body: JSON.stringify({
+          message: query,
+          history: messages
+            .filter((m) => m.id !== 'welcome-msg' && m.content)
+            .map((m) => ({ role: m.role, content: m.content })),
+        }),
       });
 
       if (!response.ok) {
@@ -135,18 +140,26 @@ export default function ChatPage() {
               setActiveAgent(parsed.agent);
               setRoutingReasoning(parsed.reasoning || null);
             } else if (parsed.type === 'token') {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, content: msg.content + parsed.token, agent: detectedAgent }
-                    : msg
-                )
-              );
+              const textChunk = (parsed.token !== undefined && parsed.token !== null)
+                ? String(parsed.token)
+                : (parsed.content !== undefined && parsed.content !== null)
+                  ? String(parsed.content)
+                  : '';
+              if (textChunk) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: msg.content + textChunk, agent: detectedAgent }
+                      : msg
+                  )
+                );
+              }
             } else if (parsed.type === 'error') {
+              const errorMsg = parsed.error || parsed.detail || 'An unexpected error occurred.';
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: parsed.error, agent: detectedAgent }
+                    ? { ...msg, content: errorMsg, agent: detectedAgent }
                     : msg
                 )
               );

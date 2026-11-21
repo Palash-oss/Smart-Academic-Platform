@@ -106,7 +106,7 @@ async def run_student_support_agent(
     if HAS_GEMINI and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
         try:
             model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            res = model.generate_content(full_prompt)
+            res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
             response_text = res.text
         except Exception as e:
             print(f"[StudentSupportAgent] Gemini call failed: {e}")

@@ -57,7 +57,7 @@ def classify_query_intent(user_query: str) -> str:
                 f"Query: {user_query}\n"
                 "Respond with ONLY 'attendance' or 'policy'."
             )
-            res = model.generate_content(prompt)
+            res = model.generate_content(prompt, request_options={"timeout": 3.0})
             classification = res.text.strip().lower()
             if "policy" in classification:
                 return "policy"
@@ -117,11 +117,11 @@ async def stream_agent_execution(
     # Stream token events
     if selected_agent == "attendance":
         async for token_chunk in stream_attendance_agent(state, db):
-            token_data = {"type": "token", "content": token_chunk}
+            token_data = {"type": "token", "content": token_chunk, "token": token_chunk}
             yield f"data: {json.dumps(token_data)}\n\n"
     else:
         async for token_chunk in stream_student_support_agent(state, db):
-            token_data = {"type": "token", "content": token_chunk}
+            token_data = {"type": "token", "content": token_chunk, "token": token_chunk}
             yield f"data: {json.dumps(token_data)}\n\n"
 
     done_data = {
