@@ -30,6 +30,7 @@ from app.db.models import (
     TimetableSlot,
     ClassSwapRequest,
 )
+from app.services.extra_lecture_service import ExtraLectureService, place_extra_lectures, week_start
 from app.schemas.timetable import (
     TimeSlotDef,
     ParallelBatchItem,
@@ -822,22 +823,19 @@ class TimetableService:
                     time_idx += 1
                     continue
 
-                # 2. Check for Saturday Mini-Project (spans entire morning)
-                if day == "Saturday" and slot_def.start_time == "08:45":
+                # 2. Check for Saturday Mini-Project (spans morning)
+                if day == "Saturday" and time_idx < 6:
                     row_cells.append(
                         TimetableCell(
                             day_of_week=day,
-                            start_time="08:45",
-                            end_time="13:00",
+                            start_time=slot_def.start_time,
+                            end_time=slot_def.end_time,
                             slot_type="PROJECT",
                             custom_title="Mini Project / Project-Based Learning",
-                            col_span=5,
+                            col_span=1,
                             room_number=div_room,
                         )
                     )
-                    time_idx = 6  # skip to 13:30
-                    continue
-                elif day == "Saturday" and time_idx < 6:
                     time_idx += 1
                     continue
 
@@ -967,6 +965,11 @@ class TimetableService:
         subj_legend_list = sorted(list(subject_legend_dict.values()), key=lambda x: x.abbr)
         fac_legend_list = sorted(list(faculty_legend_dict.values()), key=lambda x: x.abbr)
 
+        extra_lectures = await ExtraLectureService(self.db).list_for_division(
+            div.id, academic_term, week_start()
+        )
+        place_extra_lectures(grid, extra_lectures, week_start())
+
         return MasterTimetableResponse(
             header=header,
             time_slots=TIME_SLOT_DEFS,
@@ -974,6 +977,7 @@ class TimetableService:
             grid=grid,
             subject_legend=subj_legend_list,
             faculty_legend=fac_legend_list,
+            extra_lectures=extra_lectures,
         )
 
     # =========================================================================
@@ -1172,6 +1176,11 @@ class TimetableService:
 
             weekly_schedule[day] = row_cells
 
+        extra_lectures = await ExtraLectureService(self.db).list_for_faculty(
+            faculty_user.id, academic_term, week_start()
+        )
+        place_extra_lectures(weekly_schedule, extra_lectures, week_start())
+
         fac_initials = get_faculty_initials(faculty_user.full_name)
 
         return FacultyTimetableResponse(
@@ -1188,6 +1197,7 @@ class TimetableService:
             days=DAYS_OF_WEEK,
             schedule=weekly_schedule,
             upcoming_lectures=upcoming_list,
+            extra_lectures=extra_lectures,
         )
 
     # =========================================================================
@@ -1374,21 +1384,19 @@ class TimetableService:
                     time_idx += 1
                     continue
 
-                if day == "Saturday" and slot_def.start_time == "08:45":
+                # Saturday morning slots
+                if day == "Saturday" and time_idx < 6:
                     row_cells.append(
                         TimetableCell(
                             day_of_week=day,
-                            start_time="08:45",
-                            end_time="13:00",
+                            start_time=slot_def.start_time,
+                            end_time=slot_def.end_time,
                             slot_type="PROJECT",
                             custom_title="Mini Project / Project-Based Learning",
-                            col_span=5,
+                            col_span=1,
                             room_number=f"Room {div_name}",
                         )
                     )
-                    time_idx = 6
-                    continue
-                elif day == "Saturday" and time_idx < 6:
                     time_idx += 1
                     continue
 
@@ -1446,6 +1454,13 @@ class TimetableService:
 
             weekly_schedule[day] = row_cells
 
+        extra_lectures = []
+        if div_id:
+            extra_lectures = await ExtraLectureService(self.db).list_for_division(
+                div_id, academic_term, week_start()
+            )
+            place_extra_lectures(weekly_schedule, extra_lectures, week_start())
+
         return StudentTimetableResponse(
             student_id=str(student_user.id),
             student_name=student_user.full_name,
@@ -1461,4 +1476,5 @@ class TimetableService:
             days=DAYS_OF_WEEK,
             schedule=weekly_schedule,
             today_schedule=today_list,
+            extra_lectures=extra_lectures,
         )

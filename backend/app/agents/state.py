@@ -1,11 +1,11 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import Any, TypedDict
 
 
 class AgentState(TypedDict):
     user_id: str
     role: str
-    messages: List[Dict[str, str]]
-    intent: Optional[str]           # "attendance" | "policy"
-    selected_agent: Optional[str]   # "attendance" | "student_support"
-    tool_results: Optional[Dict[str, Any]]
-    final_response: Optional[str]
+    messages: list[dict[str, str]]
+    intent: str | None           # "attendance" | "policy"
+    selected_agent: str | None   # "attendance" | "student_support"
+    tool_results: dict[str, Any] | None
+    final_response: str | None

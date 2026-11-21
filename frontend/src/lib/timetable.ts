@@ -22,7 +22,7 @@ export interface TimetableCell {
   day_of_week: string;
   start_time: string;
   end_time: string;
-  slot_type: 'THEORY' | 'PRACTICAL' | 'BREAK' | 'HONORS' | 'PROJECT' | 'EMPTY';
+  slot_type: 'THEORY' | 'PRACTICAL' | 'BREAK' | 'HONORS' | 'PROJECT' | 'EMPTY' | 'EXTRA';
   col_span: number;
   room_number?: string;
   custom_title?: string;
@@ -38,6 +38,10 @@ export interface TimetableCell {
   original_faculty_name?: string;
   substitute_faculty_name?: string;
   swap_request_id?: string;
+  is_extra?: boolean;
+  extra_lecture_id?: string;
+  extra_date?: string;
+  extra_status?: 'SCHEDULED' | 'CANCELLED';
   is_parallel?: boolean;
   parallel_items?: ParallelBatchItem[];
 }
@@ -64,6 +68,7 @@ export interface MasterTimetableResponse {
   grid: Record<string, TimetableCell[]>;
   subject_legend: LegendItem[];
   faculty_legend: LegendItem[];
+  extra_lectures?: ExtraLecture[];
 }
 
 export interface PersonalizedSlotItem {
@@ -81,6 +86,50 @@ export interface PersonalizedSlotItem {
   teacher_or_student_name?: string;
 }
 
+export interface ExtraLecture {
+  id: string;
+  subject_name: string;
+  subject_code: string;
+  faculty_name: string;
+  division_name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  room_number: string;
+  status: 'SCHEDULED' | 'CANCELLED';
+  attendance_marked: boolean;
+  hours: number;
+}
+
+export interface ExtraLectureSlotPreset {
+  start_time: string;
+  end_time: string;
+  label: string;
+  period: 'MORNING' | 'AFTERNOON';
+}
+
+export interface ExtraLectureFormOptions {
+  divisions: Array<{
+    division_id: string;
+    division_name: string;
+    default_room: string;
+    subjects: Array<{ offering_id: string; subject_name: string; subject_code: string }>;
+  }>;
+  hour_boundaries: string[];
+  upcoming_saturdays: string[];
+  slot_presets?: ExtraLectureSlotPreset[];
+}
+
+export interface ExtraLectureCreatePayload {
+  academic_term: string;
+  division_id: string;
+  offering_id: string;
+  lecture_date: string;
+  start_time: string;
+  end_time: string;
+  room_number: string;
+}
+
 export interface FacultyTimetableResponse {
   faculty_id: string;
   faculty_name: string;
@@ -95,6 +144,7 @@ export interface FacultyTimetableResponse {
   days: string[];
   schedule: Record<string, TimetableCell[]>;
   upcoming_lectures: PersonalizedSlotItem[];
+  extra_lectures: ExtraLecture[];
 }
 
 export interface StudentTimetableResponse {
@@ -112,6 +162,7 @@ export interface StudentTimetableResponse {
   days: string[];
   schedule: Record<string, TimetableCell[]>;
   today_schedule: PersonalizedSlotItem[];
+  extra_lectures: ExtraLecture[];
 }
 
 export interface TimetableStatusResponse {
@@ -194,6 +245,35 @@ export async function dissolveTimetable(term: string = '2026-27-SEM5'): Promise<
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || err.message || `Failed to dissolve timetable (HTTP ${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchExtraLectureOptions(term: string = '2026-27-SEM5'): Promise<ExtraLectureFormOptions> {
+  const res = await fetchWithAuth(`/api/v1/timetable/extra-lectures/options?academic_term=${encodeURIComponent(term)}`);
+  if (!res.ok) throw new Error('Failed to load Extra Lecture options');
+  return res.json();
+}
+
+export async function createExtraLecture(payload: ExtraLectureCreatePayload): Promise<ExtraLecture> {
+  const res = await fetchWithAuth('/api/v1/timetable/extra-lectures', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const detail = Array.isArray(err.detail) ? err.detail.map((d: any) => d.msg).join('; ') : err.detail;
+    throw new Error(detail || 'Failed to create Extra Lecture');
+  }
+  return res.json();
+}
+
+export async function cancelExtraLecture(id: string): Promise<ExtraLecture> {
+  const res = await fetchWithAuth(`/api/v1/timetable/extra-lectures/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to cancel Extra Lecture');
   }
   return res.json();
 }

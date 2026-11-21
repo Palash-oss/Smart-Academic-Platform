@@ -4,6 +4,8 @@ import uuid
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
+from app.schemas.extra_lecture import ExtraLectureOut
+
 
 # ---------------------------------------------------------------------------
 # Slot & Cell Models
@@ -51,6 +53,12 @@ class TimetableCell(BaseModel):
     substitute_faculty_name: Optional[str] = None
     original_faculty_name: Optional[str] = None
     swap_request_id: Optional[str] = None
+
+    # Extra Lecture marker (one-off lecture on a calendar date)
+    is_extra: bool = False
+    extra_lecture_id: Optional[str] = None
+    extra_date: Optional[str] = None
+    extra_status: Optional[str] = None
 
     # For parallel multi-batch PRACTICAL slots (e.g., A/B/C/D running concurrently)
     is_parallel: bool = False
@@ -130,6 +138,7 @@ class MasterTimetableResponse(BaseModel):
     grid: Dict[str, List[TimetableCell]]
     subject_legend: List[LegendItem]
     faculty_legend: List[LegendItem]
+    extra_lectures: List[ExtraLectureOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +175,7 @@ class FacultyTimetableResponse(BaseModel):
     # Weekly matrix: Day -> list of cells (with assigned slots highlighted, others free)
     schedule: Dict[str, List[TimetableCell]]
     upcoming_lectures: List[PersonalizedSlotItem] = Field(default_factory=list)
+    extra_lectures: List[ExtraLectureOut] = Field(default_factory=list)
 
 
 class StudentTimetableResponse(BaseModel):
@@ -183,6 +193,7 @@ class StudentTimetableResponse(BaseModel):
     days: List[str]
     schedule: Dict[str, List[TimetableCell]]
     today_schedule: List[PersonalizedSlotItem] = Field(default_factory=list)
+    extra_lectures: List[ExtraLectureOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

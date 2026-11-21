@@ -1,10 +1,11 @@
-from typing import Dict, Any, AsyncGenerator, List, Optional
 import json
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.attendance_agent import stream_attendance_agent
 from app.agents.state import AgentState
 from app.agents.student_support_agent import stream_student_support_agent
-from app.agents.attendance_agent import stream_attendance_agent
 from app.core.config import settings
 
 try:
@@ -63,7 +64,7 @@ def classify_query_intent(user_query: str) -> str:
                 return "policy"
             elif "attendance" in classification:
                 return "attendance"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"[Supervisor] Classification LLM error: {e}")
 
     # Default Fallback
@@ -77,7 +78,7 @@ async def stream_agent_execution(
     role: str,
     user_query: str,
     db: AsyncSession,
-    history: Optional[List[Dict[str, str]]] = None
+    history: list[dict[str, str]] | None = None
 ) -> AsyncGenerator[str, None]:
     """LangGraph Supervisor Stream Orchestrator with Multi-Turn Conversation Memory:
     

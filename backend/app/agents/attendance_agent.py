@@ -1,16 +1,18 @@
-import uuid
 import re
-from typing import Dict, Any, AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.state import AgentState
-from app.db.models import User, Department
-from app.services.attendance_service import (
-    fetch_student_attendance_records,
-    fetch_all_students_faculty_overview
-)
 from app.core.config import settings
+from app.db.models import User
+from app.services.attendance_service import (
+    fetch_all_students_faculty_overview,
+    fetch_student_attendance_records,
+)
 
 try:
     import google.generativeai as genai
@@ -36,7 +38,7 @@ def clean_text_formatting(text: str) -> str:
 async def run_attendance_agent(
     state: AgentState,
     db: AsyncSession
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Attendance Agent: Computes attendance percentages & risk flags in Python, formatting clean responses without asterisks, dollars, or backticks."""
     user_id_str = state.get("user_id")
     role = state.get("role", "STUDENT")
@@ -46,25 +48,28 @@ async def run_attendance_agent(
 
     try:
         user_uuid = uuid.UUID(user_id_str)
-    except Exception:
+    except (TypeError, ValueError, AttributeError):
         user_uuid = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
     user_stmt = select(User).where(User.id == user_uuid)
     user_res = await db.execute(user_stmt)
     user_obj = user_res.scalar_one_or_none()
 
-    if user_obj and user_obj.role == "FACULTY":
+    is_faculty = (user_obj and user_obj.role == "FACULTY") or role == "FACULTY"
+    if is_faculty:
         # ----------------------------------------------------
         # FACULTY ATTENDANCE INTELLIGENCE
         # ----------------------------------------------------
-        overview = await fetch_all_students_faculty_overview(db, faculty_dept_id=user_obj.department_id)
+        faculty_dept_id = user_obj.department_id if user_obj else None
+        faculty_name = user_obj.full_name if user_obj else "Faculty Member"
+        overview = await fetch_all_students_faculty_overview(db, faculty_dept_id=faculty_dept_id)
 
         dept_code = overview[0]["department_code"] if overview else "COMP"
         total_enrolled = len(overview)
         at_risk_students = [s for s in overview if s["overall_risk"]]
         at_risk_count = len(at_risk_students)
 
-        div_summary: Dict[str, Dict[str, Any]] = {}
+        div_summary: dict[str, dict[str, Any]] = {}
         for s in overview:
             div_key = s["division_label"]
             if div_key not in div_summary:
@@ -99,12 +104,12 @@ async def run_attendance_agent(
         full_prompt = (
             f"{system_prompt}\n\n"
             f"DETERMINISTIC DEPARTMENT ATTENDANCE DATA:\n"
-            f"Faculty Member: {user_obj.full_name}\n"
+            f"Faculty Member: {faculty_name}\n"
             f"Department: {dept_code}\n"
             f"Total Enrolled Students: {total_enrolled}\n"
             f"Total At-Risk Students (<75%): {at_risk_count}\n"
             f"Division Breakdown:\n" + "\n".join([f"- {k}: {v['total']} total, {v['at_risk']} at risk" for k, v in div_summary.items()]) + "\n\n"
-            f"At-Risk Students List:\n" + "\n".join([f"- {s['student_name']} ({s['division_label']}): {s['overall_percentage']}%" for s in at_risk_students[:15]]) + "\n\n"
+            "At-Risk Students List:\n" + "\n".join([f"- {s['student_name']} ({s['division_label']}): {s['overall_percentage']}%" for s in at_risk_students[:15]]) + "\n\n"
             f"FACULTY QUESTION: {user_query}\n\n"
             "RESPONSE:"
         )
@@ -115,7 +120,7 @@ async def run_attendance_agent(
                 model = genai.GenerativeModel(settings.GEMINI_MODEL)
                 res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
                 response_text = res.text
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"[AttendanceAgent] Gemini call failed: {e}")
 
         if not response_text:
@@ -135,7 +140,7 @@ async def run_attendance_agent(
                 )
             else:
                 response_text = (
-                    f"Attendance Intelligence Summary for {user_obj.full_name} ({dept_code} Department):\n\n"
+                    f"Attendance Intelligence Summary for {faculty_name} ({dept_code} Department):\n\n"
                     f"• Total Enrolled Students: {total_enrolled}\n"
                     f"• Total Students At Risk (<75%): {at_risk_count}\n\n"
                     f"Division Breakdown:\n" +
@@ -196,7 +201,7 @@ async def run_attendance_agent(
                 model = genai.GenerativeModel(settings.GEMINI_MODEL)
                 res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
                 response_text = res.text
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"[AttendanceAgent] Gemini call failed: {e}")
 
         if not response_text:

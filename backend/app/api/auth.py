@@ -24,7 +24,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login-form")
 
 
-_USER_OBJECT_CACHE: Dict[str, tuple[float, User]] = {}
+_USER_OBJECT_CACHE: dict[str, tuple[float, User]] = {}
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),

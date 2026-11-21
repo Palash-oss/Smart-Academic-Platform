@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getStoredUser, clearAuthSession, fetchWithAuth, User } from '@/lib/api';
-import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar, Bell, Sparkles, AlertTriangle, ShieldCheck, ChevronRight } from 'lucide-react';
+import { LogOut, GraduationCap, Users, MessageSquare, BookOpen, Layers, ClipboardList, Menu, X, Calendar, Bell, Sparkles, AlertTriangle, ShieldCheck, ChevronRight, Award } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +61,22 @@ export const Navbar: React.FC = () => {
                 href: '/timetable',
                 type: 'success',
                 badge: 'LIVE TOKEN',
+              });
+            }
+          }
+          // Extra Lecture added / cancelled notices (derived server-side, gone once the date passes)
+          const extraRes = await fetchWithAuth('/api/v1/timetable/extra-lectures/notices');
+          if (extraRes.ok) {
+            const notices: Array<{ type: 'ADDED' | 'CANCELLED'; extra_lecture_id: string; subject_name: string; date: string; start_time: string }> = await extraRes.json();
+            for (const n of notices) {
+              const cancelled = n.type === 'CANCELLED';
+              items.push({
+                id: `extra-${n.type}-${n.extra_lecture_id}`,
+                title: cancelled ? 'Extra Lecture Cancelled' : 'Extra Lecture Added',
+                message: `${cancelled ? 'Extra lecture cancelled' : 'Extra lecture added'}: ${n.subject_name}, ${n.date} ${n.start_time}`,
+                href: '/timetable',
+                type: cancelled ? 'warning' : 'info',
+                badge: cancelled ? 'CANCELLED' : 'EXTRA',
               });
             }
           }
@@ -166,6 +182,10 @@ export const Navbar: React.FC = () => {
                   <Calendar className="w-3.5 h-3.5" />
                   <span>My Timetable</span>
                 </Link>
+                <Link href="/grades" className={navLinkClass('/grades')}>
+                  <Award className="w-3.5 h-3.5" />
+                  <span>My Grades</span>
+                </Link>
               </>
             )}
 
@@ -189,6 +209,11 @@ export const Navbar: React.FC = () => {
                 <Link href="/faculty/timetable" className={navLinkClass('/faculty/timetable')}>
                   <Calendar className="w-3.5 h-3.5" />
                   <span>My Timetable</span>
+                </Link>
+
+                <Link href="/faculty/exams" className={navLinkClass('/faculty/exams')}>
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Gradebook & OBE</span>
                 </Link>
               </>
             )}
@@ -356,6 +381,10 @@ export const Navbar: React.FC = () => {
                   <Calendar className="w-4 h-4 text-[#FF5500]" />
                   <span>My Timetable</span>
                 </Link>
+                <Link href="/grades" className={mobileNavLinkClass('/grades')}>
+                  <Award className="w-4 h-4 text-[#FF5500]" />
+                  <span>My Grades</span>
+                </Link>
               </>
             )}
 
@@ -379,6 +408,11 @@ export const Navbar: React.FC = () => {
                 <Link href="/faculty/timetable" className={mobileNavLinkClass('/faculty/timetable')}>
                   <Calendar className="w-4 h-4 text-[#FF5500]" />
                   <span>My Timetable</span>
+                </Link>
+
+                <Link href="/faculty/exams" className={mobileNavLinkClass('/faculty/exams')}>
+                  <Award className="w-4 h-4 text-[#FF5500]" />
+                  <span>Gradebook & OBE</span>
                 </Link>
               </>
             )}
