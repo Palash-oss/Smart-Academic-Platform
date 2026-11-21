@@ -1,13 +1,15 @@
-import uuid
 import re
-from typing import Dict, Any, AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.state import AgentState
+from app.core.config import settings
 from app.db.models import User
 from app.services.retrieval_service import retrieve_relevant_documents
-from app.core.config import settings
 
 try:
     import google.generativeai as genai
@@ -50,7 +52,7 @@ def extract_clean_pdf_snippets(docs: list) -> str:
 async def run_student_support_agent(
     state: AgentState,
     db: AsyncSession
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Student Support Agent: RAG over policy and department-scoped syllabus documents stored in pgvector."""
     user_id_str = state.get("user_id")
     messages = state.get("messages", [])
@@ -65,8 +67,8 @@ async def run_student_support_agent(
             u_obj = u_res.scalar_one_or_none()
             if u_obj:
                 dept_id = u_obj.department_id
-        except Exception:
-            pass
+        except (TypeError, ValueError, AttributeError):
+            dept_id = None
 
     docs = await retrieve_relevant_documents(db, user_query, department_id=dept_id, top_k=4)
 
@@ -108,11 +110,11 @@ async def run_student_support_agent(
             model = genai.GenerativeModel(settings.GEMINI_MODEL)
             res = model.generate_content(full_prompt, request_options={"timeout": 5.0})
             response_text = res.text
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"[StudentSupportAgent] Gemini call failed: {e}")
 
     if not response_text:
-        doc_titles = ", ".join(set(d['document_title'] for d in docs)) if docs else "Academic Rule Book Fr. CRCE 2024-25"
+        doc_titles = ", ".join({d['document_title'] for d in docs}) if docs else "Academic Rule Book Fr. CRCE 2024-25"
         citations = f"\n\nSource Documents Cited: {doc_titles}"
 
         # -------------------------------------------------------------------
